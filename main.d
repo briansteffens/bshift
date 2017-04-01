@@ -11,7 +11,8 @@ import generator;
 void main()
 {
     // Source code
-    auto src = "ulong main ( ) { ulong x ; x = 3 + 5 ; return x + 1 ; } ";
+    auto src = "ulong main ( ) { ulong x ; x = 3 + 5 ; " ~
+               "ulong y ; y = x + 1 ; return y ; } ";
 
     writeln(src);
     writeln();

@@ -154,12 +154,12 @@ void generateFunction(GeneratorState state, Function func)
     {
         generateStatement(state, func.statements[i]);
     }
-
-    state.output ~= "    ret";
 }
 
 void generateStatement(GeneratorState state, Statement st)
 {
+    state.output ~= format("    ; %s", st);
+
     auto localDeclaration = cast(LocalDeclaration)st;
     if (localDeclaration !is null)
     {
@@ -193,7 +193,7 @@ void generateLocalDeclaration(GeneratorState state, LocalDeclaration st)
         throw new Exception(format("Local %s already declared", st.name));
     }
 
-    state.locals ~= new Local(st.type, st.name);
+    state.addLocal(st.type, st.name);
 }
 
 void generateAssignment(GeneratorState state, Assignment a)
@@ -225,11 +225,27 @@ void generateReturn(GeneratorState state, Return r)
 
 Local generateNode(GeneratorState state, Node node)
 {
+    // Operator
     auto operator = cast(Operator)node;
 
     if (operator !is null)
     {
         return generateOperator(state, operator);
+    }
+
+    // Binding
+    auto binding = cast(Binding)node;
+
+    if (binding !is null)
+    {
+        auto local = state.findLocal(binding.name);
+
+        if (local is null)
+        {
+            throw new Exception(format("Binding not found: %s", binding.name));
+        }
+
+        return local;
     }
 
     throw new Exception(format("Node %s unrecognized", node));

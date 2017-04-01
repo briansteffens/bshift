@@ -392,6 +392,11 @@ class ExpressionParser
 
     void consume()
     {
+        if (this.operators.len() == 0)
+        {
+            return;
+        }
+
         if (this.operators.len() < 1 || this.output.len() < 2)
         {
             throw new Exception("Not enough on the stack(s) to consume!");
