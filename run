@@ -2,7 +2,7 @@
 
 clear && \
 ldc main.d lexer.d ast.d parser.d generator.d && \
-./main && \
+./main test.bs && \
 nasm -f elf64 output.asm && \
 ld output.o && \
 ./a.out; \

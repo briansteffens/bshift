@@ -1,24 +1,29 @@
 import std.stdio;
 import std.format;
 import std.typecons;
-//import std.file;
+import std.file;
 
 import ast;
 import lexer;
 import parser;
 import generator;
 
-void main()
+void main(string[] args)
 {
-    // Source code
-    auto src = "ulong main ( ) { ulong x ; x = 3 + 5 ; " ~
-               "ulong y ; y = x + 1 ; return y ; } ";
+    if (args.length != 2)
+    {
+        writeln("Usage: ./main <filename>");
+        return;
+    }
 
-    writeln(src);
+    // Source code
+    auto source = readText(args[1]);
+
+    writeln(source);
     writeln();
 
     // Lexer
-    auto tokens = lex(src);
+    auto tokens = lex(source);
 
     for (int i = 0; i < tokens.length; i++)
     {

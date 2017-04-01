@@ -1,0 +1,10 @@
+ulong main()
+{
+    ulong x;
+    x = 3 + 5;
+
+    ulong y;
+    y = x + 1;
+
+    return y;
+}
