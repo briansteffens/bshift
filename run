@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+clear && \
+ldc main.d lexer.d ast.d parser.d generator.d && \
+./main && \
+nasm -f elf64 output.asm && \
+ld output.o && \
+./a.out; \
+OUTPUT="$?" && \
+echo "output: $OUTPUT"
