@@ -1,10 +1,18 @@
+ulong f()
+{
+    ulong x;
+    x = 1 + 2;
+
+    return x;
+}
+
 ulong main()
 {
     ulong x;
     x = 3 + 5;
 
     ulong y;
-    y = x + 1;
+    y = x + 1 + 2;
 
     return y;
 }

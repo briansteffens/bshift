@@ -154,6 +154,9 @@ void generateFunction(GeneratorState state, Function func)
     {
         generateStatement(state, func.statements[i]);
     }
+
+    state.locals.length = 0;
+    state.temps.length = 0;
 }
 
 void generateStatement(GeneratorState state, Statement st)
@@ -225,6 +228,7 @@ void generateReturn(GeneratorState state, Return r)
 
 Local generateNode(GeneratorState state, Node node)
 {
+    writefln("generateNode %s", node);
     // Operator
     auto operator = cast(Operator)node;
 
@@ -253,12 +257,11 @@ Local generateNode(GeneratorState state, Node node)
 
 Local generateOperator(GeneratorState state, Operator operator)
 {
-    auto temp = state.addTemp(Type.ULong);
-
-    state.output ~= format(
-            "    mov %s, %s", temp.register, renderNode(state, operator.left));
-
+    auto left = renderNode(state, operator.left);
     auto right = renderNode(state, operator.right);
+
+    auto temp = state.addTemp(Type.ULong);
+    state.output ~= format("    mov %s, %s", temp.register, left);
 
     switch (operator.type)
     {
@@ -279,7 +282,6 @@ Local generateOperator(GeneratorState state, Operator operator)
 string renderNode(GeneratorState state, Node node)
 {
     auto binding = cast(Binding)node;
-
     if (binding !is null)
     {
         auto local = state.findLocal(binding.name);
@@ -287,10 +289,16 @@ string renderNode(GeneratorState state, Node node)
     }
 
     auto ulongLiteral = cast(ULongLiteral)node;
-
     if (ulongLiteral !is null)
     {
         return format("%d", ulongLiteral.value);
+    }
+
+    auto operator = cast(Operator)node;
+    if (operator !is null)
+    {
+        auto local = generateOperator(state, operator);
+        return format("%s", local.register);
     }
 
     throw new Exception(format("Node %s unrecognized", node));

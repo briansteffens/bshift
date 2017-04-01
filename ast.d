@@ -53,7 +53,7 @@ class Operator : Node
 
     override string toString()
     {
-        return format("%s %s %s", left, type, right);
+        return format("(%s %s %s)", left, type, right);
     }
 }
 

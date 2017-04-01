@@ -422,7 +422,10 @@ class ExpressionParser
 
         if (current.type == TokenType.Symbol && current.value == ";")
         {
-            this.consume();
+            while (this.operators.len() > 0)
+            {
+                this.consume();
+            }
             return false;
         }
 
