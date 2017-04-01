@@ -142,14 +142,14 @@ Token[] lex(string src)
 
         if ((isLast || !quote && isDelimiter(current)) && building.length > 0)
         {
-            tokens.length++;
             auto type = identifyTokenType(building, buildingQuote);
-            tokens[tokens.length - 1] = new Token(type, building);
+            tokens ~= new Token(type, building);
             building = "";
             buildingQuote = false;
         }
-        else if (!quoteToggledThisLoop &&
-                 (quote && !nextEscaped || !quote && !isWhiteSpace(current)))
+
+        if (!quoteToggledThisLoop &&
+            (quote && !nextEscaped || !quote && !isWhiteSpace(current)))
         {
             building ~= current;
         }
