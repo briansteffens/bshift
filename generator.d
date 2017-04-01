@@ -174,6 +174,13 @@ void generateStatement(GeneratorState state, Statement st)
         return;
     }
 
+    auto _return = cast(Return)st;
+    if (_return !is null)
+    {
+        generateReturn(state, _return);
+        return;
+    }
+
     throw new Exception(format("Unrecognized statement type: %s", st));
 }
 
@@ -203,6 +210,19 @@ void generateAssignment(GeneratorState state, Assignment a)
     state.output ~= format("    mov %s, %s", local.register, value.register);
 }
 
+void generateReturn(GeneratorState state, Return r)
+{
+    auto value = generateNode(state, r.expression);
+
+    // Move the return value into rax if it isn't already there
+    if (value.register != Register.RAX)
+    {
+        state.output ~= format("    mov rax, %s", value.register);
+    }
+
+    state.output ~= "    ret";
+}
+
 Local generateNode(GeneratorState state, Node node)
 {
     auto operator = cast(Operator)node;
@@ -211,23 +231,7 @@ Local generateNode(GeneratorState state, Node node)
     {
         return generateOperator(state, operator);
     }
-    /*
-    auto binding = cast(Binding)node;
 
-    if (binding !is null)
-    {
-        generateBinding(state, binding);
-        return;
-    }
-
-    auto ulongLiteral = cast(ULongLiteral)node;
-
-    if (ulongLiteral !is null)
-    {
-        generateULongLiteral(state, ulongLiteral);
-        return;
-    }
-    */
     throw new Exception(format("Node %s unrecognized", node));
 }
 

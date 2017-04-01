@@ -155,6 +155,23 @@ class Assignment : Statement
     }
 }
 
+class Return : Statement
+{
+    Node expression;
+
+    this(Line line, Node expression)
+    {
+        super(line);
+
+        this.expression = expression;
+    }
+
+    override string toString()
+    {
+        return format("return %s", this.expression);
+    }
+}
+
 class Definition
 {
 }

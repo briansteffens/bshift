@@ -154,6 +154,11 @@ Statement parseStatement(TokenFeed tokens)
 
     if (current.type == TokenType.Word)
     {
+        if (current.value == "return")
+        {
+            return parseReturn(tokens);
+        }
+
         try
         {
             parseType(current.value);
@@ -234,6 +239,11 @@ Assignment parseAssignment(TokenFeed tokens)
     auto expression = parseExpression(tokens);
 
     return new Assignment(null, binding, expression);
+}
+
+Return parseReturn(TokenFeed tokens)
+{
+    return new Return(null, parseExpression(tokens));
 }
 
 // This represents either an unparsed lexer Token or a parsed AST Node
