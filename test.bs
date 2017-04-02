@@ -11,7 +11,7 @@ ulong main()
 {
     ulong x;
 
-    x = 1 + (2 + (3 + 4));
+    x = inc(6);
 
     return x;
 }

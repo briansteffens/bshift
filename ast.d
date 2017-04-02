@@ -117,6 +117,23 @@ abstract class Statement
     }
 }
 
+class Call : Node
+{
+    string functionName;
+    Node[] parameters;
+
+    this(string functionName, Node[] parameters)
+    {
+        this.functionName = functionName;
+        this.parameters = parameters;
+    }
+
+    override string toString()
+    {
+        return format("%s(%s)", this.functionName, this.parameters);
+    }
+}
+
 class TypeSignature
 {
     Type type;
@@ -252,5 +269,18 @@ class Module
         }
 
         return ret;
+    }
+
+    Function findFunction(string name)
+    {
+        for (int i = 0; i < this.functions.length; i++)
+        {
+            if (this.functions[i].name == name)
+            {
+                return this.functions[i];
+            }
+        }
+
+        throw new Exception(format("Function %s not found", name));
     }
 }

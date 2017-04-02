@@ -41,14 +41,69 @@ class Local
     }
 }
 
+bool isCallerPreserved(Register r)
+{
+    return r == Register.RAX ||
+           r == Register.RCX ||
+           r == Register.RDX ||
+           r == Register.RSI ||
+           r == Register.RDI ||
+           r == Register.R8  ||
+           r == Register.R9  ||
+           r == Register.R10 ||
+           r == Register.R11;
+}
+
 class GeneratorState
 {
+    Module mod;
+
     string[] output;
 
     Local[] locals;
     Local[] temps;
 
     int nextTempIndex = 0;
+
+    this(Module mod)
+    {
+        this.mod = mod;
+    }
+
+    Register[] callerPreservedRegistersInUse()
+    {
+        Register[] ret;
+
+        for (int i = 0; i < this.locals.length; i++)
+        {
+            if (this.locals[i].location == Location.Register &&
+                isCallerPreserved(this.locals[i].register))
+            {
+                ret ~= this.locals[i].register;
+            }
+        }
+
+        for (int i = 0; i < this.temps.length; i++)
+        {
+            if (this.temps[i].location == Location.Register &&
+                isCallerPreserved(this.temps[i].register))
+            {
+                ret ~= this.temps[i].register;
+            }
+        }
+
+        return ret;
+    }
+
+    void generatePush(Register r)
+    {
+        this.output ~= format("    push %s", r);
+    }
+
+    void generatePop(Register r)
+    {
+        this.output ~= format("    pop %s", r);
+    }
 
     bool registerTaken(Register register)
     {
@@ -145,7 +200,7 @@ string renderFunctionName(string name)
 
 string[] generate(Module mod)
 {
-    auto state = new GeneratorState();
+    auto state = new GeneratorState(mod);
 
     state.output ~= "section .text";
 
@@ -165,36 +220,36 @@ string[] generate(Module mod)
     return state.output;
 }
 
+// Figure out which register a parameter should be in based on its index in
+// the parameter list
+Register parameterRegister(int index)
+{
+    switch (index)
+    {
+        case 0:
+            return Register.RDI;
+        case 1:
+            return Register.RSI;
+        case 2:
+            return Register.RDX;
+        case 3:
+            return Register.RCX;
+        case 4:
+            return Register.R8;
+        case 5:
+            return Register.R9;
+        default:
+            throw new Exception(format(
+                    "Not enough registers for parameter %d", index));
+    }
+}
+
 // Place a parameter in the appropriate location (register etc) based on its
 // index within the parameter list
 void placeParameter(Local local, int index)
 {
     local.location = Location.Register;
-
-    switch (index)
-    {
-        case 0:
-            local.register = Register.RDI;
-            break;
-        case 1:
-            local.register = Register.RSI;
-            break;
-        case 2:
-            local.register = Register.RDX;
-            break;
-        case 3:
-            local.register = Register.RCX;
-            break;
-        case 4:
-            local.register = Register.R8;
-            break;
-        case 5:
-            local.register = Register.R9;
-            break;
-        default:
-            throw new Exception(format(
-                    "Not enough registers for parameter %d", index));
-    }
+    local.register = parameterRegister(index);
 }
 
 void generateFunction(GeneratorState state, Function func)
@@ -330,6 +385,14 @@ Node generateNode(GeneratorState state, Node node)
         return new Binding(local.name);
     }
 
+    // Special handling for function calls
+    auto call = cast(Call)node;
+    if (call !is null)
+    {
+        auto local = generateCall(state, call);
+        return new Binding(local.name);
+    }
+
     return node;
 }
 
@@ -352,6 +415,48 @@ Local generateOperator(GeneratorState state, Operator operator)
         default:
             throw new Exception(
                     format("Unrecognized operator type: %s", operator.type));
+    }
+
+    return temp;
+}
+
+Local generateCall(GeneratorState state, Call call)
+{
+    // Generate all parameters
+    string[] params;
+    for (int i = 0; i < call.parameters.length; i++)
+    {
+        params ~= renderNode(state, generateNode(state, call.parameters[i]));
+    }
+
+    // Save caller-preserved registers
+    // TODO: optimize
+    Register[] callerPreserved = state.callerPreservedRegistersInUse();
+    for (auto i = 0; i < callerPreserved.length; i++)
+    {
+        state.generatePush(callerPreserved[i]);
+    }
+
+    // Pass parameters
+    for (auto i = 0; i < params.length; i++)
+    {
+        state.output ~= format("    mov %s, %s", parameterRegister(i),
+                                                 params[i]);
+    }
+
+    // Make the actual call
+    auto func = state.mod.findFunction(call.functionName);
+    state.output ~= format("    call %s", renderFunctionName(func.name));
+
+    // Save return value (in rax) to a new temp variable
+    auto temp = state.addTemp(func.returnType);
+    state.output ~= format("    mov %s, rax", temp.register);
+
+    // Restore caller-preserved registers
+    // TODO: optimize
+    for (int i = cast(int)callerPreserved.length - 1; i >= 0; i--)
+    {
+        state.generatePop(callerPreserved[i]);
     }
 
     return temp;

@@ -1,6 +1,7 @@
 import std.stdio;
 import std.format;
 import std.conv;
+import std.array;
 
 import lexer;
 import ast;
@@ -454,6 +455,28 @@ class ExpressionParser
         this.output.push(new Operator(left, operator, right));
     }
 
+    void consumeFunctionCall()
+    {
+        Node[] parameters;
+
+        while (true)
+        {
+            auto topOutput = this.output.pop();
+
+            // The function name marks the beginning of the function call
+            if (topOutput.isToken() &&
+                topOutput.token.type == TokenType.Word &&
+                topOutput.functionName)
+            {
+                // Push the new call onto the output stack
+                this.output.push(new Call(topOutput.token.value, parameters));
+                break;
+            }
+
+            insertInPlace(parameters, 0, getOrParseNode(topOutput));
+        }
+    }
+
     bool next()
     {
         if (!this.input.next())
@@ -513,6 +536,12 @@ class ExpressionParser
                     topOperator.token.type == TokenType.Symbol &&
                     topOperator.token.value == "(")
                 {
+                    // Function call?
+                    if (topOperator.parameterListStart)
+                    {
+                        this.consumeFunctionCall();
+                    }
+
                     // Pop off the open parenthesis
                     this.operators.pop();
                     return true;
