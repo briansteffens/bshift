@@ -140,7 +140,17 @@ Token[] lex(string src)
             quote = false;
         }
 
-        if ((isLast || !quote && isDelimiter(current)) && building.length > 0)
+        bool unquotedDelimiter = !quote &&
+                                 isDelimiter(current);
+
+        bool buildingSingleDelimiter = !quote &&
+                                       building.length == 1 &&
+                                       isDelimiter(building[0]);
+
+        bool flush = building.length > 0 &&
+                     (isLast || unquotedDelimiter || buildingSingleDelimiter);
+
+        if (flush)
         {
             auto type = identifyTokenType(building, buildingQuote);
             tokens ~= new Token(type, building);

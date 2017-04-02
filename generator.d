@@ -12,6 +12,14 @@ enum Register
     RDX,
     RSI,
     RDI,
+    R8,
+    R9,
+    R10,
+    R11,
+    R12,
+    R13,
+    R14,
+    R15,
 }
 
 enum Location
@@ -157,8 +165,51 @@ string[] generate(Module mod)
     return state.output;
 }
 
+// Place a parameter in the appropriate location (register etc) based on its
+// index within the parameter list
+void placeParameter(Local local, int index)
+{
+    local.location = Location.Register;
+
+    switch (index)
+    {
+        case 0:
+            local.register = Register.RDI;
+            break;
+        case 1:
+            local.register = Register.RSI;
+            break;
+        case 2:
+            local.register = Register.RDX;
+            break;
+        case 3:
+            local.register = Register.RCX;
+            break;
+        case 4:
+            local.register = Register.R8;
+            break;
+        case 5:
+            local.register = Register.R9;
+            break;
+        default:
+            throw new Exception(format(
+                    "Not enough registers for parameter %d", index));
+    }
+}
+
 void generateFunction(GeneratorState state, Function func)
 {
+    // Function parameters need to be added to locals
+    for (int i = 0; i < func.parameters.length; i++)
+    {
+        auto local = new Local(func.parameters[i].type,
+                               func.parameters[i].name);
+
+        placeParameter(local, i);
+
+        state.locals ~= local;
+    }
+
     state.output ~= format("%s:", renderFunctionName(func.name));
 
     for (int i = 0; i < func.statements.length; i++)

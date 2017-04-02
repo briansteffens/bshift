@@ -195,18 +195,33 @@ class Function : Definition
 {
     Type returnType;
     string name;
+    TypeSignature[] parameters;
     Statement[] statements;
 
-    this(Type returnType, string name, Statement[] statements)
+    this(Type returnType, string name, TypeSignature[] parameters,
+         Statement[] statements)
     {
         this.returnType = returnType;
         this.name = name;
+        this.parameters = parameters;
         this.statements = statements;
     }
 
     override string toString()
     {
-        auto ret = format("%s %s() {\n", this.returnType, this.name);
+        auto params = "";
+
+        for (int i = 0; i < this.parameters.length; i++)
+        {
+            if (i > 0)
+            {
+                params ~= ", ";
+            }
+
+            params ~= this.parameters[i].toString();
+        }
+
+        auto ret = format("%s %s(%s) {\n", this.returnType, this.name, params);
 
         for (int i = 0; i < this.statements.length; i++)
         {

@@ -34,6 +34,18 @@ class TokenFeed
         return true;
     }
 
+    Token peek(int distance)
+    {
+        int target = this.index + distance;
+
+        if (target >= this.tokens.length)
+        {
+            return null;
+        }
+
+        return this.tokens[target];
+    }
+
     Token current()
     {
         return this.tokens[this.index];
@@ -102,17 +114,32 @@ Function parseFunction(TokenFeed tokens)
         throw new Exception("Expected a function parameter list");
     }
 
-    // Close parenthesis
-    if (!tokens.next())
-    {
-        throw new Exception("Expected a close parenthesis");
-    }
+    // Parameter list
+    TypeSignature[] parameters;
 
-    token = tokens.current();
-
-    if (token.type != TokenType.Symbol || token.value != ")")
+    while (tokens.next())
     {
-        throw new Exception("Expected a close parenthesis");
+        token = tokens.current();
+
+        // End of parameter list
+        if (token.type == TokenType.Symbol && token.value == ")")
+        {
+            break;
+        }
+
+        parameters ~= parseTypeSignature(tokens);
+
+        // Comma separating parameters
+        token = tokens.current();
+
+        if (token.type == TokenType.Symbol && token.value == ",")
+        {
+            if (!tokens.next())
+            {
+                throw new Exception(
+                        "EOF reached while parsing function parameters");
+            }
+        }
     }
 
     // Open bracket
@@ -145,7 +172,7 @@ Function parseFunction(TokenFeed tokens)
         statements[statements.length - 1] = parseStatement(tokens);
     }
 
-    return new Function(type, name, statements);
+    return new Function(type, name, parameters, statements);
 }
 
 Statement parseStatement(TokenFeed tokens)
@@ -175,7 +202,22 @@ Statement parseStatement(TokenFeed tokens)
 
 LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
 {
-    return new LocalDeclaration(null, parseTypeSignature(tokens));
+    auto typeSignature = parseTypeSignature(tokens);
+
+    // Semi-colon
+    if (!tokens.next())
+    {
+        throw new Exception("Expected semi-colon");
+    }
+
+    auto current = tokens.current();
+
+    if (current.type != TokenType.Symbol || current.value != ";")
+    {
+        throw new Exception("Expected semi-colon");
+    }
+
+    return new LocalDeclaration(null, typeSignature);
 }
 
 TypeSignature parseTypeSignature(TokenFeed tokens)
@@ -197,19 +239,6 @@ TypeSignature parseTypeSignature(TokenFeed tokens)
     }
 
     auto name = current.value;
-
-    // Semi-colon
-    if (!tokens.next())
-    {
-        throw new Exception("Expected semi-colon");
-    }
-
-    current = tokens.current();
-
-    if (current.type != TokenType.Symbol || current.value != ";")
-    {
-        throw new Exception("Expected semi-colon");
-    }
 
     return new TypeSignature(type, name);
 }
@@ -257,6 +286,12 @@ class ParserItem
     Token token;
     Node node;
 
+    // Represents the function name in a call
+    bool functionName;
+
+    // Represents the first open parenthesis in a call
+    bool parameterListStart;
+
     this(Token token)
     {
         this.token = token;
@@ -292,14 +327,19 @@ class ParserItemStack
 {
     ParserItem[] stack;
 
+    void push(ParserItem i)
+    {
+        this.stack ~= i;
+    }
+
     void push(Token t)
     {
-        this.stack ~= new ParserItem(t);
+        this.push(new ParserItem(t));
     }
 
     void push(Node n)
     {
-        this.stack ~= new ParserItem(n);
+        this.push(new ParserItem(n));
     }
 
     int len()
@@ -434,10 +474,52 @@ class ExpressionParser
             return false;
         }
 
+        // Check for the beginning of a function call: word followed by (
+        if (current.type == TokenType.Word)
+        {
+            auto nextInput = this.input.peek(1);
+
+            if (nextInput !is null &&
+                nextInput.type == TokenType.Symbol &&
+                nextInput.value == "(")
+            {
+                auto nameToken = new ParserItem(current);
+                nameToken.functionName = true;
+                this.output.push(nameToken);
+
+                this.input.next();
+                auto startList = new ParserItem(this.input.current());
+                startList.parameterListStart = true;
+                this.operators.push(startList);
+
+                return true;
+            }
+        }
+
         if (current.type != TokenType.Symbol)
         {
             this.output.push(current);
             return true;
+        }
+
+        if (current.value == ")")
+        {
+            // Consume operators until the beginning of the parameter list
+            while (true)
+            {
+                auto topOperator = this.operators.peek(0);
+
+                if (topOperator.isToken() &&
+                    topOperator.token.type == TokenType.Symbol &&
+                    topOperator.token.value == "(")
+                {
+                    // Pop off the open parenthesis
+                    this.operators.pop();
+                    return true;
+                }
+
+                this.consume();
+            }
         }
 
         this.operators.push(current);
