@@ -1,5 +1,6 @@
 import std.stdio;
 import std.format;
+import std.conv;
 
 import ast;
 
@@ -107,11 +108,21 @@ class GeneratorState
 
     Local findLocal(string name)
     {
+        // Look in locals
         for (int i = 0; i < this.locals.length; i++)
         {
             if (this.locals[i].name == name)
             {
                 return this.locals[i];
+            }
+        }
+
+        // Look in temps
+        for (int i = 0; i < this.temps.length; i++)
+        {
+            if (this.temps[i].name == name)
+            {
+                return this.temps[i];
             }
         }
 
@@ -189,14 +200,15 @@ void generateStatement(GeneratorState state, Statement st)
 
 void generateLocalDeclaration(GeneratorState state, LocalDeclaration st)
 {
-    auto existing = state.findLocal(st.name);
+    auto existing = state.findLocal(st.signature.name);
 
     if (existing !is null)
     {
-        throw new Exception(format("Local %s already declared", st.name));
+        throw new Exception(format("Local %s already declared",
+                st.signature.name));
     }
 
-    state.addLocal(st.type, st.name);
+    state.addLocal(st.signature.type, st.signature.name);
 }
 
 void generateAssignment(GeneratorState state, Assignment a)
@@ -209,8 +221,23 @@ void generateAssignment(GeneratorState state, Assignment a)
     }
 
     auto value = generateNode(state, a.value);
+    auto valueRendered = renderNode(state, value);
 
-    state.output ~= format("    mov %s, %s", local.register, value.register);
+    state.output ~= format("    mov %s, %s", local.register, valueRendered);
+}
+
+string renderImmediate(Literal literal)
+{
+    auto ulongLiteral = cast(ULongLiteral)literal;
+    if (ulongLiteral !is null)
+    {
+        return to!string(ulongLiteral.value);
+    }
+    else
+    {
+        throw new Exception(
+                format("Can't render literal as immediate: %s", literal));
+    }
 }
 
 void generateReturn(GeneratorState state, Return r)
@@ -218,41 +245,41 @@ void generateReturn(GeneratorState state, Return r)
     auto value = generateNode(state, r.expression);
 
     // Move the return value into rax if it isn't already there
-    if (value.register != Register.RAX)
+    auto binding = cast(Binding)value;
+    auto literal = cast(Literal)value;
+    if (binding !is null)
     {
-        state.output ~= format("    mov rax, %s", value.register);
+        auto local = state.findLocal(binding.name);
+        if (local.register != Register.RAX)
+        {
+            state.output ~= format("    mov rax, %s", local.register);
+        }
+    }
+    else if (literal !is null)
+    {
+        state.output ~= format("    mov rax, %s", renderImmediate(literal));
+    }
+    else
+    {
+        throw new Exception(format("Can't return this: %s", value));
     }
 
     state.output ~= "    ret";
 }
 
-Local generateNode(GeneratorState state, Node node)
+// Generate a Node in an expression, doing any necessary setup to get it usable
+// by the calling generator.
+Node generateNode(GeneratorState state, Node node)
 {
-    writefln("generateNode %s", node);
-    // Operator
+    // Special handling for operators
     auto operator = cast(Operator)node;
-
     if (operator !is null)
     {
-        return generateOperator(state, operator);
+        auto local = generateOperator(state, operator);
+        return new Binding(local.name);
     }
 
-    // Binding
-    auto binding = cast(Binding)node;
-
-    if (binding !is null)
-    {
-        auto local = state.findLocal(binding.name);
-
-        if (local is null)
-        {
-            throw new Exception(format("Binding not found: %s", binding.name));
-        }
-
-        return local;
-    }
-
-    throw new Exception(format("Node %s unrecognized", node));
+    return node;
 }
 
 Local generateOperator(GeneratorState state, Operator operator)

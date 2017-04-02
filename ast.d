@@ -117,15 +117,13 @@ abstract class Statement
     }
 }
 
-class LocalDeclaration : Statement
+class TypeSignature
 {
     Type type;
     string name;
 
-    this(Line line, Type type, string name)
+    this(Type type, string name)
     {
-        super(line);
-
         this.type = type;
         this.name = name;
     }
@@ -133,6 +131,23 @@ class LocalDeclaration : Statement
     override string toString()
     {
         return format("%s %s", this.type, this.name);
+    }
+}
+
+class LocalDeclaration : Statement
+{
+    TypeSignature signature;
+
+    this(Line line, TypeSignature signature)
+    {
+        super(line);
+
+        this.signature = signature;
+    }
+
+    override string toString()
+    {
+        return format("Local %s", this.signature);
     }
 }
 

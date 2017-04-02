@@ -175,6 +175,11 @@ Statement parseStatement(TokenFeed tokens)
 
 LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
 {
+    return new LocalDeclaration(null, parseTypeSignature(tokens));
+}
+
+TypeSignature parseTypeSignature(TokenFeed tokens)
+{
     // New local type
     auto type = parseType(tokens.current().value);
 
@@ -206,7 +211,7 @@ LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
         throw new Exception("Expected semi-colon");
     }
 
-    return new LocalDeclaration(null, type, name);
+    return new TypeSignature(type, name);
 }
 
 Assignment parseAssignment(TokenFeed tokens)
