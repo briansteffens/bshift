@@ -169,6 +169,21 @@ class GeneratorState
         return ret;
     }
 
+    void freeTemp(Local temp)
+    {
+        Local[] newTemps;
+
+        foreach (existing; this.temps)
+        {
+            if (existing == temp)
+            {
+                newTemps ~= existing;
+            }
+        }
+
+        this.temps = newTemps;
+    }
+
     Local findLocal(string name)
     {
         // Look in locals
@@ -423,10 +438,10 @@ Local generateOperator(GeneratorState state, Operator operator)
 Local generateCall(GeneratorState state, Call call)
 {
     // Generate all parameters
-    string[] params;
+    Node[] params;
     for (int i = 0; i < call.parameters.length; i++)
     {
-        params ~= renderNode(state, generateNode(state, call.parameters[i]));
+        params ~= generateNode(state, call.parameters[i]);
     }
 
     // Save caller-preserved registers
@@ -437,12 +452,35 @@ Local generateCall(GeneratorState state, Call call)
         state.generatePush(callerPreserved[i]);
     }
 
-    // Pass parameters
-    for (auto i = 0; i < params.length; i++)
+    // Build list of parameters in registers and where they have to move for
+    // the call to work.
+    RegisterMove[] registerMoves;
+    for (int i = 0; i < params.length; i++)
     {
-        state.output ~= format("    mov %s, %s", parameterRegister(i),
-                                                 params[i]);
+        auto binding = cast(Binding)params[i];
+        if (binding is null)
+        {
+            continue;
+        }
+
+        auto local = state.findLocal(binding.name);
+        if (local is null)
+        {
+            throw new Exception(format("Local %s not found", binding.name));
+        }
+
+        if (local.location != Location.Register)
+        {
+            continue;
+        }
+
+        registerMoves ~= new RegisterMove(local.register,
+                                          parameterRegister(i));
     }
+
+    shuffleRegisters(state, registerMoves);
+
+    // TODO: pass non-register arguments
 
     // Make the actual call
     auto func = state.mod.findFunction(call.functionName);
@@ -503,4 +541,127 @@ string generateBinding(GeneratorState state, Binding binding)
     }
 
     return format("%s", local.register);
+}
+
+// Register shuffling ---------------------------------------------------------
+
+class RegisterMove
+{
+    Register source;
+    Register target;
+
+    this(Register source, Register target)
+    {
+        this.source = source;
+        this.target = target;
+    }
+
+    override string toString()
+    {
+        return format("%s -> %s", this.source, this.target);
+    }
+}
+
+RegisterMove findRegisterMove(RegisterMove[] moves, Register source)
+{
+    foreach (move; moves)
+    {
+        if (move.source == source)
+        {
+            return move;
+        }
+    }
+
+    return null;
+}
+
+bool isHandled(Register[] handled, Register register)
+{
+    foreach (check; handled)
+    {
+        if (check == register)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void shuffleRegisters(GeneratorState state, RegisterMove[] moves)
+{
+    Register[] handled;
+
+    foreach (start; moves)
+    {
+        if (isHandled(handled, start.source))
+        {
+            continue;
+        }
+
+        Register[] chain;
+        chain ~= start.source;
+        handled ~= start.source;
+
+        auto current = start;
+        bool circular = false;
+
+        while (true)
+        {
+            chain ~= current.target;
+            handled ~= current.target;
+
+            auto next = findRegisterMove(moves, current.target);
+
+            // End of chain
+            if (next is null)
+            {
+                break;
+            }
+
+            current = next;
+
+            // Detect circular chain
+            if (current.target == start.source)
+            {
+                circular = true;
+                break;
+            }
+        }
+
+        // Simple (non-circular) chain
+        if (!circular)
+        {
+            for (auto i = chain.length - 1; i > 0; i--)
+            {
+                state.output ~= format("    mov %s, %s",
+                                       chain[i], chain[i - 1]);
+            }
+
+            continue;
+        }
+
+        // Circular chain with only two nodes (optimize to use xchg)
+        if (chain.length == 2)
+        {
+            state.output ~= format("    xchg %s, %s", chain[0], chain[1]);
+            continue;
+        }
+
+        // Circular chain
+        auto tempLocal = state.addTemp(Type.ULong);
+        auto temp = tempLocal.register;
+
+        state.output ~= format("    mov %s, %s", temp, chain[$-1]);
+
+        for (auto i = chain.length - 1; i > 0; i--)
+        {
+            state.output ~= format("    mov %s, %s",
+                                   chain[i], chain[i - 1]);
+        }
+
+        state.output ~= format("    mov %s, %s", chain[0], temp);
+
+        state.freeTemp(tempLocal);
+    }
 }

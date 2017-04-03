@@ -7,11 +7,23 @@ ulong inc(ulong a)
     return ret;
 }
 
+ulong doubleinc(ulong a)
+{
+    ulong ret;
+
+    ret = inc(a);
+    ret = inc(ret);
+
+    return ret;
+}
+
 ulong main()
 {
     ulong x;
+    x = 3;
 
-    x = inc(6);
+    ulong y;
+    y = doubleinc(x);
 
-    return x;
+    return y;
 }
