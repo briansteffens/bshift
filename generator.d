@@ -293,7 +293,7 @@ void generateFunction(GeneratorState state, Function func)
 
 void generateStatement(GeneratorState state, Statement st)
 {
-    state.output ~= format("    ; %s", st);
+    //state.output ~= format("    ; %s", st);
 
     auto localDeclaration = cast(LocalDeclaration)st;
     if (localDeclaration !is null)

@@ -5,5 +5,5 @@ ulong add(ulong a, ulong b)
 
 ulong main()
 {
-    return add(3, 4) + 1;
+    return add(3, 4);
 }
