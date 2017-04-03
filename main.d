@@ -75,12 +75,13 @@ void main(string[] args)
     // Source code
     auto source = readText(args[1]);
 
+    writeln("bshift source code ------------------------------------------\n");
     writeln(source);
-    writeln();
 
     // Lexer
     auto tokens = lex(source);
 
+    writeln("bshift tokens -----------------------------------------------\n");
     for (int i = 0; i < tokens.length; i++)
     {
         writeln(tokens[i]);
@@ -91,7 +92,7 @@ void main(string[] args)
     // Parser
     auto mod = parse(tokens);
 
-    writeln();
+    writeln("bshift ast --------------------------------------------------\n");
     writeln(mod);
 
     // Generator
@@ -99,6 +100,8 @@ void main(string[] args)
 
     // Write nasm output
     auto contents = renderAsmFile(output);
+
+    writeln("bshift output -----------------------------------------------\n");
     writeln(contents);
 
     auto bytes = cast(ubyte[])contents;

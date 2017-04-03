@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
 clear && \
+echo && echo && echo && echo && echo && echo && echo && echo && echo && \
+echo && echo && echo && echo && echo && echo && echo && echo && echo && \
+echo && echo && echo && echo && echo && echo && echo && echo && echo && \
 ldc main.d lexer.d ast.d parser.d generator.d && \
 ./main test.bs && \
 #nasm -f elf64 output.asm && \
@@ -8,4 +11,6 @@ basm output.asm && \
 ld output.o && \
 ./a.out; \
 OUTPUT="$?" && \
-echo "output: $OUTPUT"
+echo "execution output -------------------------------------------------------"
+echo
+echo "$OUTPUT"

@@ -3,3 +3,4 @@ main
 main.o
 output.asm
 output.o
+basm.o

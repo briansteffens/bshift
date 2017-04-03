@@ -220,7 +220,6 @@ LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
 
 TypeSignature parseTypeSignature(TokenFeed tokens)
 {
-    writefln(">>> %s", tokens.current());
     // New local type
     auto type = parseType(tokens.current().value);
 
@@ -484,7 +483,7 @@ class ExpressionParser
         }
 
         this.current = this.input.current();
-        this.printState();
+        //this.printState();
 
         if (current.type == TokenType.Symbol && current.value == ";")
         {
@@ -567,7 +566,7 @@ Node parseExpression(TokenFeed tokens)
     while (parser.next())
     {
     }
-    writefln("----------------------------------------------");
+    //writefln("----------------------------------------------");
 
     if (parser.output.len() != 1)
     {
