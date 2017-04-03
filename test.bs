@@ -1,29 +1,9 @@
-ulong inc(ulong a)
+ulong add(ulong a, ulong b)
 {
-    ulong ret;
-
-    ret = a + 1;
-
-    return ret;
-}
-
-ulong doubleinc(ulong a)
-{
-    ulong ret;
-
-    ret = inc(a);
-    ret = inc(ret);
-
-    return ret;
+    return a + b;
 }
 
 ulong main()
 {
-    ulong x;
-    x = 3;
-
-    ulong y;
-    y = doubleinc(x);
-
-    return y;
+    return add(3, 4) + 1;
 }

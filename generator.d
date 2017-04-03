@@ -413,8 +413,8 @@ Node generateNode(GeneratorState state, Node node)
 
 Local generateOperator(GeneratorState state, Operator operator)
 {
-    auto left = renderNode(state, operator.left);
-    auto right = renderNode(state, operator.right);
+    auto left = renderNode(state, generateNode(state, operator.left));
+    auto right = renderNode(state, generateNode(state, operator.right));
 
     auto temp = state.addTemp(Type.ULong);
     state.output ~= format("    mov %s, %s", temp.register, left);
@@ -433,6 +433,18 @@ Local generateOperator(GeneratorState state, Operator operator)
     }
 
     return temp;
+}
+
+class NonRegisterArg
+{
+    Node node;
+    Register target;
+
+    this(Node node, Register target)
+    {
+        this.node = node;
+        this.target = target;
+    }
 }
 
 Local generateCall(GeneratorState state, Call call)
@@ -455,11 +467,15 @@ Local generateCall(GeneratorState state, Call call)
     // Build list of parameters in registers and where they have to move for
     // the call to work.
     RegisterMove[] registerMoves;
+    NonRegisterArg[] nonRegisterArgs;
     for (int i = 0; i < params.length; i++)
     {
+        auto targetRegister = parameterRegister(i);
+
         auto binding = cast(Binding)params[i];
         if (binding is null)
         {
+            nonRegisterArgs ~= new NonRegisterArg(params[i], targetRegister);
             continue;
         }
 
@@ -471,16 +487,21 @@ Local generateCall(GeneratorState state, Call call)
 
         if (local.location != Location.Register)
         {
+            nonRegisterArgs ~= new NonRegisterArg(params[i], targetRegister);
             continue;
         }
 
-        registerMoves ~= new RegisterMove(local.register,
-                                          parameterRegister(i));
+        registerMoves ~= new RegisterMove(local.register, targetRegister);
     }
 
     shuffleRegisters(state, registerMoves);
 
-    // TODO: pass non-register arguments
+    // Pass args which aren't currently located in registers
+    foreach (arg; nonRegisterArgs)
+    {
+        state.output ~= format("    mov %s, %s",
+                               arg.target, renderNode(state, arg.node));
+    }
 
     // Make the actual call
     auto func = state.mod.findFunction(call.functionName);

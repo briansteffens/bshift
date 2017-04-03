@@ -130,16 +130,13 @@ Function parseFunction(TokenFeed tokens)
 
         parameters ~= parseTypeSignature(tokens);
 
-        // Comma separating parameters
-        token = tokens.current();
-
-        if (token.type == TokenType.Symbol && token.value == ",")
+        // Commas separate parameters
+        auto next = tokens.peek(1);
+        if (next !is null &&
+            next.type == TokenType.Symbol &&
+            next.value == ",")
         {
-            if (!tokens.next())
-            {
-                throw new Exception(
-                        "EOF reached while parsing function parameters");
-            }
+            tokens.next();
         }
     }
 
@@ -223,6 +220,7 @@ LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
 
 TypeSignature parseTypeSignature(TokenFeed tokens)
 {
+    writefln(">>> %s", tokens.current());
     // New local type
     auto type = parseType(tokens.current().value);
 
@@ -525,7 +523,7 @@ class ExpressionParser
             return true;
         }
 
-        if (current.value == ")")
+        if (current.value == "," || current.value == ")")
         {
             // Consume operators until the beginning of the parameter list
             while (true)
@@ -536,6 +534,13 @@ class ExpressionParser
                     topOperator.token.type == TokenType.Symbol &&
                     topOperator.token.value == "(")
                 {
+                    // Don't clean up the function call yet if we're only on a
+                    // comma
+                    if (current.value == ",")
+                    {
+                        return true;
+                    }
+
                     // Function call?
                     if (topOperator.parameterListStart)
                     {

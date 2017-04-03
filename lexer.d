@@ -23,7 +23,7 @@ bool isWhiteSpace(dchar c)
 bool isSymbol(dchar c)
 {
     return c == '+' || c == '=' || c == '(' || c == ')' || c == ';' ||
-           c == '{' || c == '}';
+           c == '{' || c == '}' || c == ',';
 }
 
 bool isDelimiter(dchar c)
