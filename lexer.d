@@ -1,4 +1,5 @@
 import std.format;
+import std.stdio;
 
 enum TokenType
 {
@@ -81,6 +82,16 @@ class Token
     }
 }
 
+Token parseDoubleSymbol(dchar first, dchar second)
+{
+    if (first == '=' && second == '=')
+    {
+        return new Token(TokenType.Symbol, "==");
+    }
+
+    return null;
+}
+
 Token[] lex(string src)
 {
     if (src.length < 2)
@@ -154,6 +165,18 @@ Token[] lex(string src)
 
         bool flush = building.length > 0 &&
                      (isLast || unquotedDelimiter || buildingSingleDelimiter);
+
+        // Detect special double-symbol perators
+        if (buildingSingleDelimiter && !isLast)
+        {
+            auto token = parseDoubleSymbol(building[0], current);
+            if (token !is null)
+            {
+                tokens ~= token;
+                building = "";
+                continue;
+            }
+        }
 
         if (flush)
         {

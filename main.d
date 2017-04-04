@@ -10,62 +10,6 @@ import generator;
 
 void main(string[] args)
 {
-    /*
-    auto state = new GeneratorState(null);
-    RegisterMove[] moves;
-
-    moves ~= new RegisterMove(Register.RAX, Register.RDI);
-    moves ~= new RegisterMove(Register.RDI, Register.RSI);
-
-    moves ~= new RegisterMove(Register.R8, Register.R9);
-    moves ~= new RegisterMove(Register.R9, Register.R8);
-
-    moves ~= new RegisterMove(Register.R10, Register.R11);
-    moves ~= new RegisterMove(Register.R11, Register.R12);
-    moves ~= new RegisterMove(Register.R12, Register.R10);
-
-    state.temps ~= new Local(Type.ULong, "a");
-    state.temps[$-1].location = Location.Register;
-    state.temps[$-1].register = Register.RAX;
-
-    state.temps ~= new Local(Type.ULong, "b");
-    state.temps[$-1].location = Location.Register;
-    state.temps[$-1].register = Register.RDI;
-
-    state.temps ~= new Local(Type.ULong, "c");
-    state.temps[$-1].location = Location.Register;
-    state.temps[$-1].register = Register.RSI;
-
-    state.temps ~= new Local(Type.ULong, "d");
-    state.temps[$-1].location = Location.Register;
-    state.temps[$-1].register = Register.R8;
-
-    state.temps ~= new Local(Type.ULong, "e");
-    state.temps[$-1].location = Location.Register;
-    state.temps[$-1].register = Register.R9;
-
-    state.temps ~= new Local(Type.ULong, "f");
-    state.temps[$-1].location = Location.Register;
-    state.temps[$-1].register = Register.R10;
-
-    state.temps ~= new Local(Type.ULong, "g");
-    state.temps[$-1].location = Location.Register;
-    state.temps[$-1].register = Register.R11;
-
-    state.temps ~= new Local(Type.ULong, "h");
-    state.temps[$-1].location = Location.Register;
-    state.temps[$-1].register = Register.R12;
-
-    shuffleRegisters(state, moves);
-
-    foreach (x; state.output)
-    {
-        writeln(x);
-    }
-
-    return;
-    */
-
     if (args.length != 2)
     {
         writeln("Usage: ./main <filename>");

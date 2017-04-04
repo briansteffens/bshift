@@ -564,6 +564,23 @@ Local generateCastLocalIntegerToBool(GeneratorState state, Cast typeCast)
 
 Local generateOperator(GeneratorState state, Operator operator)
 {
+    if (operator.type == OperatorType.Plus ||
+        operator.type == OperatorType.Asterisk)
+    {
+        return generateMathOperator(state, operator);
+    }
+
+    if (operator.type == OperatorType.Equality)
+    {
+        return generateRelationalOperator(state, operator);
+    }
+
+    throw new Exception(
+            format("Unrecognized operator type: %s", operator.type));
+}
+
+Local generateMathOperator(GeneratorState state, Operator operator)
+{
     auto left = renderNode(state, generateNode(state, operator.left));
     auto right = renderNode(state, generateNode(state, operator.right));
 
@@ -579,8 +596,31 @@ Local generateOperator(GeneratorState state, Operator operator)
             state.output ~= format("    imul %s, %s", temp.register, right);
             break;
         default:
-            throw new Exception(
-                    format("Unrecognized operator type: %s", operator.type));
+            throw new Exception(format("Unrecognized math operator type: %s",
+                                       operator.type));
+    }
+
+    return temp;
+}
+
+Local generateRelationalOperator(GeneratorState state, Operator operator)
+{
+    auto left = renderNode(state, generateNode(state, operator.left));
+    auto right = renderNode(state, generateNode(state, operator.right));
+
+    auto temp = state.addTemp(Type.Bool);
+    state.output ~= format("    xor %s, %s", temp.register, temp.register);
+
+    switch (operator.type)
+    {
+        case OperatorType.Equality:
+            state.output ~= format("    cmp %s, %s", left, right);
+            state.output ~= format("    sete %s", lowByte(temp.register));
+            break;
+        default:
+            throw new Exception(format(
+                    "Unrecognized relational operator type: %s",
+                    operator.type));
     }
 
     return temp;

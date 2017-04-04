@@ -22,6 +22,7 @@ enum OperatorType
 {
     Plus,
     Asterisk,
+    Equality,
 }
 
 OperatorType parseOperatorType(string input)
@@ -32,6 +33,8 @@ OperatorType parseOperatorType(string input)
             return OperatorType.Plus;
         case "*":
             return OperatorType.Asterisk;
+        case "==":
+            return OperatorType.Equality;
         default:
             throw new Exception(
                     format("Unrecognized OperatorType: %s", input));
