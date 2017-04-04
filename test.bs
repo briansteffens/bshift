@@ -4,7 +4,7 @@ ulong main()
     x = 4;
 
     bool b;
-    b = x == 4;
+    b = x != 3;
 
     return b;
 }

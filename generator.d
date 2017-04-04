@@ -570,7 +570,8 @@ Local generateOperator(GeneratorState state, Operator operator)
         return generateMathOperator(state, operator);
     }
 
-    if (operator.type == OperatorType.Equality)
+    if (operator.type == OperatorType.Equality ||
+        operator.type == OperatorType.Inequality)
     {
         return generateRelationalOperator(state, operator);
     }
@@ -616,6 +617,10 @@ Local generateRelationalOperator(GeneratorState state, Operator operator)
         case OperatorType.Equality:
             state.output ~= format("    cmp %s, %s", left, right);
             state.output ~= format("    sete %s", lowByte(temp.register));
+            break;
+        case OperatorType.Inequality:
+            state.output ~= format("    cmp %s, %s", left, right);
+            state.output ~= format("    setne %s", lowByte(temp.register));
             break;
         default:
             throw new Exception(format(
