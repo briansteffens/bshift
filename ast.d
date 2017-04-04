@@ -24,6 +24,7 @@ enum OperatorType
     Asterisk,
     Equality,
     Inequality,
+    LogicalAnd,
 }
 
 OperatorType parseOperatorType(string input)
@@ -38,6 +39,8 @@ OperatorType parseOperatorType(string input)
             return OperatorType.Equality;
         case "!=":
             return OperatorType.Inequality;
+        case "&&":
+            return OperatorType.LogicalAnd;
         default:
             throw new Exception(
                     format("Unrecognized OperatorType: %s", input));

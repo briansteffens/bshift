@@ -112,11 +112,39 @@ class GeneratorState
     Local[] locals;
     Local[] temps;
 
+    string[] labels;
+
     int nextTempIndex = 0;
 
     this(Module mod)
     {
         this.mod = mod;
+    }
+
+    // Find a unique new label by adding numbers to the end of prefix
+    string addLabel(string prefix)
+    {
+        int counter = 0;
+
+        while (true)
+        {
+            string ret = format("%s%d", prefix, counter);
+
+            bool found = false;
+            for (int i = 0; i < this.labels.length; i++)
+            {
+                if (this.labels[i] == ret)
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+            {
+                return ret;
+            }
+        }
     }
 
     Register[] callerPreservedRegistersInUse()
@@ -576,6 +604,11 @@ Local generateOperator(GeneratorState state, Operator operator)
         return generateRelationalOperator(state, operator);
     }
 
+    if (operator.type == OperatorType.LogicalAnd)
+    {
+        return generateLogicalAndOperator(state, operator);
+    }
+
     throw new Exception(
             format("Unrecognized operator type: %s", operator.type));
 }
@@ -627,6 +660,32 @@ Local generateRelationalOperator(GeneratorState state, Operator operator)
                     "Unrecognized relational operator type: %s",
                     operator.type));
     }
+
+    return temp;
+}
+
+Local generateLogicalAndOperator(GeneratorState state, Operator operator)
+{
+    auto temp = state.addTemp(Type.Bool);
+    state.output ~= format("    xor %s, %s", temp.register, temp.register);
+
+    auto endComparison = state.addLabel("end_comparison_");
+
+    // Left operand
+    auto left = renderNode(state, generateNode(state, operator.left));
+    state.output ~= format("    test %s, %s", left, left);
+    state.output ~= format("    je %s", endComparison);
+
+    // Right operand
+    auto right = renderNode(state, generateNode(state, operator.right));
+    state.output ~= format("    test %s, %s", right, right);
+    state.output ~= format("    je %s", endComparison);
+
+    // Both were true
+    state.output ~= format("    mov %s, 1", temp.register);
+
+    // Either were false
+    state.output ~= format("%s:", endComparison);
 
     return temp;
 }
