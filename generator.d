@@ -144,6 +144,8 @@ class GeneratorState
             {
                 return ret;
             }
+
+            counter++;
         }
     }
 
