@@ -1,8 +1,10 @@
 ulong main()
 {
-    bool b;
+    ulong x;
+    x = 4;
 
-    b = (bool)48;
+    bool b;
+    b = (bool)x;
 
     return b;
 }

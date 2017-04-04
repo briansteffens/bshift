@@ -557,7 +557,7 @@ Local generateCastLocalIntegerToBool(GeneratorState state, Cast typeCast)
 
     state.output ~= format("    xor %s, %s", target.register, target.register);
     state.output ~= format("    cmp %s, 0", source);
-    state.output ~= format("    sete %s", lowByte(target.register));
+    state.output ~= format("    setne %s", lowByte(target.register));
 
     return target;
 }
