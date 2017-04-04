@@ -75,6 +75,7 @@ class Binding : Node
 enum Type
 {
     ULong,
+    Bool,
 }
 
 Type parseType(string s)
@@ -83,6 +84,8 @@ Type parseType(string s)
     {
         case "ulong":
             return Type.ULong;
+        case "bool":
+            return Type.Bool;
         default:
             throw new Exception(format("Unrecognized type: %s", s));
     }
@@ -90,6 +93,12 @@ Type parseType(string s)
 
 abstract class Literal : Node
 {
+    Type type;
+
+    this(Type type)
+    {
+        this.type = type;
+    }
 }
 
 class ULongLiteral : Literal
@@ -98,6 +107,23 @@ class ULongLiteral : Literal
 
     this(ulong value)
     {
+        super(Type.ULong);
+        this.value = value;
+    }
+
+    override string toString()
+    {
+        return to!string(this.value);
+    }
+}
+
+class BoolLiteral : Literal
+{
+    bool value;
+
+    this(bool value)
+    {
+        super(Type.Bool);
         this.value = value;
     }
 
@@ -131,6 +157,23 @@ class Call : Node
     override string toString()
     {
         return format("%s(%s)", this.functionName, this.parameters);
+    }
+}
+
+class Cast : Node
+{
+    Type newType;
+    Node target;
+
+    this(Type newType, Node target)
+    {
+        this.newType = newType;
+        this.target = target;
+    }
+
+    override string toString()
+    {
+        return format("(%s)%s", this.newType, this.target);
     }
 }
 

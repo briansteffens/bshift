@@ -6,9 +6,13 @@ echo && echo && echo && echo && echo && echo && echo && echo && echo && \
 echo && echo && echo && echo && echo && echo && echo && echo && echo && \
 ldc main.d lexer.d ast.d parser.d generator.d && \
 ./main test.bs && \
+
 #nasm -f elf64 output.asm && \
+#ld output.o && \
+
 basm output.asm && \
-ld output.o && \
+ld basm.o && \
+
 ./a.out; \
 OUTPUT="$?" && \
 echo "execution output -------------------------------------------------------"

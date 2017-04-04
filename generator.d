@@ -22,6 +22,44 @@ enum Register
     R15,
 }
 
+string lowByte(Register full)
+{
+    switch (full)
+    {
+        case Register.RAX:
+            return "al";
+        case Register.RBX:
+            return "bl";
+        case Register.RCX:
+            return "cl";
+        case Register.RDX:
+            return "dl";
+        case Register.RSI:
+            return "sil";
+        case Register.RDI:
+            return "dil";
+        case Register.R8:
+            return "r8b";
+        case Register.R9:
+            return "r9b";
+        case Register.R10:
+            return "r10b";
+        case Register.R11:
+            return "r11b";
+        case Register.R12:
+            return "r12b";
+        case Register.R13:
+            return "r13b";
+        case Register.R14:
+            return "r14b";
+        case Register.R15:
+            return "r15b";
+        default:
+            throw new Exception(
+                    format("Can't find the low byte for %s", full));
+    }
+}
+
 enum Location
 {
     Register,
@@ -52,6 +90,17 @@ bool isCallerPreserved(Register r)
            r == Register.R9  ||
            r == Register.R10 ||
            r == Register.R11;
+}
+
+Type getType(GeneratorState state, Node node)
+{
+    auto literal = cast(Literal)node;
+    if (literal !is null)
+    {
+        return literal.type;
+    }
+
+    throw new Exception(format("Can't figure out the type for Node %s", node));
 }
 
 class GeneratorState
@@ -408,7 +457,109 @@ Node generateNode(GeneratorState state, Node node)
         return new Binding(local.name);
     }
 
+    // Special handling for calls
+    auto typeCast = cast(Cast)node;
+    if (typeCast !is null)
+    {
+        auto local = generateCast(state, typeCast);
+        return new Binding(local.name);
+    }
+
     return node;
+}
+
+bool isTypeIntegral(Type type)
+{
+    return type == Type.ULong;
+}
+
+bool isLiteralInteger(GeneratorState state, Node node)
+{
+    auto literal = cast(Literal)node;
+    return literal !is null && isTypeIntegral(literal.type);
+}
+
+bool isBindingInteger(GeneratorState state, Node node)
+{
+    auto binding = cast(Binding)node;
+    if (binding is null)
+    {
+        return false;
+    }
+
+    auto local = state.findLocal(binding.name);
+    if (local is null)
+    {
+        return false;
+    }
+
+    return isTypeIntegral(local.type);
+}
+
+Local generateCast(GeneratorState state, Cast typeCast)
+{
+    auto unableToCast = new Exception(format("Unable to cast %s to %s",
+            typeCast.target, typeCast.newType));
+
+    if (typeCast.newType == Type.Bool)
+    {
+        if (isLiteralInteger(state, typeCast.target))
+        {
+            return generateCastLiteralIntegerToBool(state, typeCast);
+        }
+
+        if (isBindingInteger(state, typeCast.target))
+        {
+            return generateCastLocalIntegerToBool(state, typeCast);
+        }
+    }
+
+    throw unableToCast;
+}
+
+Local generateCastLiteralIntegerToBool(GeneratorState state, Cast typeCast)
+{
+    bool foundMatch = false;
+    bool castedValue;
+
+    auto ulongLiteral = cast(ULongLiteral)typeCast.target;
+    if (ulongLiteral !is null)
+    {
+        castedValue = ulongLiteral.value != 0;
+        foundMatch = true;
+    }
+
+    if (!foundMatch)
+    {
+        throw new Exception(format("Can't convert %s to bool",
+                            typeCast.target));
+    }
+
+    auto target = state.addTemp(Type.Bool);
+
+    if (castedValue)
+    {
+        state.output ~= format("    mov %s, 1", target.register);
+    }
+    else
+    {
+        state.output ~= format("    xor %s, %s", target.register,
+                                                 target.register);
+    }
+
+    return target;
+}
+
+Local generateCastLocalIntegerToBool(GeneratorState state, Cast typeCast)
+{
+    auto source = renderNode(state, generateNode(state, typeCast.target));
+    auto target = state.addTemp(Type.Bool);
+
+    state.output ~= format("    xor %s, %s", target.register, target.register);
+    state.output ~= format("    cmp %s, 0", source);
+    state.output ~= format("    sete %s", lowByte(target.register));
+
+    return target;
 }
 
 Local generateOperator(GeneratorState state, Operator operator)

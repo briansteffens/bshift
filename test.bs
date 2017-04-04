@@ -1,9 +1,8 @@
-ulong add(ulong a, ulong b)
-{
-    return a + b;
-}
-
 ulong main()
 {
-    return add(3, 4);
+    bool b;
+
+    b = (bool)48;
+
+    return b;
 }

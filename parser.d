@@ -433,6 +433,17 @@ class ExpressionParser
         }
     }
 
+    // Pushes a new item onto the output stack, dealing with special cases
+    void outputPush(ParserItem i)
+    {
+        if (this.consumeCastComplete(i))
+        {
+            return;
+        }
+
+        this.output.push(i);
+    }
+
     void consume()
     {
         if (this.operators.len() == 0)
@@ -449,7 +460,7 @@ class ExpressionParser
         auto operator = parseOperatorType(this.operators.pop().token.value);
         auto left = getOrParseNode(this.output.pop());
 
-        this.output.push(new Operator(left, operator, right));
+        this.outputPush(new ParserItem(new Operator(left, operator, right)));
     }
 
     void consumeFunctionCall()
@@ -466,12 +477,96 @@ class ExpressionParser
                 topOutput.functionName)
             {
                 // Push the new call onto the output stack
-                this.output.push(new Call(topOutput.token.value, parameters));
+                this.outputPush(new ParserItem(
+                            new Call(topOutput.token.value, parameters)));
                 break;
             }
 
             insertInPlace(parameters, 0, getOrParseNode(topOutput));
         }
+    }
+
+    // A cast start looks like '(bool)' and isn't completed until the target
+    // is set by a subsequent target (the thing to cast to that type).
+    bool consumeCastStart()
+    {
+        // Check for open parenthesis
+        auto cur = this.input.current();
+
+        if (!cur.match(TokenType.Symbol, "("))
+        {
+            return false;
+        }
+
+        // Check for a valid type name
+        cur = this.input.peek(1);
+
+        if (cur.type != TokenType.Word)
+        {
+            return false;
+        }
+
+        Type castType;
+        try
+        {
+            castType = parseType(cur.value);
+        }
+        catch
+        {
+            return false;
+        }
+
+        // Check for close parenthesis
+        cur = this.input.peek(2);
+
+        if (!cur.match(TokenType.Symbol, ")"))
+        {
+            return false;
+        }
+
+        // Found a cast, rewrite these tokens as an incomplete cast
+        this.input.next();
+        this.input.next();
+
+        this.outputPush(new ParserItem(new Cast(castType, null)));
+
+        return true;
+    }
+
+    // A cast is completed when the top of the output stack has an incomplete
+    // cast and the new item being pushed onto the stack is something that can
+    // be a cast target.
+    bool consumeCastComplete(ParserItem newItem)
+    {
+        if (this.output.stack.length == 0)
+        {
+            return false;
+        }
+
+        // Check for an incomplete cast
+        auto maybeCast = this.output.peek(0);
+
+        if (maybeCast is null || !maybeCast.isNode())
+        {
+            return false;
+        }
+
+        auto castNode = cast(Cast)maybeCast.node;
+        if (castNode is null || castNode.target !is null)
+        {
+            return false;
+        }
+
+        // Check if newItem is castable
+        if (newItem.isToken() &&
+            (newItem.token.type == TokenType.Integer ||
+             newItem.token.type == TokenType.Word))
+        {
+            castNode.target = parseToken(newItem.token);
+            return true;
+        }
+
+        return false;
     }
 
     bool next()
@@ -483,7 +578,7 @@ class ExpressionParser
         }
 
         this.current = this.input.current();
-        //this.printState();
+        this.printState();
 
         if (current.type == TokenType.Symbol && current.value == ";")
         {
@@ -505,7 +600,7 @@ class ExpressionParser
             {
                 auto nameToken = new ParserItem(current);
                 nameToken.functionName = true;
-                this.output.push(nameToken);
+                this.outputPush(nameToken);
 
                 this.input.next();
                 auto startList = new ParserItem(this.input.current());
@@ -518,7 +613,13 @@ class ExpressionParser
 
         if (current.type != TokenType.Symbol)
         {
-            this.output.push(current);
+            this.outputPush(new ParserItem(current));
+            return true;
+        }
+
+        // Detect cast: open parenthesis, type, close parenthesis
+        if (this.consumeCastStart())
+        {
             return true;
         }
 

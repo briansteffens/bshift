@@ -74,6 +74,11 @@ class Token
     {
         return format("%s\t%s", this.type, this.value);
     }
+
+    bool match(TokenType type, string value)
+    {
+        return this.type == type && this.value == value;
+    }
 }
 
 Token[] lex(string src)
