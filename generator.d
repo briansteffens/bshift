@@ -142,6 +142,7 @@ class GeneratorState
 
             if (!found)
             {
+                this.labels ~= ret;
                 return ret;
             }
 
