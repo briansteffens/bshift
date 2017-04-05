@@ -35,6 +35,17 @@ class TokenFeed
         return true;
     }
 
+    bool rewind(int distance)
+    {
+        if (distance == 0 && distance > this.index)
+        {
+            return false;
+        }
+
+        this.index -= distance;
+        return true;
+    }
+
     Token peek(int distance)
     {
         int target = this.index + distance;
@@ -140,20 +151,26 @@ Function parseFunction(TokenFeed tokens)
         }
     }
 
+    auto functionBody = parseBlock(tokens);
+
+    return new Function(type, name, parameters, functionBody);
+}
+
+Block parseBlock(TokenFeed tokens)
+{
     // Open bracket
     if (!tokens.next())
     {
         throw new Exception("Expected a function body");
     }
 
-    token = tokens.current();
+    auto token = tokens.current();
 
     if (token.type != TokenType.Symbol || token.value != "{")
     {
         throw new Exception("Expected a function body");
     }
 
-    // Function body
     Statement[] statements;
 
     while (tokens.next())
@@ -170,12 +187,23 @@ Function parseFunction(TokenFeed tokens)
         statements[statements.length - 1] = parseStatement(tokens);
     }
 
-    return new Function(type, name, parameters, statements);
+    return new Block(statements);
 }
 
 Statement parseStatement(TokenFeed tokens)
 {
     auto current = tokens.current();
+
+    // Start of block
+    if (current.match(TokenType.Symbol, "{"))
+    {
+        if (!tokens.rewind(1))
+        {
+            throw new Exception("Can't rewind?");
+        }
+
+        return parseBlock(tokens);
+    }
 
     if (current.type == TokenType.Word)
     {

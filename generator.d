@@ -362,9 +362,9 @@ void generateFunction(GeneratorState state, Function func)
 
     state.output ~= format("%s:", renderFunctionName(func.name));
 
-    for (int i = 0; i < func.statements.length; i++)
+    for (int i = 0; i < func.block.statements.length; i++)
     {
-        generateStatement(state, func.statements[i]);
+        generateStatement(state, func.block.statements[i]);
     }
 
     state.locals.length = 0;
@@ -396,7 +396,22 @@ void generateStatement(GeneratorState state, Statement st)
         return;
     }
 
+    auto block = cast(Block)st;
+    if (block !is null)
+    {
+        generateBlock(state, block);
+        return;
+    }
+
     throw new Exception(format("Unrecognized statement type: %s", st));
+}
+
+void generateBlock(GeneratorState state, Block block)
+{
+    foreach (statement; block.statements)
+    {
+        generateStatement(state, statement);
+    }
 }
 
 void generateLocalDeclaration(GeneratorState state, LocalDeclaration st)

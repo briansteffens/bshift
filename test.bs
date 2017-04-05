@@ -9,5 +9,10 @@ ulong main()
     bool c;
     b = a && b;
 
+    {
+        ulong x;
+        x = 7;
+    }
+
     return b;
 }

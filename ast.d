@@ -256,6 +256,30 @@ class Return : Statement
     }
 }
 
+class Block : Statement
+{
+    Statement[] statements;
+
+    this(Statement[] statements)
+    {
+        super(null);
+
+        this.statements = statements;
+    }
+
+    override string toString()
+    {
+        auto ret = "{\n";
+
+        foreach (statement; this.statements)
+        {
+            ret ~= format("    %s\n", statement);
+        }
+
+        return ret ~ "}\n";
+    }
+}
+
 class Definition
 {
 }
@@ -265,39 +289,32 @@ class Function : Definition
     Type returnType;
     string name;
     TypeSignature[] parameters;
-    Statement[] statements;
+    Block block;
 
-    this(Type returnType, string name, TypeSignature[] parameters,
-         Statement[] statements)
+    this(Type returnType, string name, TypeSignature[] parameters, Block block)
     {
         this.returnType = returnType;
         this.name = name;
         this.parameters = parameters;
-        this.statements = statements;
+        this.block = block;
     }
 
     override string toString()
     {
         auto params = "";
 
-        for (int i = 0; i < this.parameters.length; i++)
+        foreach (param; this.parameters)
         {
-            if (i > 0)
+            if (params != "")
             {
                 params ~= ", ";
             }
 
-            params ~= this.parameters[i].toString();
+            params ~= param.toString();
         }
 
-        auto ret = format("%s %s(%s) {\n", this.returnType, this.name, params);
-
-        for (int i = 0; i < this.statements.length; i++)
-        {
-            ret ~= format("    %s\n", this.statements[i]);
-        }
-
-        return ret ~ "}\n";
+        return format("%s %s(%s)\n%s", this.returnType, this.name, params,
+                this.block);
     }
 }
 
