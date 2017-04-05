@@ -410,6 +410,13 @@ void generateStatement(GeneratorState state, Statement st)
         return;
     }
 
+    auto _while = cast(While)st;
+    if (_while !is null)
+    {
+        generateWhile(state, _while);
+        return;
+    }
+
     throw new Exception(format("Unrecognized statement type: %s", st));
 }
 
@@ -421,7 +428,7 @@ class GeneratorIfBlock
     Statement block;
     string label;
 
-    this(IfBlock block, string label)
+    this(ConditionalBlock block, string label)
     {
         this.conditional = block.conditional;
         this.block = block.block;
@@ -433,6 +440,29 @@ class GeneratorIfBlock
         this.block = block;
         this.label = label;
     }
+}
+
+void generateWhile(GeneratorState state, While _while)
+{
+    auto startWhileLabel = state.addLabel("while_start_");
+    auto endWhileLabel = state.addLabel("while_end_");
+
+    state.output ~= format("%s:", startWhileLabel);
+
+    if (_while.conditional !is null)
+    {
+        auto conditional = renderNode(state,
+                generateNode(state, _while.conditional));
+
+        state.output ~= format("    test %s, %s", conditional, conditional);
+        state.output ~= format("    je %s", endWhileLabel);
+    }
+
+    // Loop body
+    generateStatement(state, _while.block);
+
+    state.output ~= format("    jmp %s", startWhileLabel);
+    state.output ~= format("%s:", endWhileLabel);
 }
 
 void generateIf(GeneratorState state, If _if)

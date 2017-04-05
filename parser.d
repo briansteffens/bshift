@@ -213,6 +213,8 @@ Statement parseStatement(TokenFeed tokens)
                 return parseReturn(tokens);
             case "if":
                 return parseIf(tokens);
+            case "while":
+                return parseWhile(tokens);
             default:
                 try
                 {
@@ -310,10 +312,17 @@ Return parseReturn(TokenFeed tokens)
     return new Return(null, parseExpression(tokens));
 }
 
+While parseWhile(TokenFeed tokens)
+{
+    auto block = parseConditionalBlock(tokens);
+
+    return new While(block.conditional, block.block);
+}
+
 If parseIf(TokenFeed tokens)
 {
-    auto ifBlock = parseIfBlock(tokens);
-    IfBlock[] elseIfBlocks;
+    auto ifBlock = parseConditionalBlock(tokens);
+    ConditionalBlock[] elseIfBlocks;
     Statement elseBlock = null;
 
     while (true)
@@ -333,7 +342,7 @@ If parseIf(TokenFeed tokens)
         {
             tokens.next();
 
-            elseIfBlocks ~= parseIfBlock(tokens);
+            elseIfBlocks ~= parseConditionalBlock(tokens);
 
             continue;
         }
@@ -348,7 +357,7 @@ If parseIf(TokenFeed tokens)
 }
 
 // Parse a conditional expression followed by a statement or block
-IfBlock parseIfBlock(TokenFeed tokens)
+ConditionalBlock parseConditionalBlock(TokenFeed tokens)
 {
     // Make sure there's an open parenthesis
     auto next = tokens.peek(1);
@@ -361,7 +370,7 @@ IfBlock parseIfBlock(TokenFeed tokens)
     auto conditional = parseExpressionParenthesis(tokens);
     auto block = parseStatement(tokens);
 
-    return new IfBlock(conditional, block);
+    return new ConditionalBlock(conditional, block);
 }
 
 // This represents either an unparsed lexer Token or a parsed AST Node

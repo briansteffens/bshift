@@ -239,13 +239,15 @@ class Assignment : Statement
     }
 }
 
-class IfBlock
+class ConditionalBlock : Statement
 {
     Node conditional;
     Statement block;
 
     this(Node conditional, Statement block)
     {
+        super(null);
+
         this.conditional = conditional;
         this.block = block;
     }
@@ -256,13 +258,27 @@ class IfBlock
     }
 }
 
+class While : ConditionalBlock
+{
+    this(Node conditional, Statement block)
+    {
+        super(conditional, block);
+    }
+
+    override string toString()
+    {
+        return format("while\n%s", super.toString());
+    }
+}
+
 class If : Statement
 {
-    IfBlock   ifBlock;
-    IfBlock[] elseIfBlocks;
+    ConditionalBlock ifBlock;
+    ConditionalBlock[] elseIfBlocks;
     Statement elseBlock;
 
-    this(IfBlock ifBlock, IfBlock[] elseIfBlocks, Statement elseBlock)
+    this(ConditionalBlock ifBlock, ConditionalBlock[] elseIfBlocks,
+         Statement elseBlock)
     {
         super(null);
 
