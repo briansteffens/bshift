@@ -338,7 +338,10 @@ If parseIf(TokenFeed tokens)
             continue;
         }
 
+        // "else" block
+        tokens.next();
         elseBlock = parseStatement(tokens);
+        break;
     }
 
     return new If(ifBlock, elseIfBlocks, elseBlock);
@@ -356,8 +359,6 @@ IfBlock parseIfBlock(TokenFeed tokens)
     }
 
     auto conditional = parseExpressionParenthesis(tokens);
-    writeln("\n\nASDFASDF\n\n");
-    writeln(tokens.current());
     auto block = parseStatement(tokens);
 
     return new IfBlock(conditional, block);

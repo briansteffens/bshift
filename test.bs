@@ -1,15 +1,17 @@
 ulong main()
 {
-    bool a;
-    a = (bool)1;
-
-    ulong x;
-    x = 3;
-
-    if (a)
+    if ((bool)0)
     {
-        x = 7;
+        return 3;
+    }
+    else if ((bool)0)
+    {
+        return 7;
+    }
+    else
+    {
+        return 13;
     }
 
-    return x;
+    return 0;
 }
