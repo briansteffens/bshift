@@ -1,10 +1,19 @@
 ulong main()
 {
-    if ((bool)0)
+    ulong x;
+    x = 1;
+
+    bool b;
+    b = false;
+
+    bool c;
+    c = true;
+
+    if (b)
     {
         return 3;
     }
-    else if ((bool)0)
+    else if (c)
     {
         return 7;
     }

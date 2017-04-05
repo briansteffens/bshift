@@ -467,7 +467,15 @@ Node parseToken(Token t)
         case TokenType.Integer:
             return new ULongLiteral(to!ulong(t.value));
         case TokenType.Word:
-            return new Binding(t.value);
+            switch (t.value)
+            {
+                case "true":
+                    return new BoolLiteral(true);
+                case "false":
+                    return new BoolLiteral(false);
+                default:
+                    return new Binding(t.value);
+            }
         default:
             throw new Exception(format("Unrecognized token type: %s", t.type));
     }

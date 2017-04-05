@@ -896,6 +896,12 @@ string renderNode(GeneratorState state, Node node)
         return format("%d", ulongLiteral.value);
     }
 
+    auto boolLiteral = cast(BoolLiteral)node;
+    if (boolLiteral !is null)
+    {
+        return boolLiteral.value ? "1" : "0";
+    }
+
     auto operator = cast(Operator)node;
     if (operator !is null)
     {
