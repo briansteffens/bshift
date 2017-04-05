@@ -403,7 +403,94 @@ void generateStatement(GeneratorState state, Statement st)
         return;
     }
 
+    auto _if = cast(If)st;
+    if (_if !is null)
+    {
+        generateIf(state, _if);
+        return;
+    }
+
     throw new Exception(format("Unrecognized statement type: %s", st));
+}
+
+// Convenience structure for generating if statements: represents one block
+// (if, else if, or else)
+class GeneratorIfBlock
+{
+    Node conditional;
+    Statement block;
+    string label;
+
+    this(IfBlock block, string label)
+    {
+        this.conditional = block.conditional;
+        this.block = block.block;
+        this.label = label;
+    }
+
+    this(Statement block, string label)
+    {
+        this.block = block;
+        this.label = label;
+    }
+}
+
+void generateIf(GeneratorState state, If _if)
+{
+    // Put all the blocks in a standardized format for this process
+    GeneratorIfBlock[] blocks;
+
+    blocks ~= new GeneratorIfBlock(_if.ifBlock, state.addLabel("if_"));
+
+    for (int i = 0; i < _if.elseIfBlocks.length; i++)
+    {
+        blocks ~= new GeneratorIfBlock(_if.elseIfBlocks[i],
+                state.addLabel(format("else_if_%d_", i)));
+    }
+
+    if (_if.elseBlock !is null)
+    {
+        blocks ~= new GeneratorIfBlock(_if.elseBlock,
+                                       state.addLabel("else_"));
+    }
+
+    // Start the real work
+    auto endIfLabel = state.addLabel("end_if_");
+
+    for (int i = 0; i < blocks.length; i++)
+    {
+        auto block = blocks[i];
+
+        state.output ~= format("%s:", block.label);
+
+        if (block.conditional !is null)
+        {
+            // The label to jump to if the comparison fails
+            auto nextBlockLabel = endIfLabel;
+            if (i + 1 < blocks.length)
+            {
+                nextBlockLabel = blocks[i + 1].label;
+            }
+
+            auto conditional = renderNode(state,
+                    generateNode(state, block.conditional));
+
+            state.output ~= format("    test %s, %s",
+                                   conditional, conditional);
+            state.output ~= format("    je %s", nextBlockLabel);
+        }
+
+        // Block: run if the conditional was true
+        generateStatement(state, block.block);
+
+        // Jump out of the if structure, unless we're already at the end
+        if (i == blocks.length - 1)
+        {
+            state.output ~= format("    jmp %s", endIfLabel);
+        }
+    }
+
+    state.output ~= format("%s:", endIfLabel);
 }
 
 void generateBlock(GeneratorState state, Block block)

@@ -239,6 +239,58 @@ class Assignment : Statement
     }
 }
 
+class IfBlock
+{
+    Node conditional;
+    Statement block;
+
+    this(Node conditional, Statement block)
+    {
+        this.conditional = conditional;
+        this.block = block;
+    }
+
+    override string toString()
+    {
+        return format("(%s)\n%s", this.conditional, this.block);
+    }
+}
+
+class If : Statement
+{
+    IfBlock   ifBlock;
+    IfBlock[] elseIfBlocks;
+    Statement elseBlock;
+
+    this(IfBlock ifBlock, IfBlock[] elseIfBlocks, Statement elseBlock)
+    {
+        super(null);
+
+        this.ifBlock = ifBlock;
+        this.elseIfBlocks = elseIfBlocks;
+        this.elseBlock = elseBlock;
+    }
+
+    override string toString()
+    {
+        auto ret = format("if (%s)\n%s\n", this.ifBlock.conditional,
+                          this.ifBlock.block);
+
+        foreach (elseIf; this.elseIfBlocks)
+        {
+            ret ~= format("else if (%s)\n%s\n", elseIf.conditional,
+                    elseIf.block);
+        }
+
+        if (this.elseBlock !is null)
+        {
+            ret ~= format("else\n%s\n", this.elseBlock);
+        }
+
+        return ret;
+    }
+}
+
 class Return : Statement
 {
     Node expression;

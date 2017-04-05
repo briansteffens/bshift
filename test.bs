@@ -3,16 +3,13 @@ ulong main()
     bool a;
     a = (bool)1;
 
-    bool b;
-    b = (bool)1;
+    ulong x;
+    x = 3;
 
-    bool c;
-    b = a && b;
-
+    if (a)
     {
-        ulong x;
         x = 7;
     }
 
-    return b;
+    return x;
 }

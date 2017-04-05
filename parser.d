@@ -207,20 +207,24 @@ Statement parseStatement(TokenFeed tokens)
 
     if (current.type == TokenType.Word)
     {
-        if (current.value == "return")
+        switch (current.value)
         {
-            return parseReturn(tokens);
+            case "return":
+                return parseReturn(tokens);
+            case "if":
+                return parseIf(tokens);
+            default:
+                try
+                {
+                    parseType(current.value);
+                    return parseLocalDeclaration(tokens);
+                }
+                catch
+                {
+                    // Not a local declaration. Bury exception.
+                }
         }
 
-        try
-        {
-            parseType(current.value);
-            return parseLocalDeclaration(tokens);
-        }
-        catch
-        {
-            // Not a local declaration. Bury exception.
-        }
     }
 
     return parseAssignment(tokens);
@@ -304,6 +308,59 @@ Assignment parseAssignment(TokenFeed tokens)
 Return parseReturn(TokenFeed tokens)
 {
     return new Return(null, parseExpression(tokens));
+}
+
+If parseIf(TokenFeed tokens)
+{
+    auto ifBlock = parseIfBlock(tokens);
+    IfBlock[] elseIfBlocks;
+    Statement elseBlock = null;
+
+    while (true)
+    {
+        // No more else blocks
+        auto elseKeyword = tokens.peek(1);
+        if (elseKeyword is null || !elseKeyword.match(TokenType.Word, "else"))
+        {
+            break;
+        }
+
+        tokens.next();
+
+        // "else if" block
+        auto ifKeyword = tokens.peek(1);
+        if (ifKeyword is null || ifKeyword.match(TokenType.Word, "if"))
+        {
+            tokens.next();
+
+            elseIfBlocks ~= parseIfBlock(tokens);
+
+            continue;
+        }
+
+        elseBlock = parseStatement(tokens);
+    }
+
+    return new If(ifBlock, elseIfBlocks, elseBlock);
+}
+
+// Parse a conditional expression followed by a statement or block
+IfBlock parseIfBlock(TokenFeed tokens)
+{
+    // Make sure there's an open parenthesis
+    auto next = tokens.peek(1);
+
+    if (next is null || !next.match(TokenType.Symbol, "("))
+    {
+        throw new Exception("Expected an if conditional");
+    }
+
+    auto conditional = parseExpressionParenthesis(tokens);
+    writeln("\n\nASDFASDF\n\n");
+    writeln(tokens.current());
+    auto block = parseStatement(tokens);
+
+    return new IfBlock(conditional, block);
 }
 
 // This represents either an unparsed lexer Token or a parsed AST Node
@@ -459,6 +516,22 @@ class ExpressionParser
         {
             writefln("\t%s", this.operators.peek(i));
         }
+    }
+
+    // Get the number of open parenthesis on the operator stack
+    int parenthesisDepth()
+    {
+        int ret = 0;
+
+        foreach (item; this.operators.stack)
+        {
+            if (item.isToken() && item.token.match(TokenType.Symbol, "("))
+            {
+                ret++;
+            }
+        }
+
+        return ret;
     }
 
     // Pushes a new item onto the output stack, dealing with special cases
@@ -692,10 +765,10 @@ class ExpressionParser
 Node parseExpression(TokenFeed tokens)
 {
     auto parser = new ExpressionParser(tokens);
+
     while (parser.next())
     {
     }
-    //writefln("----------------------------------------------");
 
     if (parser.output.len() != 1)
     {
@@ -703,4 +776,33 @@ Node parseExpression(TokenFeed tokens)
     }
 
     return getOrParseNode(parser.output.pop());
+}
+
+// Parse an expression in parenthesis, ending on the first close parenthesis
+// with no open parenthesis on the stack
+Node parseExpressionParenthesis(TokenFeed tokens)
+{
+    auto parser = new ExpressionParser(tokens);
+
+    while (parser.next())
+    {
+        // Look for the terminating close parenthesis
+        if (parser.input.peek(1) !is null &&
+            parser.input.peek(1).match(TokenType.Symbol, ")") &&
+            parser.parenthesisDepth() == 1)
+        {
+            // Consume the last parenthesis
+            parser.next();
+            tokens.next();
+
+            if (parser.output.len() != 1)
+            {
+                throw new Exception("Expected one node to be left in parser");
+            }
+
+            return getOrParseNode(parser.output.pop());
+        }
+    }
+
+    throw new Exception("Expected a close parenthesis");
 }
