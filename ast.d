@@ -87,6 +87,19 @@ enum Type
     Bool,
 }
 
+int typeSize(Type t)
+{
+    switch (t)
+    {
+        case Type.ULong:
+            return 8;
+        case Type.Bool:
+            return 1;
+        default:
+            throw new Exception(format("Unknown size for %s", t));
+    }
+}
+
 Type parseType(string s)
 {
     switch (s)
@@ -142,16 +155,6 @@ class BoolLiteral : Literal
     }
 }
 
-abstract class Statement
-{
-    Line line;
-
-    this(Line line)
-    {
-        this.line = line;
-    }
-}
-
 class Call : Node
 {
     string functionName;
@@ -203,6 +206,21 @@ class TypeSignature
     }
 }
 
+abstract class Statement
+{
+    Line line;
+
+    this(Line line)
+    {
+        this.line = line;
+    }
+
+    LocalDeclaration[] declarations()
+    {
+        return [];
+    }
+}
+
 class LocalDeclaration : Statement
 {
     TypeSignature signature;
@@ -217,6 +235,11 @@ class LocalDeclaration : Statement
     override string toString()
     {
         return format("Local %s", this.signature);
+    }
+
+    override LocalDeclaration[] declarations()
+    {
+        return [this];
     }
 }
 
@@ -255,6 +278,11 @@ class ConditionalBlock : Statement
     override string toString()
     {
         return format("(%s)\n%s", this.conditional, this.block);
+    }
+
+    override LocalDeclaration[] declarations()
+    {
+        return block.declarations();
     }
 }
 
@@ -305,6 +333,23 @@ class If : Statement
 
         return ret;
     }
+
+    override LocalDeclaration[] declarations()
+    {
+        LocalDeclaration[] ret = this.ifBlock.declarations();
+
+        foreach (elseIf; this.elseIfBlocks)
+        {
+            ret ~= elseIf.declarations();
+        }
+
+        if (this.elseBlock !is null)
+        {
+            ret ~= this.elseBlock.declarations();
+        }
+
+        return ret;
+    }
 }
 
 class Return : Statement
@@ -345,6 +390,18 @@ class Block : Statement
         }
 
         return ret ~ "}\n";
+    }
+
+    override LocalDeclaration[] declarations()
+    {
+        LocalDeclaration[] ret;
+
+        foreach (statement; this.statements)
+        {
+            ret ~= statement.declarations();
+        }
+
+        return ret;
     }
 }
 

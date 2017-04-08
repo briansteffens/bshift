@@ -60,9 +60,31 @@ string lowByte(Register full)
     }
 }
 
+enum OpSize
+{
+    Byte,
+    Word,
+    Dword,
+    Qword,
+}
+
+OpSize typeToOpSize(Type t)
+{
+    switch (t)
+    {
+        case Type.Bool:
+            return OpSize.Byte;
+        case Type.ULong:
+            return OpSize.Qword;
+        default:
+            throw new Exception(format("Unknown type %s", t));
+    }
+}
+
 enum Location
 {
     Register,
+    Stack,
 }
 
 class Local
@@ -71,6 +93,7 @@ class Local
     Type type;
     Location location;
     Register register;
+    int stackOffset;
 
     this(Type type, string name)
     {
@@ -349,6 +372,8 @@ void placeParameter(Local local, int index)
 
 void generateFunction(GeneratorState state, Function func)
 {
+    int stackOffset = 0;
+
     // Function parameters need to be added to locals
     for (int i = 0; i < func.parameters.length; i++)
     {
@@ -357,10 +382,55 @@ void generateFunction(GeneratorState state, Function func)
 
         placeParameter(local, i);
 
+        stackOffset += typeSize(func.parameters[i].type);
+        local.stackOffset = stackOffset;
+
         state.locals ~= local;
     }
 
+    // Register locals
+    auto declarations = func.block.declarations();
+    foreach (decl; declarations)
+    {
+        auto existing = state.findLocal(decl.signature.name);
+
+        if (existing !is null)
+        {
+            throw new Exception(format("Local %s already declared",
+                    decl.signature.name));
+        }
+
+        auto local = new Local(decl.signature.type, decl.signature.name);
+
+        local.location = Location.Stack;
+
+        stackOffset += typeSize(decl.signature.type);
+        local.stackOffset = stackOffset;
+
+        state.locals ~= local;
+    }
+
+    // Function prologue
     state.output ~= format("%s:", renderFunctionName(func.name));
+    state.output ~= format("    push rbp");
+    state.output ~= format("    mov rbp, rsp");
+
+    if (stackOffset > 0)
+    {
+        state.output ~= format("    sub rsp, %s", stackOffset);
+    }
+
+    // Copy locals into the stack
+    foreach (local; state.locals)
+    {
+        if (local.location == Location.Register)
+        {
+            state.output ~= format("mov [rbp - %d], %s",
+                    local.stackOffset, local.register);
+
+            local.location = Location.Stack;
+        }
+    }
 
     for (int i = 0; i < func.block.statements.length; i++)
     {
@@ -373,8 +443,6 @@ void generateFunction(GeneratorState state, Function func)
 
 void generateStatement(GeneratorState state, Statement st)
 {
-    //state.output ~= format("    ; %s", st);
-
     auto localDeclaration = cast(LocalDeclaration)st;
     if (localDeclaration !is null)
     {
@@ -533,15 +601,6 @@ void generateBlock(GeneratorState state, Block block)
 
 void generateLocalDeclaration(GeneratorState state, LocalDeclaration st)
 {
-    auto existing = state.findLocal(st.signature.name);
-
-    if (existing !is null)
-    {
-        throw new Exception(format("Local %s already declared",
-                st.signature.name));
-    }
-
-    state.addLocal(st.signature.type, st.signature.name);
 }
 
 void generateAssignment(GeneratorState state, Assignment a)
@@ -553,10 +612,19 @@ void generateAssignment(GeneratorState state, Assignment a)
         throw new Exception(format("Local %s not found", a.binding.name));
     }
 
+    auto localRendered = renderLocal(local);
+
     auto value = generateNode(state, a.value);
     auto valueRendered = renderNode(state, value);
 
-    state.output ~= format("    mov %s, %s", local.register, valueRendered);
+    auto sizeHint = "";
+    if (local.location == Location.Stack)
+    {
+        sizeHint = to!string(typeToOpSize(local.type));
+    }
+
+    state.output ~= format("    mov %s%s, %s", sizeHint, localRendered,
+                           valueRendered);
 }
 
 string renderImmediate(Literal literal)
@@ -583,9 +651,17 @@ void generateReturn(GeneratorState state, Return r)
     if (binding !is null)
     {
         auto local = state.findLocal(binding.name);
-        if (local.register != Register.RAX)
+
+        if (local is null)
         {
-            state.output ~= format("    mov rax, %s", local.register);
+            throw new Exception(format("Local %s not found", binding.name));
+        }
+
+        if (local.location != Location.Register ||
+            local.register != Register.RAX)
+        {
+            auto localRendered = renderLocal(local);
+            state.output ~= format("    mov rax, %s", localRendered);
         }
     }
     else if (literal !is null)
@@ -597,6 +673,8 @@ void generateReturn(GeneratorState state, Return r)
         throw new Exception(format("Can't return this: %s", value));
     }
 
+    state.output ~= "    mov rsp, rbp";
+    state.output ~= "    pop rbp";
     state.output ~= "    ret";
 }
 
@@ -911,13 +989,26 @@ Local generateCall(GeneratorState state, Call call)
     return temp;
 }
 
+string renderLocal(Local local)
+{
+    switch (local.location)
+    {
+        case Location.Register:
+            return format("%s", local.register);
+        case Location.Stack:
+            return format("[rbp-%d]", local.stackOffset);
+        default:
+            throw new Exception(format("Unknown location %s", local.location));
+    }
+}
+
 string renderNode(GeneratorState state, Node node)
 {
     auto binding = cast(Binding)node;
     if (binding !is null)
     {
         auto local = state.findLocal(binding.name);
-        return format("%s", local.register);
+        return renderLocal(local);
     }
 
     auto ulongLiteral = cast(ULongLiteral)node;
