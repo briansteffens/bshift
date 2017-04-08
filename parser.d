@@ -235,21 +235,26 @@ Statement parseStatement(TokenFeed tokens)
 LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
 {
     auto typeSignature = parseTypeSignature(tokens);
+    Node expression = null;
 
-    // Semi-colon
+    // Assignment operator (=) or semi-colon
     if (!tokens.next())
     {
-        throw new Exception("Expected semi-colon");
+        throw new Exception("Expected assignment operator (=) or semi-colon");
     }
 
     auto current = tokens.current();
 
-    if (current.type != TokenType.Symbol || current.value != ";")
+    if (current.match(TokenType.Symbol, "="))
     {
-        throw new Exception("Expected semi-colon");
+        expression = parseExpression(tokens);
+    }
+    else if (!current.match(TokenType.Symbol, ";"))
+    {
+        throw new Exception("Expected assignment operator (=) or semi-colon");
     }
 
-    return new LocalDeclaration(null, typeSignature);
+    return new LocalDeclaration(null, typeSignature, expression);
 }
 
 TypeSignature parseTypeSignature(TokenFeed tokens)

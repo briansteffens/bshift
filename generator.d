@@ -601,26 +601,36 @@ void generateBlock(GeneratorState state, Block block)
 
 void generateLocalDeclaration(GeneratorState state, LocalDeclaration st)
 {
+    if (st.value !is null)
+    {
+        generateAssignmentShared(state, st.signature.name, st.value);
+    }
 }
 
 void generateAssignment(GeneratorState state, Assignment a)
 {
-    auto local = state.findLocal(a.binding.name);
+    generateAssignmentShared(state, a.binding.name, a.value);
+}
 
-    if (local is null)
+void generateAssignmentShared(GeneratorState state, string targetName,
+                              Node expression)
+{
+    auto target = state.findLocal(targetName);
+
+    if (target is null)
     {
-        throw new Exception(format("Local %s not found", a.binding.name));
+        throw new Exception(format("Local %s not found", targetName));
     }
 
-    auto localRendered = renderLocal(local);
+    auto localRendered = renderLocal(target);
 
-    auto value = generateNode(state, a.value);
+    auto value = generateNode(state, expression);
     auto valueRendered = renderNode(state, value);
 
     auto sizeHint = "";
-    if (local.location == Location.Stack)
+    if (target.location == Location.Stack)
     {
-        sizeHint = to!string(typeToOpSize(local.type));
+        sizeHint = to!string(typeToOpSize(target.type));
     }
 
     state.output ~= format("    mov %s%s, %s", sizeHint, localRendered,

@@ -224,17 +224,26 @@ abstract class Statement
 class LocalDeclaration : Statement
 {
     TypeSignature signature;
+    Node value;
 
-    this(Line line, TypeSignature signature)
+    this(Line line, TypeSignature signature, Node value)
     {
         super(line);
 
         this.signature = signature;
+        this.value = value;
     }
 
     override string toString()
     {
-        return format("Local %s", this.signature);
+        auto ret = format("Local %s", this.signature);
+
+        if (this.value !is null)
+        {
+            ret ~= format(" = %s", this.value);
+        }
+
+        return ret;
     }
 
     override LocalDeclaration[] declarations()
