@@ -81,33 +81,55 @@ class Binding : Node
     }
 }
 
-enum Type
+enum PrimitiveType
 {
     ULong,
     Bool,
 }
 
-int typeSize(Type t)
+class Type
+{
+    PrimitiveType primitive;
+    bool pointer;
+
+    this(PrimitiveType primitive, bool pointer = false)
+    {
+        this.primitive = primitive;
+        this.pointer = pointer;
+    }
+}
+
+int primitiveSize(PrimitiveType t)
 {
     switch (t)
     {
-        case Type.ULong:
+        case PrimitiveType.ULong:
             return 8;
-        case Type.Bool:
+        case PrimitiveType.Bool:
             return 1;
         default:
             throw new Exception(format("Unknown size for %s", t));
     }
 }
 
-Type parseType(string s)
+int typeSize(Type t)
+{
+    if (t.pointer)
+    {
+        return 8;
+    }
+
+    return primitiveSize(t.primitive);
+}
+
+PrimitiveType parsePrimitive(string s)
 {
     switch (s)
     {
         case "ulong":
-            return Type.ULong;
+            return PrimitiveType.ULong;
         case "bool":
-            return Type.Bool;
+            return PrimitiveType.Bool;
         default:
             throw new Exception(format("Unrecognized type: %s", s));
     }
@@ -115,9 +137,9 @@ Type parseType(string s)
 
 abstract class Literal : Node
 {
-    Type type;
+    PrimitiveType type;
 
-    this(Type type)
+    this(PrimitiveType type)
     {
         this.type = type;
     }
@@ -129,7 +151,7 @@ class ULongLiteral : Literal
 
     this(ulong value)
     {
-        super(Type.ULong);
+        super(PrimitiveType.ULong);
         this.value = value;
     }
 
@@ -145,7 +167,7 @@ class BoolLiteral : Literal
 
     this(bool value)
     {
-        super(Type.Bool);
+        super(PrimitiveType.Bool);
         this.value = value;
     }
 

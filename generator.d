@@ -68,17 +68,27 @@ enum OpSize
     Qword,
 }
 
-OpSize typeToOpSize(Type t)
+OpSize primitiveToOpSize(PrimitiveType t)
 {
     switch (t)
     {
-        case Type.Bool:
+        case PrimitiveType.Bool:
             return OpSize.Byte;
-        case Type.ULong:
+        case PrimitiveType.ULong:
             return OpSize.Qword;
         default:
             throw new Exception(format("Unknown type %s", t));
     }
+}
+
+OpSize typeToOpSize(Type t)
+{
+    if (t.pointer)
+    {
+        return OpSize.Qword;
+    }
+
+    return primitiveToOpSize(t.primitive);
 }
 
 enum Location
@@ -115,7 +125,7 @@ bool isCallerPreserved(Register r)
            r == Register.R11;
 }
 
-Type getType(GeneratorState state, Node node)
+PrimitiveType getType(GeneratorState state, Node node)
 {
     auto literal = cast(Literal)node;
     if (literal !is null)
@@ -719,15 +729,15 @@ Node generateNode(GeneratorState state, Node node)
     return node;
 }
 
-bool isTypeIntegral(Type type)
+bool isPrimitiveIntegral(PrimitiveType type)
 {
-    return type == Type.ULong;
+    return type == PrimitiveType.ULong;
 }
 
 bool isLiteralInteger(GeneratorState state, Node node)
 {
     auto literal = cast(Literal)node;
-    return literal !is null && isTypeIntegral(literal.type);
+    return literal !is null && isPrimitiveIntegral(literal.type);
 }
 
 bool isBindingInteger(GeneratorState state, Node node)
@@ -744,7 +754,12 @@ bool isBindingInteger(GeneratorState state, Node node)
         return false;
     }
 
-    return isTypeIntegral(local.type);
+    if (local.type.pointer)
+    {
+        return false;
+    }
+
+    return isPrimitiveIntegral(local.type.primitive);
 }
 
 Local generateCast(GeneratorState state, Cast typeCast)
@@ -752,7 +767,8 @@ Local generateCast(GeneratorState state, Cast typeCast)
     auto unableToCast = new Exception(format("Unable to cast %s to %s",
             typeCast.target, typeCast.newType));
 
-    if (typeCast.newType == Type.Bool)
+    if (typeCast.newType.pointer ||
+        typeCast.newType.primitive == PrimitiveType.Bool)
     {
         if (isLiteralInteger(state, typeCast.target))
         {
@@ -786,7 +802,7 @@ Local generateCastLiteralIntegerToBool(GeneratorState state, Cast typeCast)
                             typeCast.target));
     }
 
-    auto target = state.addTemp(Type.Bool);
+    auto target = state.addTemp(new Type(PrimitiveType.Bool));
 
     if (castedValue)
     {
@@ -804,7 +820,7 @@ Local generateCastLiteralIntegerToBool(GeneratorState state, Cast typeCast)
 Local generateCastLocalIntegerToBool(GeneratorState state, Cast typeCast)
 {
     auto source = renderNode(state, generateNode(state, typeCast.target));
-    auto target = state.addTemp(Type.Bool);
+    auto target = state.addTemp(new Type(PrimitiveType.Bool));
 
     state.output ~= format("    xor %s, %s", target.register, target.register);
     state.output ~= format("    cmp %s, 0", source);
@@ -841,7 +857,7 @@ Local generateMathOperator(GeneratorState state, Operator operator)
     auto left = renderNode(state, generateNode(state, operator.left));
     auto right = renderNode(state, generateNode(state, operator.right));
 
-    auto temp = state.addTemp(Type.ULong);
+    auto temp = state.addTemp(new Type(PrimitiveType.ULong));
     state.output ~= format("    mov %s, %s", temp.register, left);
 
     switch (operator.type)
@@ -865,7 +881,7 @@ Local generateRelationalOperator(GeneratorState state, Operator operator)
     auto left = renderNode(state, generateNode(state, operator.left));
     auto right = renderNode(state, generateNode(state, operator.right));
 
-    auto temp = state.addTemp(Type.Bool);
+    auto temp = state.addTemp(new Type(PrimitiveType.Bool));
     state.output ~= format("    xor %s, %s", temp.register, temp.register);
 
     switch (operator.type)
@@ -889,7 +905,7 @@ Local generateRelationalOperator(GeneratorState state, Operator operator)
 
 Local generateLogicalAndOperator(GeneratorState state, Operator operator)
 {
-    auto temp = state.addTemp(Type.Bool);
+    auto temp = state.addTemp(new Type(PrimitiveType.Bool));
     state.output ~= format("    xor %s, %s", temp.register, temp.register);
 
     auto endComparison = state.addLabel("end_comparison_");
@@ -1167,7 +1183,7 @@ void shuffleRegisters(GeneratorState state, RegisterMove[] moves)
         }
 
         // Circular chain
-        auto tempLocal = state.addTemp(Type.ULong);
+        auto tempLocal = state.addTemp(new Type(PrimitiveType.ULong));
         auto temp = tempLocal.register;
 
         state.output ~= format("    mov %s, %s", temp, chain[$-1]);

@@ -96,7 +96,7 @@ Function parseFunction(TokenFeed tokens)
         throw new Exception("Expected a function return type");
     }
 
-    auto type = parseType(token.value);
+    auto type = parseType(tokens);
 
     // Function name
     if (!tokens.next())
@@ -218,7 +218,7 @@ Statement parseStatement(TokenFeed tokens)
             default:
                 try
                 {
-                    parseType(current.value);
+                    parsePrimitive(current.value);
                     return parseLocalDeclaration(tokens);
                 }
                 catch
@@ -257,10 +257,14 @@ LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
     return new LocalDeclaration(null, typeSignature, expression);
 }
 
+Type parseType(TokenFeed tokens)
+{
+    return new Type(parsePrimitive(tokens.current().value));
+}
+
 TypeSignature parseTypeSignature(TokenFeed tokens)
 {
-    // New local type
-    auto type = parseType(tokens.current().value);
+    auto type = parseType(tokens);
 
     // New local name
     if (!tokens.next())
@@ -630,10 +634,10 @@ class ExpressionParser
             return false;
         }
 
-        Type castType;
+        PrimitiveType castType;
         try
         {
-            castType = parseType(cur.value);
+            castType = parsePrimitive(cur.value);
         }
         catch
         {
@@ -652,7 +656,7 @@ class ExpressionParser
         this.input.next();
         this.input.next();
 
-        this.outputPush(new ParserItem(new Cast(castType, null)));
+        this.outputPush(new ParserItem(new Cast(new Type(castType), null)));
 
         return true;
     }
