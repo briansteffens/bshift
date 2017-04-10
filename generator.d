@@ -1060,13 +1060,12 @@ class NonRegisterArg
     }
 }
 
-Local generateCall(GeneratorState state, Call call)
+Register[] prepareCallParams(GeneratorState state, Node[] params)
 {
     // Generate all parameters
-    Node[] params;
-    for (int i = 0; i < call.parameters.length; i++)
+    for (int i = 0; i < params.length; i++)
     {
-        params ~= generateNode(state, call.parameters[i]);
+        params[i] = generateNode(state, params[i]);
     }
 
     // Save caller-preserved registers
@@ -1116,13 +1115,18 @@ Local generateCall(GeneratorState state, Call call)
                                arg.target, renderNode(state, arg.node));
     }
 
-    // Make the actual call
-    auto func = state.mod.findFunction(call.functionName);
-    state.output ~= format("    call %s", renderFunctionName(func.name));
+    return callerPreserved;
+}
 
+Local cleanupCall(GeneratorState state, Type returnType,
+                  Register[] callerPreserved)
+{
     // Save return value (in rax) to a new temp variable
-    auto temp = state.addTemp(func.returnType);
-    state.output ~= format("    mov %s, rax", temp.register);
+    auto temp = state.addTemp(returnType);
+    if (temp.register != Register.RAX)
+    {
+        state.output ~= format("    mov %s, rax", temp.register);
+    }
 
     // Restore caller-preserved registers
     // TODO: optimize
@@ -1132,6 +1136,36 @@ Local generateCall(GeneratorState state, Call call)
     }
 
     return temp;
+}
+
+Local generateCall(GeneratorState state, Call call)
+{
+    if (call.functionName == "syscall")
+    {
+        return generateSysCall(state, call);
+    }
+
+    auto callerPreserved = prepareCallParams(state, call.parameters);
+
+    // Make the actual call
+    auto func = state.mod.findFunction(call.functionName);
+    state.output ~= format("    call %s", renderFunctionName(func.name));
+
+    return cleanupCall(state, func.returnType, callerPreserved);
+}
+
+Local generateSysCall(GeneratorState state, Call call)
+{
+    auto callerPreserved = prepareCallParams(state, call.parameters[1..$]);
+
+    // Handle the system call code, which needs to go in rax
+    auto callCode = generateNode(state, call.parameters[0]);
+    state.output ~= format("    mov rax, %s", renderNode(state, callCode));
+
+    // Make the system call
+    state.output ~= format("    syscall");
+
+    return cleanupCall(state, new Type(PrimitiveType.ULong), callerPreserved);
 }
 
 string renderLocal(Local local)

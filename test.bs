@@ -1,7 +1,10 @@
+ulong f(ulong a, ulong b)
+{
+    return a + b;
+}
+
 ulong main()
 {
-    ulong a = 3;
-    ulong* b = &a;
-    *b = a + 1;
-    return a;
+    ulong x = syscall(60, 13);
+    return f(3, 4);
 }
