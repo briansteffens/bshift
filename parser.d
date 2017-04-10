@@ -938,6 +938,52 @@ class ExpressionParser
             return true;
         }
 
+        // Handle end of indexer
+        if (current.value == "]")
+        {
+            // Consume operators until the beginning of the bracket
+            while (true)
+            {
+                auto topOperator = this.operators.peek(0);
+
+                if (topOperator.isToken() &&
+                    topOperator.token.match(TokenType.Symbol, "["))
+                {
+                    auto valueItem = this.output.pop();
+                    auto indexerItem = this.output.pop();
+
+                    Node valueNode;
+                    if (valueItem.isToken())
+                    {
+                        valueNode = parseToken(valueItem.token);
+                    }
+                    else
+                    {
+                        valueNode = valueItem.node;
+                    }
+
+                    Node indexerNode;
+                    if (indexerItem.isToken())
+                    {
+                        indexerNode = parseToken(indexerItem.token);
+                    }
+                    else
+                    {
+                        indexerNode = indexerItem.node;
+                    }
+
+                    auto indexer = new Indexer(indexerNode, valueNode);
+
+                    this.output.push(indexer);
+
+                    this.operators.pop();
+                    return true;
+                }
+
+                this.consume();
+            }
+        }
+
         if (current.value == "," || current.value == ")")
         {
             // Consume operators until the beginning of the parameter list

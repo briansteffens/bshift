@@ -349,6 +349,23 @@ class LocalDeclaration : Statement
     }
 }
 
+class Indexer : Node
+{
+    Node source;
+    Node index;
+
+    this(Node source, Node index)
+    {
+        this.source = source;
+        this.index = index;
+    }
+
+    override string toString()
+    {
+        return format("%s[%s]", this.source, this.index);
+    }
+}
+
 class Assignment : Statement
 {
     Node lvalue;

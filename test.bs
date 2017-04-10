@@ -1,6 +1,9 @@
-extern u64 a_c_function(u64 a);
-
 u64 main()
 {
-    return a_c_function(6);
+    u64 c = 13;
+    u64 b = 7;
+    u64 a = 3;
+
+    u64* ar = &a;
+    return ar[0];
 }

@@ -788,6 +788,14 @@ Node generateNode(GeneratorState state, Node node)
         return new Binding(local.name);
     }
 
+    // Special handling for indexers
+    auto indexer = cast(Indexer)node;
+    if (indexer !is null)
+    {
+        auto local = generateIndexer(state, indexer);
+        return new Binding(local.name);
+    }
+
     return node;
 }
 
@@ -822,6 +830,29 @@ bool isBindingInteger(GeneratorState state, Node node)
     }
 
     return isPrimitiveIntegral(local.type.primitive);
+}
+
+// If the given local is not in a register, move it into one
+Local requireLocalInRegister(GeneratorState state, Local local)
+{
+    switch (local.location)
+    {
+        case Location.Register:
+            return local;
+        case Location.Stack:
+            auto temp = state.addTemp(local.type);
+            state.output ~= "    mov %s, %s", temp.register, 
+            return temp;
+        default:
+            throw new Exception(format(
+                    "Can't move local from %s to register", local.location));
+    }
+}
+
+Local generateIndexer(GeneratorState state, Indexer indexer)
+{
+    auto indexerNode = generateNode(state, indexer.index);
+    return null;
 }
 
 Local generateDereference(GeneratorState state, Dereference dereference)
