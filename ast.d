@@ -84,6 +84,7 @@ class Binding : Node
 enum PrimitiveType
 {
     ULong,
+    U8,
     Bool,
 }
 
@@ -114,6 +115,12 @@ class Type
     {
         return new Type(this.primitive, this.pointer);
     }
+
+    bool compare(Type other)
+    {
+        return this.primitive == other.primitive &&
+               this.pointer == other.pointer;
+    }
 }
 
 int primitiveSize(PrimitiveType t)
@@ -123,6 +130,8 @@ int primitiveSize(PrimitiveType t)
         case PrimitiveType.ULong:
             return 8;
         case PrimitiveType.Bool:
+            return 1;
+        case PrimitiveType.U8:
             return 1;
         default:
             throw new Exception(format("Unknown size for %s", t));
@@ -147,6 +156,8 @@ PrimitiveType parsePrimitive(string s)
             return PrimitiveType.ULong;
         case "bool":
             return PrimitiveType.Bool;
+        case "u8":
+            return PrimitiveType.U8;
         default:
             throw new Exception(format("Unrecognized type: %s", s));
     }

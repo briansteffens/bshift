@@ -1,10 +1,7 @@
-ulong f(ulong a, ulong b)
-{
-    return a + b;
-}
-
 ulong main()
 {
-    ulong x = syscall(60, 13);
-    return f(3, 4);
+    u8 a = 3;
+    u8 b = 7;
+    u8 c = a + b;
+    return c;
 }

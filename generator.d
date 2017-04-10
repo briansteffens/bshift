@@ -76,6 +76,8 @@ OpSize primitiveToOpSize(PrimitiveType t)
             return OpSize.Byte;
         case PrimitiveType.ULong:
             return OpSize.Qword;
+        case PrimitiveType.U8:
+            return OpSize.Byte;
         default:
             throw new Exception(format("Unknown type %s", t));
     }
@@ -123,17 +125,6 @@ bool isCallerPreserved(Register r)
            r == Register.R9  ||
            r == Register.R10 ||
            r == Register.R11;
-}
-
-PrimitiveType getType(GeneratorState state, Node node)
-{
-    auto literal = cast(Literal)node;
-    if (literal !is null)
-    {
-        return literal.type;
-    }
-
-    throw new Exception(format("Can't figure out the type for Node %s", node));
 }
 
 class GeneratorState
@@ -971,12 +962,48 @@ Local generateOperator(GeneratorState state, Operator operator)
             format("Unrecognized operator type: %s", operator.type));
 }
 
+Type getType(GeneratorState state, Node node)
+{
+    auto literal = cast(Literal)node;
+    if (literal !is null)
+    {
+        return new Type(literal.type);
+    }
+
+    auto binding = cast(Binding)node;
+    if (binding !is null)
+    {
+        auto local = state.findLocal(binding.name);
+
+        if (local is null)
+        {
+            throw new Exception(format("Can't find local %s", binding.name));
+        }
+
+        return local.type;
+    }
+
+    throw new Exception(format("Can't figure out type for %s", node));
+}
+
 Local generateMathOperator(GeneratorState state, Operator operator)
 {
-    auto left = renderNode(state, generateNode(state, operator.left));
-    auto right = renderNode(state, generateNode(state, operator.right));
+    auto leftNode = generateNode(state, operator.left);
+    auto rightNode = generateNode(state, operator.right);
 
-    auto temp = state.addTemp(new Type(PrimitiveType.ULong));
+    auto leftType = getType(state, leftNode);
+    auto rightType = getType(state, rightNode);
+
+    if (!leftType.compare(rightType))
+    {
+        throw new Exception(format("Can't combine types %s and %s",
+                leftType, rightType));
+    }
+
+    auto left = renderNode(state, leftNode);
+    auto right = renderNode(state, rightNode);
+
+    auto temp = state.addTemp(leftType);
     state.output ~= format("    mov %s, %s", temp.register, left);
 
     switch (operator.type)
@@ -1173,6 +1200,12 @@ string renderLocal(Local local)
     switch (local.location)
     {
         case Location.Register:
+            if (!local.type.pointer &&
+                primitiveSize(local.type.primitive) == 1)
+            {
+                return format("%s", lowByte(local.register));
+            }
+
             return format("%s", local.register);
         case Location.Stack:
             return format("[rbp-%d]", local.stackOffset);
