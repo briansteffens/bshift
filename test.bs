@@ -1,7 +1,9 @@
 ulong main()
 {
-    u8 a = 3;
-    u8 b = 7;
-    u8 c = a + b;
-    return c;
+    u8 char3 = 10;
+    u8 char2 = 33;
+    u8 char1 = 105;
+    u8 char0 = 72;
+
+    return syscall(1, 1, &char0, 4);
 }
