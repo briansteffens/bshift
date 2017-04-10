@@ -259,7 +259,17 @@ LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
 
 Type parseType(TokenFeed tokens)
 {
-    return new Type(parsePrimitive(tokens.current().value));
+    auto primitive = parsePrimitive(tokens.current().value);
+
+    bool pointer = false;
+    auto next = tokens.peek(1);
+    if (next.match(TokenType.Symbol, "*"))
+    {
+        pointer = true;
+        tokens.next();
+    }
+
+    return new Type(primitive, pointer=pointer);
 }
 
 TypeSignature parseTypeSignature(TokenFeed tokens)
@@ -286,8 +296,22 @@ TypeSignature parseTypeSignature(TokenFeed tokens)
 
 Assignment parseAssignment(TokenFeed tokens)
 {
-    // Binding (lvalue)
+    // Check for dereference operator
     auto current = tokens.current();
+    bool dereference = false;
+
+    if (current.match(TokenType.Symbol, "*"))
+    {
+        dereference = true;
+
+        if (!tokens.next())
+        {
+            throw new Exception("Expected a variable name to assign to");
+        }
+    }
+
+    // Binding (lvalue)
+    current = tokens.current();
 
     if (current.type != TokenType.Word)
     {
@@ -295,7 +319,12 @@ Assignment parseAssignment(TokenFeed tokens)
                 "Expected a variable name to assign to. Got: %s", current));
     }
 
-    auto binding = new Binding(current.value);
+    Node lvalue = new Binding(current.value);
+
+    if (dereference)
+    {
+        lvalue = new Dereference(lvalue);
+    }
 
     // Assignment operator (=)
     if (!tokens.next())
@@ -313,7 +342,7 @@ Assignment parseAssignment(TokenFeed tokens)
     // Expression (rvalue)
     auto expression = parseExpression(tokens);
 
-    return new Assignment(null, binding, expression);
+    return new Assignment(null, lvalue, expression);
 }
 
 Return parseReturn(TokenFeed tokens)
@@ -736,6 +765,54 @@ class ExpressionParser
                 this.operators.push(startList);
 
                 return true;
+            }
+        }
+
+        // Detect reference: word preceded by ampersand
+        if (current.type == TokenType.Word &&
+            this.operators.stack.length > 0)
+        {
+            auto topOperator = this.operators.peek(0);
+
+            if (topOperator.isToken() &&
+                topOperator.token.match(TokenType.Symbol, "&"))
+            {
+                this.output.push(new ParserItem(new Reference(
+                            parseToken(current))));
+
+                this.operators.pop();
+                return true;
+            }
+        }
+
+        // Detect dereference: word preceded by asterisk preceded by another
+        // symbol or nothing
+        if (current.match(TokenType.Symbol, "*") &&
+            this.input.tokens.length > 0)
+        {
+            bool firstOperator = this.operators.stack.length == 0;
+
+            bool precededBySymbol = false;
+            if (this.operators.stack.length > 0)
+            {
+                auto topOperator = this.operators.peek(0);
+
+                precededBySymbol = topOperator.isToken() &&
+                                   topOperator.token.type == TokenType.Symbol;
+            }
+
+            if (firstOperator || precededBySymbol)
+            {
+                auto next = this.input.peek(1);
+
+                if (next.type == TokenType.Word)
+                {
+                    this.output.push(new ParserItem(new Dereference(
+                            parseToken(next))));
+
+                    this.input.next();
+                    return true;
+                }
             }
         }
 

@@ -288,7 +288,7 @@ class GeneratorState
 
         foreach (existing; this.temps)
         {
-            if (existing == temp)
+            if (existing != temp)
             {
                 newTemps ~= existing;
             }
@@ -611,40 +611,71 @@ void generateBlock(GeneratorState state, Block block)
 
 void generateLocalDeclaration(GeneratorState state, LocalDeclaration st)
 {
-    if (st.value !is null)
+    if (st.value is null)
     {
-        generateAssignmentShared(state, st.signature.name, st.value);
+        return;
     }
+
+    generateAssignmentShared(state, new Binding(st.signature.name), st.value);
 }
 
 void generateAssignment(GeneratorState state, Assignment a)
 {
-    generateAssignmentShared(state, a.binding.name, a.value);
+    generateAssignmentShared(state, a.lvalue, a.value);
 }
 
-void generateAssignmentShared(GeneratorState state, string targetName,
+void generateAssignmentShared(GeneratorState state, Node target,
                               Node expression)
 {
-    auto target = state.findLocal(targetName);
+    bool targetDereference = false;
 
-    if (target is null)
+    auto deref = cast(Dereference)target;
+    if (deref !is null)
     {
-        throw new Exception(format("Local %s not found", targetName));
+        targetDereference = true;
+        target = deref.source;
     }
 
-    auto localRendered = renderLocal(target);
+    auto targetBinding = cast(Binding)target;
+    if (targetBinding is null)
+    {
+        throw new Exception(format("Can't assign to %s", target));
+    }
+
+    auto targetLocal = state.findLocal(targetBinding.name);
+    if (targetLocal is null)
+    {
+        throw new Exception(format("Local %s not found", targetBinding.name));
+    }
 
     auto value = generateNode(state, expression);
     auto valueRendered = renderNode(state, value);
 
     auto sizeHint = "";
-    if (target.location == Location.Stack)
+    if (targetLocal.location == Location.Stack)
     {
-        sizeHint = to!string(typeToOpSize(target.type));
+        sizeHint = to!string(typeToOpSize(targetLocal.type));
     }
 
-    state.output ~= format("    mov %s%s, %s", sizeHint, localRendered,
+    auto targetRendered = renderLocal(targetLocal);
+
+    // Deal with dereference if necessary
+    Local tempTarget = null;
+    if (targetDereference)
+    {
+        tempTarget = state.addTemp(targetLocal.type);
+        state.output ~= format("    mov %s, %s", tempTarget.register,
+                               targetRendered);
+        targetRendered = format("[%s]", tempTarget.register);
+    }
+
+    state.output ~= format("    mov %s%s, %s", sizeHint, targetRendered,
                            valueRendered);
+
+    if (tempTarget !is null)
+    {
+        state.freeTemp(tempTarget);
+    }
 }
 
 string renderImmediate(Literal literal)
@@ -726,6 +757,22 @@ Node generateNode(GeneratorState state, Node node)
         return new Binding(local.name);
     }
 
+    // Special handling for references
+    auto reference = cast(Reference)node;
+    if (reference !is null)
+    {
+        auto local = generateReference(state, reference);
+        return new Binding(local.name);
+    }
+
+    // Special handling for dereferences
+    auto dereference = cast(Dereference)node;
+    if (dereference !is null)
+    {
+        auto local = generateDereference(state, dereference);
+        return new Binding(local.name);
+    }
+
     return node;
 }
 
@@ -760,6 +807,78 @@ bool isBindingInteger(GeneratorState state, Node node)
     }
 
     return isPrimitiveIntegral(local.type.primitive);
+}
+
+Local generateDereference(GeneratorState state, Dereference dereference)
+{
+    auto sourceNode = generateNode(state, dereference.source);
+
+    auto sourceBinding = cast(Binding)sourceNode;
+    if (sourceBinding is null)
+    {
+        throw new Exception(format("Can't dereference node %s", sourceNode));
+    }
+
+    auto sourceLocal = state.findLocal(sourceBinding.name);
+    if (sourceLocal is null)
+    {
+        throw new Exception(format("Can't find temp %s", sourceBinding.name));
+    }
+
+    if (sourceLocal.location == Location.Register)
+    {
+        throw new Exception(format("Can't dereference a register %s",
+                                   sourceBinding.name));
+    }
+
+    auto outputType = sourceLocal.type.clone();
+    outputType.pointer = true;
+
+    auto outputLocal = state.addTemp(outputType);
+    auto temp = state.addTemp(new Type(PrimitiveType.ULong));
+
+    state.output ~= format("    mov %s, %s", temp.register,
+                           renderNode(state, sourceNode));
+
+    state.output ~= format("    mov %s, [%s]", outputLocal.register,
+                           temp.register);
+
+    state.freeTemp(temp);
+
+    return outputLocal;
+}
+
+Local generateReference(GeneratorState state, Reference reference)
+{
+    auto sourceNode = generateNode(state, reference.source);
+
+    auto sourceBinding = cast(Binding)sourceNode;
+    if (sourceBinding is null)
+    {
+        throw new Exception(format("Can't reference node %s", sourceNode));
+    }
+
+    auto sourceLocal = state.findLocal(sourceBinding.name);
+    if (sourceLocal is null)
+    {
+        throw new Exception(format("Can't find temp %s", sourceBinding.name));
+    }
+
+    if (sourceLocal.location == Location.Register)
+    {
+        throw new Exception(format("Can't reference a register %s",
+                                   sourceBinding.name));
+    }
+
+    auto outputType = sourceLocal.type.clone();
+    outputType.pointer = true;
+
+    auto outputLocal = state.addTemp(outputType);
+
+    state.output ~= format("    lea %s, %s", outputLocal.register,
+                           renderNode(state, sourceNode));
+
+    return outputLocal;
 }
 
 Local generateCast(GeneratorState state, Cast typeCast)

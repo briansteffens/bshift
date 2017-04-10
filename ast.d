@@ -97,6 +97,23 @@ class Type
         this.primitive = primitive;
         this.pointer = pointer;
     }
+
+    override string toString()
+    {
+        auto ret = to!string(this.primitive);
+
+        if (this.pointer)
+        {
+            ret ~= "*";
+        }
+
+        return ret;
+    }
+
+    Type clone()
+    {
+        return new Type(this.primitive, this.pointer);
+    }
 }
 
 int primitiveSize(PrimitiveType t)
@@ -211,6 +228,36 @@ class Cast : Node
     }
 }
 
+class Reference : Node
+{
+    Node source;
+
+    this(Node source)
+    {
+        this.source = source;
+    }
+
+    override string toString()
+    {
+        return format("&%s", this.source);
+    }
+}
+
+class Dereference : Node
+{
+    Node source;
+
+    this(Node source)
+    {
+        this.source = source;
+    }
+
+    override string toString()
+    {
+        return format("*%s", this.source);
+    }
+}
+
 class TypeSignature
 {
     Type type;
@@ -276,20 +323,20 @@ class LocalDeclaration : Statement
 
 class Assignment : Statement
 {
-    Binding binding;
+    Node lvalue;
     Node value;
 
-    this(Line line, Binding binding, Node value)
+    this(Line line, Node lvalue, Node value)
     {
         super(line);
 
-        this.binding = binding;
+        this.lvalue = lvalue;
         this.value = value;
     }
 
     override string toString()
     {
-        return format("%s = %s", this.binding, this.value);
+        return format("%s = %s", this.lvalue, this.value);
     }
 }
 
