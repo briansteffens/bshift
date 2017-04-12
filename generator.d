@@ -74,7 +74,7 @@ OpSize primitiveToOpSize(PrimitiveType t)
     {
         case PrimitiveType.Bool:
             return OpSize.Byte;
-        case PrimitiveType.ULong:
+        case PrimitiveType.U64:
             return OpSize.Qword;
         case PrimitiveType.U8:
             return OpSize.Byte;
@@ -671,10 +671,10 @@ void generateAssignmentShared(GeneratorState state, Node target,
 
 string renderImmediate(Literal literal)
 {
-    auto ulongLiteral = cast(ULongLiteral)literal;
-    if (ulongLiteral !is null)
+    auto u64Literal = cast(U64Literal)literal;
+    if (u64Literal !is null)
     {
-        return to!string(ulongLiteral.value);
+        return to!string(u64Literal.value);
     }
     else
     {
@@ -769,7 +769,7 @@ Node generateNode(GeneratorState state, Node node)
 
 bool isPrimitiveIntegral(PrimitiveType type)
 {
-    return type == PrimitiveType.ULong;
+    return type == PrimitiveType.U64;
 }
 
 bool isLiteralInteger(GeneratorState state, Node node)
@@ -826,7 +826,7 @@ Local generateDereference(GeneratorState state, Dereference dereference)
     outputType.pointer = true;
 
     auto outputLocal = state.addTemp(outputType);
-    auto temp = state.addTemp(new Type(PrimitiveType.ULong));
+    auto temp = state.addTemp(new Type(PrimitiveType.U64));
 
     state.output ~= format("    mov %s, %s", temp.register,
                            renderNode(state, sourceNode));
@@ -899,10 +899,10 @@ Local generateCastLiteralIntegerToBool(GeneratorState state, Cast typeCast)
     bool foundMatch = false;
     bool castedValue;
 
-    auto ulongLiteral = cast(ULongLiteral)typeCast.target;
-    if (ulongLiteral !is null)
+    auto u64Literal = cast(U64Literal)typeCast.target;
+    if (u64Literal !is null)
     {
-        castedValue = ulongLiteral.value != 0;
+        castedValue = u64Literal.value != 0;
         foundMatch = true;
     }
 
@@ -1192,7 +1192,7 @@ Local generateSysCall(GeneratorState state, Call call)
     // Make the system call
     state.output ~= format("    syscall");
 
-    return cleanupCall(state, new Type(PrimitiveType.ULong), callerPreserved);
+    return cleanupCall(state, new Type(PrimitiveType.U64), callerPreserved);
 }
 
 string renderLocal(Local local)
@@ -1223,10 +1223,10 @@ string renderNode(GeneratorState state, Node node)
         return renderLocal(local);
     }
 
-    auto ulongLiteral = cast(ULongLiteral)node;
-    if (ulongLiteral !is null)
+    auto u64Literal = cast(U64Literal)node;
+    if (u64Literal !is null)
     {
-        return format("%d", ulongLiteral.value);
+        return format("%d", u64Literal.value);
     }
 
     auto boolLiteral = cast(BoolLiteral)node;
@@ -1369,7 +1369,7 @@ void shuffleRegisters(GeneratorState state, RegisterMove[] moves)
         }
 
         // Circular chain
-        auto tempLocal = state.addTemp(new Type(PrimitiveType.ULong));
+        auto tempLocal = state.addTemp(new Type(PrimitiveType.U64));
         auto temp = tempLocal.register;
 
         state.output ~= format("    mov %s, %s", temp, chain[$-1]);

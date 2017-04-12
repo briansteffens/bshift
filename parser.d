@@ -512,7 +512,7 @@ Node parseToken(Token t)
     switch (t.type)
     {
         case TokenType.Integer:
-            return new ULongLiteral(to!ulong(t.value));
+            return new U64Literal(to!ulong(t.value));
         case TokenType.Word:
             switch (t.value)
             {

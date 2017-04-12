@@ -83,7 +83,7 @@ class Binding : Node
 
 enum PrimitiveType
 {
-    ULong,
+    U64,
     U8,
     Bool,
 }
@@ -127,7 +127,7 @@ int primitiveSize(PrimitiveType t)
 {
     switch (t)
     {
-        case PrimitiveType.ULong:
+        case PrimitiveType.U64:
             return 8;
         case PrimitiveType.Bool:
             return 1;
@@ -152,8 +152,8 @@ PrimitiveType parsePrimitive(string s)
 {
     switch (s)
     {
-        case "ulong":
-            return PrimitiveType.ULong;
+        case "u64":
+            return PrimitiveType.U64;
         case "bool":
             return PrimitiveType.Bool;
         case "u8":
@@ -173,13 +173,13 @@ abstract class Literal : Node
     }
 }
 
-class ULongLiteral : Literal
+class U64Literal : Literal
 {
     ulong value;
 
     this(ulong value)
     {
-        super(PrimitiveType.ULong);
+        super(PrimitiveType.U64);
         this.value = value;
     }
 
