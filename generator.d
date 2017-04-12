@@ -328,13 +328,16 @@ string[] generate(Module mod)
         generateFunction(state, mod.functions[i]);
     }
 
-    // Bootstrap the main function
-    state.output ~= "global _start";
-    state.output ~= "_start:";
-    state.output ~= format("    call %s", renderFunctionName("main"));
-    state.output ~= "    mov rdi, rax";
-    state.output ~= "    mov rax, 60";
-    state.output ~= "    syscall";
+    // Bootstrap the main function if there is one
+    if (mod.functionExists("main"))
+    {
+        state.output ~= "global _start";
+        state.output ~= "_start:";
+        state.output ~= format("    call %s", renderFunctionName("main"));
+        state.output ~= "    mov rdi, rax";
+        state.output ~= "    mov rax, 60";
+        state.output ~= "    syscall";
+    }
 
     return state.output;
 }
@@ -426,7 +429,7 @@ void generateFunction(GeneratorState state, Function func)
     {
         if (local.location == Location.Register)
         {
-            state.output ~= format("mov [rbp - %d], %s",
+            state.output ~= format("    mov [rbp - %d], %s",
                     local.stackOffset, local.register);
 
             local.location = Location.Stack;

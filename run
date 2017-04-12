@@ -5,7 +5,7 @@ echo && echo && echo && echo && echo && echo && echo && echo && echo && \
 echo && echo && echo && echo && echo && echo && echo && echo && echo && \
 echo && echo && echo && echo && echo && echo && echo && echo && echo && \
 ldc main.d lexer.d ast.d parser.d generator.d && \
-./main test.bs && \
+./main string.bs && \
 
 #nasm -f elf64 output.asm && \
 #ld output.o && \

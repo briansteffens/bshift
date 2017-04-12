@@ -554,6 +554,19 @@ class Module
         return ret;
     }
 
+    bool functionExists(string name)
+    {
+        foreach (func; this.functions)
+        {
+            if (func.name == name)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     Function findFunction(string name)
     {
         for (int i = 0; i < this.functions.length; i++)
