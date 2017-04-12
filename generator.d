@@ -326,11 +326,6 @@ class GeneratorState
     }
 }
 
-string renderFunctionName(Function func)
-{
-    return format("function_%s_%s", func.mod.name, func.name);
-}
-
 string[] generate(Module mod)
 {
     auto state = new GeneratorState(mod);
@@ -349,7 +344,7 @@ string[] generate(Module mod)
 
         state.output ~= "global _start";
         state.output ~= "_start:";
-        state.output ~= format("    call %s", renderFunctionName(mainFunc));
+        state.output ~= format("    call %s", mainFunc.renderName());
         state.output ~= "    mov rdi, rax";
         state.output ~= "    mov rax, 60";
         state.output ~= "    syscall";
@@ -439,8 +434,9 @@ void generateFunction(GeneratorState state, Function func)
     }
 
     // Function prologue TODO: add export/public keyword to control this
-    state.output ~= format("global %s", renderFunctionName(func));
-    state.output ~= format("%s:", renderFunctionName(func));
+    auto funcName = func.renderName();
+    state.output ~= format("global %s", funcName);
+    state.output ~= format("%s:", funcName);
     state.output ~= format("    push rbp");
     state.output ~= format("    mov rbp, rsp");
 
@@ -1216,12 +1212,13 @@ Local generateCall(GeneratorState state, Call call)
 
     // Make the actual call
     auto func = state.mod.findFunction(call);
-    state.output ~= format("    call %s", renderFunctionName(func));
+    state.output ~= format("    call %s", func.renderName());
 
     // Make sure the function gets listed as an extern
-    if (func.mod != state.mod)
+    auto bshiftFunc = cast(Function)func;
+    if (bshiftFunc is null || bshiftFunc.mod != state.mod)
     {
-        state.addExtern(renderFunctionName(func));
+        state.addExtern(func.renderName());
     }
 
     return cleanupCall(state, func.returnType, callerPreserved);

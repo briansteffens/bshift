@@ -71,6 +71,7 @@ Module parse(string name, Token[] tokenArray)
 
     Module[] imports;
     Function[] functions;
+    FunctionSignature[] externs;
 
     while (tokens.next())
     {
@@ -78,6 +79,13 @@ Module parse(string name, Token[] tokenArray)
         if (imp !is null)
         {
             imports ~= imp;
+            continue;
+        }
+
+        auto ext = parseExtern(tokens);
+        if (ext !is null)
+        {
+            externs ~= ext;
             continue;
         }
 
@@ -91,7 +99,7 @@ Module parse(string name, Token[] tokenArray)
         functions ~= parseFunction(tokens);
     }
 
-    auto ret = new Module(name, imports, functions);
+    auto ret = new Module(name, imports, functions, externs);
 
     foreach (func; functions)
     {
@@ -99,6 +107,28 @@ Module parse(string name, Token[] tokenArray)
     }
 
     return ret;
+}
+
+FunctionSignature parseExtern(TokenFeed tokens)
+{
+    if (!tokens.current().match(TokenType.Word, "extern"))
+    {
+        return null;
+    }
+
+    if (!tokens.next())
+    {
+        throw new Exception("Expected a function signature after extern");
+    }
+
+    auto sig = parseFunctionSignature(tokens);
+
+    if (!tokens.next() || !tokens.current().match(TokenType.Symbol, ";"))
+    {
+        throw new Exception("Expected a semi-colon after extern");
+    }
+
+    return sig;
 }
 
 Module parseImport(TokenFeed tokens)
@@ -120,7 +150,7 @@ Module parseImport(TokenFeed tokens)
     return parse(name, lex(readText(name ~ ".bs")));
 }
 
-Function parseFunction(TokenFeed tokens)
+FunctionSignature parseFunctionSignature(TokenFeed tokens)
 {
     // Return value
     auto token = tokens.current();
@@ -185,9 +215,16 @@ Function parseFunction(TokenFeed tokens)
         }
     }
 
+    return new FunctionSignature(type, name, parameters);
+}
+
+Function parseFunction(TokenFeed tokens)
+{
+    auto sig = parseFunctionSignature(tokens);
     auto functionBody = parseBlock(tokens);
 
-    return new Function(type, name, parameters, functionBody);
+    return new Function(sig.returnType, sig.name, sig.parameters,
+                        functionBody);
 }
 
 Block parseBlock(TokenFeed tokens)

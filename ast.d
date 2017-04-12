@@ -515,20 +515,17 @@ class Definition
 {
 }
 
-class Function : Definition
+class FunctionSignature : Definition
 {
-    Module mod;
     Type returnType;
     string name;
     TypeSignature[] parameters;
-    Block block;
 
-    this(Type returnType, string name, TypeSignature[] parameters, Block block)
+    this(Type returnType, string name, TypeSignature[] parameters)
     {
         this.returnType = returnType;
         this.name = name;
         this.parameters = parameters;
-        this.block = block;
     }
 
     override string toString()
@@ -545,8 +542,34 @@ class Function : Definition
             params ~= param.toString();
         }
 
-        return format("%s %s(%s)\n%s", this.returnType, this.name, params,
-                this.block);
+        return format("%s %s(%s)", this.returnType, this.name, params);
+    }
+
+    string renderName()
+    {
+        return this.name;
+    }
+}
+
+class Function : FunctionSignature
+{
+    Module mod;
+    Block block;
+
+    this(Type returnType, string name, TypeSignature[] parameters, Block block)
+    {
+        super(returnType, name, parameters);
+        this.block = block;
+    }
+
+    override string toString()
+    {
+        return format("%s\n%s", super.toString(), this.block);
+    }
+
+    override string renderName()
+    {
+        return format("function_%s_%s", this.mod.name, this.name);
     }
 }
 
@@ -555,12 +578,15 @@ class Module
     string name;
     Module[] imports;
     Function[] functions;
+    FunctionSignature[] externs;
 
-    this(string name, Module[] imports, Function[] functions)
+    this(string name, Module[] imports, Function[] functions,
+         FunctionSignature[] externs)
     {
         this.name = name;
         this.imports = imports;
         this.functions = functions;
+        this.externs = externs;
     }
 
     override string toString()
@@ -570,6 +596,11 @@ class Module
         foreach (imp; this.imports)
         {
             ret ~= imp.toString() ~ "\n";
+        }
+
+        foreach (ext; this.externs)
+        {
+            ret ~= ext.toString() ~ "\n";
         }
 
         foreach (func; this.functions)
@@ -595,26 +626,45 @@ class Module
 
     Function findFunction(string name)
     {
-        for (int i = 0; i < this.functions.length; i++)
+        foreach (func; this.functions)
         {
-            if (this.functions[i].name == name)
+            if (func.name == name)
             {
-                return this.functions[i];
+                return func;
             }
         }
 
         throw new Exception(format("Function %s not found", name));
     }
 
-    Function findFunction(Call call)
+    FunctionSignature findFunction(Call call)
     {
+        // Search the current module
         if (call.moduleName is null)
         {
-            return this.findFunction(call.functionName);
+            foreach (func; this.functions)
+            {
+                if (func.name == call.functionName)
+                {
+                    return func;
+                }
+            }
+
+            // Search for externs defined in the current module
+            foreach (ext; this.externs)
+            {
+                if (ext.name == call.functionName)
+                {
+                    return ext;
+                }
+            }
+
+            throw new Exception(format("Function %s not found", name));
         }
 
+        // Search imported modules
         auto imp = this.findImport(call.moduleName);
-        return imp.findFunction(call.functionName);
+        return imp.findFunction(call);
     }
 
     Module findImport(string name)
