@@ -2,6 +2,7 @@ import std.stdio;
 import std.format;
 import std.typecons;
 import std.file;
+import std.array;
 
 import ast;
 import lexer;
@@ -17,7 +18,8 @@ void main(string[] args)
     }
 
     // Source code
-    auto source = readText(args[1]);
+    auto sourceFilename = args[1];
+    auto source = readText(sourceFilename);
 
     writeln("bshift source code ------------------------------------------\n");
     writeln(source);
@@ -34,7 +36,8 @@ void main(string[] args)
     writeln();
 
     // Parser
-    auto mod = parse(tokens);
+    auto moduleName = replace(sourceFilename, ".bs", "");
+    auto mod = parse(moduleName, tokens);
 
     writeln("bshift ast --------------------------------------------------\n");
     writeln(mod);
@@ -42,7 +45,7 @@ void main(string[] args)
     // Generator
     auto output = generate(mod);
 
-    // Write nasm output
+    // Write assembly output
     auto contents = renderAsmFile(output);
 
     writeln("bshift output -----------------------------------------------\n");
@@ -50,7 +53,8 @@ void main(string[] args)
 
     auto bytes = cast(ubyte[])contents;
 
-    auto file = File("output.asm", "w");
+    auto outputFilename = replace(sourceFilename, ".bs", ".asm");
+    auto file = File(outputFilename, "w");
     file.rawWrite(bytes);
 }
 

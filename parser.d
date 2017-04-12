@@ -2,6 +2,7 @@ import std.stdio;
 import std.format;
 import std.conv;
 import std.array;
+import std.file;
 
 import lexer;
 import ast;
@@ -64,14 +65,22 @@ class TokenFeed
     }
 }
 
-Module parse(Token[] tokenArray)
+Module parse(string name, Token[] tokenArray)
 {
     auto tokens = new TokenFeed(tokenArray);
 
+    Module[] imports;
     Function[] functions;
 
     while (tokens.next())
     {
+        auto imp = parseImport(tokens);
+        if (imp !is null)
+        {
+            imports ~= imp;
+            continue;
+        }
+
         auto current = tokens.current();
 
         if (current.type != TokenType.Word)
@@ -79,11 +88,36 @@ Module parse(Token[] tokenArray)
             throw new Exception("Unexpected token; expected function");
         }
 
-        functions.length++;
-        functions[functions.length - 1] = parseFunction(tokens);
+        functions ~= parseFunction(tokens);
     }
 
-    return new Module(functions);
+    auto ret = new Module(name, imports, functions);
+
+    foreach (func; functions)
+    {
+        func.mod = ret;
+    }
+
+    return ret;
+}
+
+Module parseImport(TokenFeed tokens)
+{
+    if (!tokens.current().match(TokenType.Word, "import"))
+    {
+        return null;
+    }
+
+    if (!tokens.next() || tokens.current().type != TokenType.Word)
+    {
+        throw new Exception("Expected a module name to import");
+    }
+
+    auto name = tokens.current().value;
+    tokens.next();
+
+    // Parse the import
+    return parse(name, lex(readText(name ~ ".bs")));
 }
 
 Function parseFunction(TokenFeed tokens)
@@ -420,6 +454,9 @@ class ParserItem
     // Represents the function name in a call
     bool functionName;
 
+    // Stores the module name in a qualified function call
+    string moduleName;
+
     // Represents the first open parenthesis in a call
     bool parameterListStart;
 
@@ -620,6 +657,57 @@ class ExpressionParser
         this.outputPush(new ParserItem(new Operator(left, operator, right)));
     }
 
+    // Function calls can start like "func(" or "mod::func("
+    bool startFunctionCall()
+    {
+        auto token0 = this.input.current();
+        auto token1 = this.input.peek(1);
+        auto token2 = this.input.peek(2);
+        auto token3 = this.input.peek(3);
+
+        if (token0.type != TokenType.Word)
+        {
+            return false;
+        }
+
+        if (token1.match(TokenType.Symbol, "("))
+        {
+            auto nameToken = new ParserItem(token0);
+            nameToken.functionName = true;
+            this.outputPush(nameToken);
+
+            auto startList = new ParserItem(token1);
+            startList.parameterListStart = true;
+            this.operators.push(startList);
+
+            this.input.next();
+
+            return true;
+        }
+
+        if (token1.match(TokenType.Symbol, "::") &&
+            token2.type == TokenType.Word &&
+            token3.match(TokenType.Symbol, "("))
+        {
+            auto nameToken = new ParserItem(token2);
+            nameToken.functionName = true;
+            nameToken.moduleName = token0.value;
+            this.outputPush(nameToken);
+
+            auto startList = new ParserItem(token3);
+            startList.parameterListStart = true;
+            this.operators.push(startList);
+
+            this.input.next();
+            this.input.next();
+            this.input.next();
+
+            return true;
+        }
+
+        return false;
+    }
+
     void consumeFunctionCall()
     {
         Node[] parameters;
@@ -634,8 +722,9 @@ class ExpressionParser
                 topOutput.functionName)
             {
                 // Push the new call onto the output stack
-                this.outputPush(new ParserItem(
-                            new Call(topOutput.token.value, parameters)));
+                auto call = new Call(topOutput.moduleName,
+                        topOutput.token.value, parameters);
+                this.outputPush(new ParserItem(call));
                 break;
             }
 
@@ -746,26 +835,10 @@ class ExpressionParser
             return false;
         }
 
-        // Check for the beginning of a function call: word followed by (
-        if (current.type == TokenType.Word)
+        // Check for the beginning of a function call
+        if (this.startFunctionCall())
         {
-            auto nextInput = this.input.peek(1);
-
-            if (nextInput !is null &&
-                nextInput.type == TokenType.Symbol &&
-                nextInput.value == "(")
-            {
-                auto nameToken = new ParserItem(current);
-                nameToken.functionName = true;
-                this.outputPush(nameToken);
-
-                this.input.next();
-                auto startList = new ParserItem(this.input.current());
-                startList.parameterListStart = true;
-                this.operators.push(startList);
-
-                return true;
-            }
+            return true;
         }
 
         // Detect reference: word preceded by ampersand

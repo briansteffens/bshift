@@ -137,12 +137,26 @@ class GeneratorState
     Local[] temps;
 
     string[] labels;
+    string[] externs;
 
     int nextTempIndex = 0;
 
     this(Module mod)
     {
         this.mod = mod;
+    }
+
+    void addExtern(string name)
+    {
+        foreach (ext; this.externs)
+        {
+            if (ext == name)
+            {
+                return;
+            }
+        }
+
+        this.externs ~= name;
     }
 
     // Find a unique new label by adding numbers to the end of prefix
@@ -312,9 +326,9 @@ class GeneratorState
     }
 }
 
-string renderFunctionName(string name)
+string renderFunctionName(Function func)
 {
-    return format("function_%s", name);
+    return format("function_%s_%s", func.mod.name, func.name);
 }
 
 string[] generate(Module mod)
@@ -331,13 +345,23 @@ string[] generate(Module mod)
     // Bootstrap the main function if there is one
     if (mod.functionExists("main"))
     {
+        auto mainFunc = mod.findFunction("main");
+
         state.output ~= "global _start";
         state.output ~= "_start:";
-        state.output ~= format("    call %s", renderFunctionName("main"));
+        state.output ~= format("    call %s", renderFunctionName(mainFunc));
         state.output ~= "    mov rdi, rax";
         state.output ~= "    mov rax, 60";
         state.output ~= "    syscall";
     }
+
+    // Render externs
+    string[] externs;
+    foreach (ext; state.externs)
+    {
+        externs ~= format("extern %s", ext);
+    }
+    state.output = externs ~ state.output;
 
     return state.output;
 }
@@ -414,8 +438,9 @@ void generateFunction(GeneratorState state, Function func)
         state.locals ~= local;
     }
 
-    // Function prologue
-    state.output ~= format("%s:", renderFunctionName(func.name));
+    // Function prologue TODO: add export/public keyword to control this
+    state.output ~= format("global %s", renderFunctionName(func));
+    state.output ~= format("%s:", renderFunctionName(func));
     state.output ~= format("    push rbp");
     state.output ~= format("    mov rbp, rsp");
 
@@ -1178,8 +1203,14 @@ Local generateCall(GeneratorState state, Call call)
     auto callerPreserved = prepareCallParams(state, call.parameters);
 
     // Make the actual call
-    auto func = state.mod.findFunction(call.functionName);
-    state.output ~= format("    call %s", renderFunctionName(func.name));
+    auto func = state.mod.findFunction(call);
+    state.output ~= format("    call %s", renderFunctionName(func));
+
+    // Make sure the function gets listed as an extern
+    if (func.mod != state.mod)
+    {
+        state.addExtern(renderFunctionName(func));
+    }
 
     return cleanupCall(state, func.returnType, callerPreserved);
 }

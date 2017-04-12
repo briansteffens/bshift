@@ -1,6 +1,4 @@
 a.out
 main
-main.o
-output.asm
-output.o
-basm.o
+*.o
+*.asm

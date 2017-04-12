@@ -4,17 +4,19 @@ clear && \
 echo && echo && echo && echo && echo && echo && echo && echo && echo && \
 echo && echo && echo && echo && echo && echo && echo && echo && echo && \
 echo && echo && echo && echo && echo && echo && echo && echo && echo && \
+
 ldc main.d lexer.d ast.d parser.d generator.d && \
+
 ./main string.bs && \
+basm string.asm && \
 
-#nasm -f elf64 output.asm && \
-#ld output.o && \
+./main test.bs && \
+basm test.asm && \
 
-basm output.asm && \
-ld basm.o && \
+ld test.o string.o && \
 
 ./a.out; \
 OUTPUT="$?" && \
-echo "execution output -------------------------------------------------------"
-echo
+echo "execution output --------------------------------------------------" && \
+echo && \
 echo "$OUTPUT"

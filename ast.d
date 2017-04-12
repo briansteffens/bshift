@@ -207,18 +207,28 @@ class BoolLiteral : Literal
 
 class Call : Node
 {
+    string moduleName;
     string functionName;
     Node[] parameters;
 
-    this(string functionName, Node[] parameters)
+    this(string moduleName, string functionName, Node[] parameters)
     {
+        this.moduleName = moduleName;
         this.functionName = functionName;
         this.parameters = parameters;
     }
 
     override string toString()
     {
-        return format("%s(%s)", this.functionName, this.parameters);
+        if (this.moduleName is null)
+        {
+            return format("%s(%s)", this.functionName, this.parameters);
+        }
+        else
+        {
+            return format("%s::%s(%s)", this.moduleName, this.functionName,
+                          this.parameters);
+        }
     }
 }
 
@@ -500,6 +510,7 @@ class Definition
 
 class Function : Definition
 {
+    Module mod;
     Type returnType;
     string name;
     TypeSignature[] parameters;
@@ -534,10 +545,14 @@ class Function : Definition
 
 class Module
 {
+    string name;
+    Module[] imports;
     Function[] functions;
 
-    this(Function[] functions)
+    this(string name, Module[] imports, Function[] functions)
     {
+        this.name = name;
+        this.imports = imports;
         this.functions = functions;
     }
 
@@ -545,10 +560,14 @@ class Module
     {
         auto ret = "";
 
-        for (int i = 0; i < this.functions.length; i++)
+        foreach (imp; this.imports)
         {
-            ret ~= this.functions[i].toString();
-            ret ~= "\n";
+            ret ~= imp.toString() ~ "\n";
+        }
+
+        foreach (func; this.functions)
+        {
+            ret ~= func.toString() ~ "\n";
         }
 
         return ret;
@@ -578,5 +597,29 @@ class Module
         }
 
         throw new Exception(format("Function %s not found", name));
+    }
+
+    Function findFunction(Call call)
+    {
+        if (call.moduleName is null)
+        {
+            return this.findFunction(call.functionName);
+        }
+
+        auto imp = this.findImport(call.moduleName);
+        return imp.findFunction(call.functionName);
+    }
+
+    Module findImport(string name)
+    {
+        foreach (imp; this.imports)
+        {
+            if (imp.name == name)
+            {
+                return imp;
+            }
+        }
+
+        throw new Exception(format("Import %s not found", name));
     }
 }

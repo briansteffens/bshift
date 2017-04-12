@@ -25,7 +25,7 @@ bool isSymbol(dchar c)
 {
     return c == '+' || c == '=' || c == '(' || c == ')' || c == ';' ||
            c == '{' || c == '}' || c == ',' || c == '!' || c == '&' ||
-           c == '*';
+           c == '*' || c == ':';
 }
 
 bool isDelimiter(dchar c)
@@ -98,6 +98,11 @@ Token parseDoubleSymbol(dchar first, dchar second)
     if (first == '&' && second == '&')
     {
         return new Token(TokenType.Symbol, "&&");
+    }
+
+    if (first == ':' && second == ':')
+    {
+        return new Token(TokenType.Symbol, "::");
     }
 
     return null;

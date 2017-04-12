@@ -1,4 +1,4 @@
-u64 strlen(u8* str)
+u64 len(u8* str)
 {
     return 3;
 }
