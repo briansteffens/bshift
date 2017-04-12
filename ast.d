@@ -121,6 +121,13 @@ class Type
         return this.primitive == other.primitive &&
                this.pointer == other.pointer;
     }
+
+    bool compatibleWith(Type other)
+    {
+        return this.compare(other) ||
+               this.primitive == PrimitiveType.U64 && other.pointer ||
+               this.pointer && other.primitive == PrimitiveType.U64;
+    }
 }
 
 int primitiveSize(PrimitiveType t)

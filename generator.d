@@ -851,7 +851,7 @@ Local generateDereference(GeneratorState state, Dereference dereference)
     }
 
     auto outputType = sourceLocal.type.clone();
-    outputType.pointer = true;
+    outputType.pointer = false;
 
     auto outputLocal = state.addTemp(outputType);
     auto temp = state.addTemp(new Type(PrimitiveType.U64));
@@ -859,9 +859,21 @@ Local generateDereference(GeneratorState state, Dereference dereference)
     state.output ~= format("    mov %s, %s", temp.register,
                            renderNode(state, sourceNode));
 
-    state.output ~= format("    mov %s, [%s]", outputLocal.register,
-                           temp.register);
+    string targetRegister;
+    switch (outputType.primitive)
+    {
+        case PrimitiveType.U64:
+            targetRegister = to!string(outputLocal.register);
+            break;
+        case PrimitiveType.U8:
+            targetRegister = lowByte(outputLocal.register);
+            break;
+        default:
+            throw new Exception(format("Can't dereference type %s",
+                                outputType));
+    }
 
+    state.output ~= format("    mov %s, [%s]", targetRegister, temp.register);
     state.freeTemp(temp);
 
     return outputLocal;
@@ -1022,7 +1034,7 @@ Local generateMathOperator(GeneratorState state, Operator operator)
     auto leftType = getType(state, leftNode);
     auto rightType = getType(state, rightNode);
 
-    if (!leftType.compare(rightType))
+    if (!leftType.compatibleWith(rightType))
     {
         throw new Exception(format("Can't combine types %s and %s",
                 leftType, rightType));
@@ -1058,14 +1070,14 @@ Local generateRelationalOperator(GeneratorState state, Operator operator)
     auto temp = state.addTemp(new Type(PrimitiveType.Bool));
     state.output ~= format("    xor %s, %s", temp.register, temp.register);
 
+    state.output ~= format("    cmp %s, %s", left, right);
+
     switch (operator.type)
     {
         case OperatorType.Equality:
-            state.output ~= format("    cmp %s, %s", left, right);
             state.output ~= format("    sete %s", lowByte(temp.register));
             break;
         case OperatorType.Inequality:
-            state.output ~= format("    cmp %s, %s", left, right);
             state.output ~= format("    setne %s", lowByte(temp.register));
             break;
         default:

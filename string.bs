@@ -1,4 +1,12 @@
 u64 len(u8* str)
 {
-    return 3;
+    u64 ret = 0;
+
+    while (*str != 0)
+    {
+        str = str + 1;
+        ret = ret + 1;
+    }
+
+    return ret;
 }
