@@ -1,91 +1,12 @@
 import std.format;
 import std.conv;
 
-class Line
-{
-    int number;
-    string source;
-
-    this(int number, string source)
-    {
-        this.number = number;
-        this.source = source;
-    }
-}
-
-abstract class Node
-{
-    Line line;
-}
-
-enum OperatorType
-{
-    Plus,
-    Asterisk,
-    Equality,
-    Inequality,
-    LogicalAnd,
-}
-
-OperatorType parseOperatorType(string input)
-{
-    switch (input)
-    {
-        case "+":
-            return OperatorType.Plus;
-        case "*":
-            return OperatorType.Asterisk;
-        case "==":
-            return OperatorType.Equality;
-        case "!=":
-            return OperatorType.Inequality;
-        case "&&":
-            return OperatorType.LogicalAnd;
-        default:
-            throw new Exception(
-                    format("Unrecognized OperatorType: %s", input));
-    }
-}
-
-class Operator : Node
-{
-    OperatorType type;
-    Node left;
-    Node right;
-
-    this(Node left, OperatorType type, Node right)
-    {
-        this.type = type;
-        this.left = left;
-        this.right = right;
-    }
-
-    override string toString()
-    {
-        return format("(%s %s %s)", left, type, right);
-    }
-}
-
-class Binding : Node
-{
-    string name;
-
-    this(string name)
-    {
-        this.name = name;
-    }
-
-    override string toString()
-    {
-        return this.name;
-    }
-}
-
 enum PrimitiveType
 {
     U64,
     U8,
     Bool,
+    Void,
 }
 
 class Type
@@ -175,13 +96,93 @@ PrimitiveType parsePrimitive(string s)
     }
 }
 
+class Line
+{
+    int number;
+    string source;
+
+    this(int number, string source)
+    {
+        this.number = number;
+        this.source = source;
+    }
+}
+
+abstract class Node
+{
+    Line line;
+    Type type;
+}
+
+enum OperatorType
+{
+    Plus,
+    Asterisk,
+    Equality,
+    Inequality,
+    LogicalAnd,
+}
+
+OperatorType parseOperatorType(string input)
+{
+    switch (input)
+    {
+        case "+":
+            return OperatorType.Plus;
+        case "*":
+            return OperatorType.Asterisk;
+        case "==":
+            return OperatorType.Equality;
+        case "!=":
+            return OperatorType.Inequality;
+        case "&&":
+            return OperatorType.LogicalAnd;
+        default:
+            throw new Exception(
+                    format("Unrecognized OperatorType: %s", input));
+    }
+}
+
+class Operator : Node
+{
+    OperatorType operatorType;
+    Node left;
+    Node right;
+
+    this(Node left, OperatorType type, Node right)
+    {
+        this.type = left.type;
+        this.operatorType = operatorType;
+        this.left = left;
+        this.right = right;
+    }
+
+    override string toString()
+    {
+        return format("(%s %s %s)", left, operatorType, right);
+    }
+}
+
+class Binding : Node
+{
+    string name;
+
+    this(string name)
+    {
+        this.name = name;
+    }
+
+    override string toString()
+    {
+        return this.name;
+    }
+}
+
 abstract class Literal : Node
 {
-    PrimitiveType type;
-
     this(PrimitiveType type)
     {
-        this.type = type;
+        this.type = new Type(type);
     }
 }
 

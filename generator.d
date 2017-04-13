@@ -939,9 +939,9 @@ Node generateNode(GeneratorState state, Node node)
     return node;
 }
 
-bool isPrimitiveIntegral(PrimitiveType type)
+bool isPrimitiveIntegral(Type type)
 {
-    return type == PrimitiveType.U64;
+    return type.primitive == PrimitiveType.U64;
 }
 
 bool isLiteralInteger(GeneratorState state, Node node)
@@ -969,7 +969,7 @@ bool isBindingInteger(GeneratorState state, Node node)
         return false;
     }
 
-    return isPrimitiveIntegral(local.type.primitive);
+    return isPrimitiveIntegral(local.type);
 }
 
 // If the given node is not in a register, move it into one
@@ -1212,25 +1212,25 @@ Local generateCastLocalIntegerToBool(GeneratorState state, Cast typeCast)
 
 Local generateOperator(GeneratorState state, Operator operator)
 {
-    if (operator.type == OperatorType.Plus ||
-        operator.type == OperatorType.Asterisk)
+    if (operator.operatorType == OperatorType.Plus ||
+        operator.operatorType == OperatorType.Asterisk)
     {
         return generateMathOperator(state, operator);
     }
 
-    if (operator.type == OperatorType.Equality ||
-        operator.type == OperatorType.Inequality)
+    if (operator.operatorType == OperatorType.Equality ||
+        operator.operatorType == OperatorType.Inequality)
     {
         return generateRelationalOperator(state, operator);
     }
 
-    if (operator.type == OperatorType.LogicalAnd)
+    if (operator.operatorType == OperatorType.LogicalAnd)
     {
         return generateLogicalAndOperator(state, operator);
     }
 
     throw new Exception(
-            format("Unrecognized operator type: %s", operator.type));
+            format("Unrecognized operator type: %s", operator.operatorType));
 }
 
 Type getType(GeneratorState state, Node node)
@@ -1238,7 +1238,7 @@ Type getType(GeneratorState state, Node node)
     auto literal = cast(Literal)node;
     if (literal !is null)
     {
-        return new Type(literal.type);
+        return literal.type;
     }
 
     auto binding = cast(Binding)node;
@@ -1277,7 +1277,7 @@ Local generateMathOperator(GeneratorState state, Operator operator)
     auto temp = state.addTemp(leftType);
     state.render(format("    mov %s, %s", temp.register, left));
 
-    switch (operator.type)
+    switch (operator.operatorType)
     {
         case OperatorType.Plus:
             state.render(format("    add %s, %s", temp.register, right));
@@ -1303,7 +1303,7 @@ Local generateRelationalOperator(GeneratorState state, Operator operator)
 
     state.render(format("    cmp %s, %s", left, right));
 
-    switch (operator.type)
+    switch (operator.operatorType)
     {
         case OperatorType.Equality:
             state.render(format("    sete %s", lowByte(temp.register)));
