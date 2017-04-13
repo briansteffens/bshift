@@ -832,27 +832,55 @@ bool isBindingInteger(GeneratorState state, Node node)
     return isPrimitiveIntegral(local.type.primitive);
 }
 
-// If the given local is not in a register, move it into one
-Local requireLocalInRegister(GeneratorState state, Local local)
+// If the given node is not in a register, move it into one
+Local requireLocalInRegister(GeneratorState state, Node node)
 {
-    switch (local.location)
+    // If node is already a local, resolve it
+    auto binding = cast(Binding)node;
+    if (binding !is null)
     {
-        case Location.Register:
+        auto local = state.findLocal(binding.name);
+        if (local is null)
+        {
+            throw new Exception(format("Can't find local %s", binding.name));
+        }
+
+        // If it's already in a register, no work needed
+        if (local.location == Location.Register)
+        {
             return local;
-        case Location.Stack:
-            auto temp = state.addTemp(local.type);
-            state.output ~= "    mov %s, %s", temp.register, 
-            return temp;
-        default:
-            throw new Exception(format(
-                    "Can't move local from %s to register", local.location));
+        }
     }
+
+    // Not in a register: make a new temp and copy it there
+    auto ret = state.addTemp(getType(state, node));
+    state.output ~= format("    mov %s, %s", ret.register,
+                           renderNode(state, node));
+    return ret;
 }
 
 Local generateIndexer(GeneratorState state, Indexer indexer)
 {
     auto indexerNode = generateNode(state, indexer.index);
-    return null;
+    auto indexerRegister = requireLocalInRegister(state, indexerNode);
+
+    auto sourceNode = generateNode(state, indexer.source);
+    auto sourceRegister = requireLocalInRegister(state, sourceNode);
+
+    auto outputType = sourceRegister.type.clone();
+    outputType.pointer = false;
+
+    auto output = state.addTemp(outputType);
+
+    auto scale = primitiveSize(outputType.primitive);
+
+    state.output ~= format("    mov %s, [%s * %d + %s]", output.register,
+            indexerRegister.register, scale, sourceRegister.register);
+
+    state.freeTemp(sourceRegister);
+    state.freeTemp(indexerRegister);
+
+    return output;
 }
 
 Local generateDereference(GeneratorState state, Dereference dereference)
