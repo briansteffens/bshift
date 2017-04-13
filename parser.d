@@ -367,43 +367,11 @@ TypeSignature parseTypeSignature(TokenFeed tokens)
 
 Assignment parseAssignment(TokenFeed tokens)
 {
-    // Check for dereference operator
+    // parseExpression always starts by calling .next()
+    tokens.rewind(1);
+    auto lvalue = parseExpression(tokens);
+
     auto current = tokens.current();
-    bool dereference = false;
-
-    if (current.match(TokenType.Symbol, "*"))
-    {
-        dereference = true;
-
-        if (!tokens.next())
-        {
-            throw new Exception("Expected a variable name to assign to");
-        }
-    }
-
-    // Binding (lvalue)
-    current = tokens.current();
-
-    if (current.type != TokenType.Word)
-    {
-        throw new Exception(format(
-                "Expected a variable name to assign to. Got: %s", current));
-    }
-
-    Node lvalue = new Binding(current.value);
-
-    if (dereference)
-    {
-        lvalue = new Dereference(lvalue);
-    }
-
-    // Assignment operator (=)
-    if (!tokens.next())
-    {
-        throw new Exception("Expected assignment operator (=)");
-    }
-
-    current = tokens.current();
 
     if (current.type != TokenType.Symbol && current.value != "=")
     {
@@ -863,7 +831,8 @@ class ExpressionParser
         this.current = this.input.current();
         this.printState();
 
-        if (current.type == TokenType.Symbol && current.value == ";")
+        if (current.match(TokenType.Symbol, ";") ||
+            current.match(TokenType.Symbol, "="))
         {
             while (this.operators.len() > 0)
             {

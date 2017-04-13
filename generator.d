@@ -643,6 +643,7 @@ void generateAssignmentShared(GeneratorState state, Node target,
                               Node expression)
 {
     bool targetDereference = false;
+    Local tempTarget = null;
 
     auto deref = cast(Dereference)target;
     if (deref !is null)
@@ -651,38 +652,52 @@ void generateAssignmentShared(GeneratorState state, Node target,
         target = deref.source;
     }
 
-    auto targetBinding = cast(Binding)target;
-    if (targetBinding is null)
-    {
-        throw new Exception(format("Can't assign to %s", target));
-    }
+    string targetRendered = null;
+    Type targetType = null;
 
-    auto targetLocal = state.findLocal(targetBinding.name);
-    if (targetLocal is null)
+    // Assigning to an indexer
+    auto indexer = cast(Indexer)target;
+    IndexerResolveData indexerData;
+    if (indexer !is null)
     {
-        throw new Exception(format("Local %s not found", targetBinding.name));
+        indexerData = resolveIndexer(state, indexer);
+        targetRendered = indexerData.address;
+        targetType = indexerData.sourceRegister.type.clone();
+        targetType.pointer = false;
+    }
+    // Assigning to a binding
+    else
+    {
+        auto targetBinding = cast(Binding)target;
+        if (targetBinding is null)
+        {
+            throw new Exception(format("Can't assign to %s", target));
+        }
+
+        auto targetLocal = state.findLocal(targetBinding.name);
+        if (targetLocal is null)
+        {
+            throw new Exception(format("Local %s not found",
+                    targetBinding.name));
+        }
+
+        targetRendered = renderLocal(targetLocal);
+        targetType = targetLocal.type;
+
+        // Deal with dereference if necessary
+        if (targetDereference)
+        {
+            tempTarget = state.addTemp(targetLocal.type);
+            state.output ~= format("    mov %s, %s", tempTarget.register,
+                                   targetRendered);
+            targetRendered = format("[%s]", tempTarget.register);
+        }
     }
 
     auto value = generateNode(state, expression);
     auto valueRendered = renderNode(state, value);
 
-    auto sizeHint = "";
-    if (targetLocal.location == Location.Stack)
-    {
-        sizeHint = to!string(typeToOpSize(targetLocal.type));
-    }
-
-    auto targetRendered = renderLocal(targetLocal);
-
-    // Deal with dereference if necessary
-    Local tempTarget = null;
-    if (targetDereference)
-    {
-        tempTarget = state.addTemp(targetLocal.type);
-        state.output ~= format("    mov %s, %s", tempTarget.register,
-                               targetRendered);
-        targetRendered = format("[%s]", tempTarget.register);
-    }
+    auto sizeHint = to!string(typeToOpSize(targetType));
 
     state.output ~= format("    mov %s%s, %s", sizeHint, targetRendered,
                            valueRendered);
@@ -690,6 +705,12 @@ void generateAssignmentShared(GeneratorState state, Node target,
     if (tempTarget !is null)
     {
         state.freeTemp(tempTarget);
+    }
+
+    if (indexer !is null)
+    {
+        state.freeTemp(indexerData.sourceRegister);
+        state.freeTemp(indexerData.indexerRegister);
     }
 }
 
@@ -859,26 +880,50 @@ Local requireLocalInRegister(GeneratorState state, Node node)
     return ret;
 }
 
-Local generateIndexer(GeneratorState state, Indexer indexer)
+struct IndexerResolveData
 {
+    string address;
+
+    // These temps can be freed by the caller after use of the address.
+    Local sourceRegister;
+    Local indexerRegister;
+}
+
+// Resolves an indexer to an addressing mode operand pointing to the area in
+// memory where the indexed item is. This allows generators to read the value
+// into a register when it's an rvalue and write to the memory address
+// directly when it's an lvalue.
+IndexerResolveData resolveIndexer(GeneratorState state, Indexer indexer)
+{
+    IndexerResolveData data;
+
     auto indexerNode = generateNode(state, indexer.index);
-    auto indexerRegister = requireLocalInRegister(state, indexerNode);
+    data.indexerRegister = requireLocalInRegister(state, indexerNode);
 
     auto sourceNode = generateNode(state, indexer.source);
-    auto sourceRegister = requireLocalInRegister(state, sourceNode);
+    data.sourceRegister = requireLocalInRegister(state, sourceNode);
 
-    auto outputType = sourceRegister.type.clone();
+    auto scale = primitiveSize(data.sourceRegister.type.primitive);
+
+    data.address = format("[%s * %d + %s]", data.indexerRegister.register,
+                          scale, data.sourceRegister.register);
+
+    return data;
+}
+
+Local generateIndexer(GeneratorState state, Indexer indexer)
+{
+    auto data = resolveIndexer(state, indexer);
+
+    auto outputType = data.sourceRegister.type.clone();
     outputType.pointer = false;
 
     auto output = state.addTemp(outputType);
 
-    auto scale = primitiveSize(outputType.primitive);
+    state.output ~= format("    mov %s, %s", output.register, data.address);
 
-    state.output ~= format("    mov %s, [%s * %d + %s]", output.register,
-            indexerRegister.register, scale, sourceRegister.register);
-
-    state.freeTemp(sourceRegister);
-    state.freeTemp(indexerRegister);
+    state.freeTemp(data.sourceRegister);
+    state.freeTemp(data.indexerRegister);
 
     return output;
 }
