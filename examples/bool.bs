@@ -1,6 +1,6 @@
-ulong main()
+u64 main()
 {
-    ulong x;
+    u64 x;
     x = 1;
 
     bool b;

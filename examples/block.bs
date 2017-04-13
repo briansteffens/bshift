@@ -1,10 +1,10 @@
-ulong main()
+u64 main()
 {
     bool b;
     b = (bool)1;
 
     {
-        ulong x;
+        u64 x;
         x = 7;
     }
 

@@ -10,10 +10,10 @@ ldc main.d lexer.d ast.d parser.d generator.d && \
 ./main string.bs && \
 basm string.asm && \
 
-./main test.bs && \
-basm test.asm && \
+./main "${1}.bs" && \
+basm "${1}.asm" && \
 
-ld test.o string.o && \
+ld "${1}.o" string.o && \
 
 ./a.out; \
 OUTPUT="$?" && \

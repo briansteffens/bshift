@@ -1,17 +1,17 @@
-ulong f()
+u64 f()
 {
-    ulong x;
+    u64 x;
     x = 1 + 2;
 
     return x;
 }
 
-ulong main()
+u64 main()
 {
-    ulong x;
+    u64 x;
     x = 3 + 5;
 
-    ulong y;
+    u64 y;
     y = x + 1 + 2;
 
     return y;

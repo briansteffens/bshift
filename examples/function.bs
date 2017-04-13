@@ -1,12 +1,12 @@
-ulong f(ulong a)
+u64 f(u64 a)
 {
     return a + 1;
 }
 
-ulong main()
+u64 main()
 {
-    ulong x = f(1);
-    ulong y = f(2);
+    u64 x = f(1);
+    u64 y = f(2);
 
     return x + y;
 }
