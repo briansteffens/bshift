@@ -1,0 +1,12 @@
+ulong main()
+{
+    bool b;
+    b = (bool)1;
+
+    {
+        ulong x;
+        x = 7;
+    }
+
+    return b;
+}

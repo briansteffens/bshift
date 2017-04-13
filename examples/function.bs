@@ -1,0 +1,12 @@
+ulong f(ulong a)
+{
+    return a + 1;
+}
+
+ulong main()
+{
+    ulong x = f(1);
+    ulong y = f(2);
+
+    return x + y;
+}

@@ -1,0 +1,6 @@
+extern u64 a_c_function(u64 a);
+
+u64 main()
+{
+    return a_c_function(6);
+}
