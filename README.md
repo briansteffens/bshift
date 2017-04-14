@@ -4,7 +4,8 @@
 
 * [ldc](https://wiki.dlang.org/LDC)
 * gcc
-* nasm
+* nasm on OS X
+* [basm](https://github.com/briansteffens/basm) on Linux
 * GNU make
 
 ### Usage
