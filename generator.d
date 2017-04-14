@@ -146,6 +146,12 @@ class GeneratorState
         this.mod = mod;
     }
 
+    void render(string line)
+    {
+        writefln("RENDER: %s", line);
+        this.output ~= line;
+    }
+
     void addExtern(string name)
     {
         foreach (ext; this.externs)
@@ -215,12 +221,12 @@ class GeneratorState
 
     void generatePush(Register r)
     {
-        this.output ~= format("    push %s", r);
+        this.render(format("    push %s", r));
     }
 
     void generatePop(Register r)
     {
-        this.output ~= format("    pop %s", r);
+        this.render(format("    pop %s", r));
     }
 
     bool registerTaken(Register register)
@@ -330,7 +336,7 @@ string[] generate(Module mod)
 {
     auto state = new GeneratorState(mod);
 
-    state.output ~= "section .text";
+    state.render("section .text");
 
     for (int i = 0; i < mod.functions.length; i++)
     {
@@ -342,25 +348,25 @@ string[] generate(Module mod)
     {
         auto mainFunc = mod.findFunction("main");
 
-        state.output ~= "global _start";
-        state.output ~= "_start:";
-        state.output ~= format("    call %s", mainFunc.renderName());
-        state.output ~= "    mov rdi, rax";
+        state.render("global _start");
+        state.render("_start:");
+        state.render(format("    call %s", mainFunc.renderName()));
+        state.render(format("    mov rdi, rax"));
         version (OSX)
         {
-            state.output ~= "    mov rax, 0x2000001";
+            state.render("    mov rax, 0x2000001");
         }
         else
         {
-            state.output ~= "    mov rax, 60";
+            state.render("    mov rax, 60");
         }
-        state.output ~= "    syscall";
+        state.render("    syscall");
 
         version (OSX)
         {
             // Mac requires dummy data section with dummy value for some reason
-            state.output ~= "section .data";
-            state.output ~= "_dummy: db 0";
+            state.render("section .data");
+            state.render("_dummy: db 0");
         }
     }
 
@@ -449,14 +455,14 @@ void generateFunction(GeneratorState state, Function func)
 
     // Function prologue TODO: add export/public keyword to control this
     auto funcName = func.renderName();
-    state.output ~= format("global %s", funcName);
-    state.output ~= format("%s:", funcName);
-    state.output ~= format("    push rbp");
-    state.output ~= format("    mov rbp, rsp");
+    state.render(format("global %s", funcName));
+    state.render(format("%s:", funcName));
+    state.render(format("    push rbp"));
+    state.render(format("    mov rbp, rsp"));
 
     if (stackOffset > 0)
     {
-        state.output ~= format("    sub rsp, %s", stackOffset);
+        state.render(format("    sub rsp, %s", stackOffset));
     }
 
     // Copy locals into the stack
@@ -464,8 +470,8 @@ void generateFunction(GeneratorState state, Function func)
     {
         if (local.location == Location.Register)
         {
-            state.output ~= format("    mov [rbp - %d], %s",
-                    local.stackOffset, local.register);
+            state.render(format("    mov [rbp - %d], %s",
+                    local.stackOffset, local.register));
 
             local.location = Location.Stack;
         }
@@ -554,22 +560,22 @@ void generateWhile(GeneratorState state, While _while)
     auto startWhileLabel = state.addLabel("while_start_");
     auto endWhileLabel = state.addLabel("while_end_");
 
-    state.output ~= format("%s:", startWhileLabel);
+    state.render(format("%s:", startWhileLabel));
 
     if (_while.conditional !is null)
     {
         auto conditional = renderNode(state,
                 generateNode(state, _while.conditional));
 
-        state.output ~= format("    test %s, %s", conditional, conditional);
-        state.output ~= format("    je %s", endWhileLabel);
+        state.render(format("    test %s, %s", conditional, conditional));
+        state.render(format("    je %s", endWhileLabel));
     }
 
     // Loop body
     generateStatement(state, _while.block);
 
-    state.output ~= format("    jmp %s", startWhileLabel);
-    state.output ~= format("%s:", endWhileLabel);
+    state.render(format("    jmp %s", startWhileLabel));
+    state.render(format("%s:", endWhileLabel));
 }
 
 void generateIf(GeneratorState state, If _if)
@@ -598,7 +604,7 @@ void generateIf(GeneratorState state, If _if)
     {
         auto block = blocks[i];
 
-        state.output ~= format("%s:", block.label);
+        state.render(format("%s:", block.label));
 
         if (block.conditional !is null)
         {
@@ -612,9 +618,8 @@ void generateIf(GeneratorState state, If _if)
             auto conditional = renderNode(state,
                     generateNode(state, block.conditional));
 
-            state.output ~= format("    test %s, %s",
-                                   conditional, conditional);
-            state.output ~= format("    je %s", nextBlockLabel);
+            state.render(format("    test %s, %s", conditional, conditional));
+            state.render(format("    je %s", nextBlockLabel));
         }
 
         // Block: run if the conditional was true
@@ -623,11 +628,11 @@ void generateIf(GeneratorState state, If _if)
         // Jump out of the if structure, unless we're already at the end
         if (i == blocks.length - 1)
         {
-            state.output ~= format("    jmp %s", endIfLabel);
+            state.render(format("    jmp %s", endIfLabel));
         }
     }
 
-    state.output ~= format("%s:", endIfLabel);
+    state.render(format("%s:", endIfLabel));
 }
 
 void generateBlock(GeneratorState state, Block block)
@@ -702,8 +707,8 @@ void generateAssignmentShared(GeneratorState state, Node target,
         if (targetDereference)
         {
             tempTarget = state.addTemp(targetLocal.type);
-            state.output ~= format("    mov %s, %s", tempTarget.register,
-                                   targetRendered);
+            state.render(format("    mov %s, %s", tempTarget.register,
+                                targetRendered));
             targetRendered = format("[%s]", tempTarget.register);
         }
     }
@@ -713,8 +718,8 @@ void generateAssignmentShared(GeneratorState state, Node target,
 
     auto sizeHint = to!string(typeToOpSize(targetType));
 
-    state.output ~= format("    mov %s%s, %s", sizeHint, targetRendered,
-                           valueRendered);
+    state.render(format("    mov %s%s, %s", sizeHint, targetRendered,
+                        valueRendered));
 
     if (tempTarget !is null)
     {
@@ -762,21 +767,21 @@ void generateReturn(GeneratorState state, Return r)
             local.register != Register.RAX)
         {
             auto localRendered = renderLocal(local);
-            state.output ~= format("    mov rax, %s", localRendered);
+            state.render(format("    mov rax, %s", localRendered));
         }
     }
     else if (literal !is null)
     {
-        state.output ~= format("    mov rax, %s", renderImmediate(literal));
+        state.render(format("    mov rax, %s", renderImmediate(literal)));
     }
     else
     {
         throw new Exception(format("Can't return this: %s", value));
     }
 
-    state.output ~= "    mov rsp, rbp";
-    state.output ~= "    pop rbp";
-    state.output ~= "    ret";
+    state.render("    mov rsp, rbp");
+    state.render("    pop rbp");
+    state.render("    ret");
 }
 
 // Generate a Node in an expression, doing any necessary setup to get it usable
@@ -888,9 +893,21 @@ Local requireLocalInRegister(GeneratorState state, Node node)
     }
 
     // Not in a register: make a new temp and copy it there
-    auto ret = state.addTemp(getType(state, node));
-    state.output ~= format("    mov %s, %s", ret.register,
-                           renderNode(state, node));
+    auto retType = getType(state, node);
+    auto ret = state.addTemp(retType);
+
+    // Special handling for array locals
+    if (retType.elements > 1)
+    {
+        state.render(format("    lea %s, %s", ret.register,
+                            renderNode(state, node)));
+    }
+    else
+    {
+        state.render(format("    mov %s, %s", ret.register,
+                            renderNode(state, node)));
+    }
+
     return ret;
 }
 
@@ -934,7 +951,7 @@ Local generateIndexer(GeneratorState state, Indexer indexer)
 
     auto output = state.addTemp(outputType);
 
-    state.output ~= format("    mov %s, %s", output.register, data.address);
+    state.render(format("    mov %s, %s", output.register, data.address));
 
     state.freeTemp(data.sourceRegister);
     state.freeTemp(data.indexerRegister);
@@ -970,8 +987,8 @@ Local generateDereference(GeneratorState state, Dereference dereference)
     auto outputLocal = state.addTemp(outputType);
     auto temp = state.addTemp(new Type(PrimitiveType.U64));
 
-    state.output ~= format("    mov %s, %s", temp.register,
-                           renderNode(state, sourceNode));
+    state.render(format("    mov %s, %s", temp.register,
+                        renderNode(state, sourceNode)));
 
     string targetRegister;
     switch (outputType.primitive)
@@ -987,7 +1004,7 @@ Local generateDereference(GeneratorState state, Dereference dereference)
                                 outputType));
     }
 
-    state.output ~= format("    mov %s, [%s]", targetRegister, temp.register);
+    state.render(format("    mov %s, [%s]", targetRegister, temp.register));
     state.freeTemp(temp);
 
     return outputLocal;
@@ -1020,8 +1037,8 @@ Local generateReference(GeneratorState state, Reference reference)
 
     auto outputLocal = state.addTemp(outputType);
 
-    state.output ~= format("    lea %s, %s", outputLocal.register,
-                           renderNode(state, sourceNode));
+    state.render(format("    lea %s, %s", outputLocal.register,
+                        renderNode(state, sourceNode)));
 
     return outputLocal;
 }
@@ -1070,12 +1087,12 @@ Local generateCastLiteralIntegerToBool(GeneratorState state, Cast typeCast)
 
     if (castedValue)
     {
-        state.output ~= format("    mov %s, 1", target.register);
+        state.render(format("    mov %s, 1", target.register));
     }
     else
     {
-        state.output ~= format("    xor %s, %s", target.register,
-                                                 target.register);
+        state.render(format("    xor %s, %s", target.register,
+                            target.register));
     }
 
     return target;
@@ -1086,9 +1103,9 @@ Local generateCastLocalIntegerToBool(GeneratorState state, Cast typeCast)
     auto source = renderNode(state, generateNode(state, typeCast.target));
     auto target = state.addTemp(new Type(PrimitiveType.Bool));
 
-    state.output ~= format("    xor %s, %s", target.register, target.register);
-    state.output ~= format("    cmp %s, 0", source);
-    state.output ~= format("    setne %s", lowByte(target.register));
+    state.render(format("    xor %s, %s", target.register, target.register));
+    state.render(format("    cmp %s, 0", source));
+    state.render(format("    setne %s", lowByte(target.register)));
 
     return target;
 }
@@ -1158,15 +1175,15 @@ Local generateMathOperator(GeneratorState state, Operator operator)
     auto right = renderNode(state, rightNode);
 
     auto temp = state.addTemp(leftType);
-    state.output ~= format("    mov %s, %s", temp.register, left);
+    state.render(format("    mov %s, %s", temp.register, left));
 
     switch (operator.type)
     {
         case OperatorType.Plus:
-            state.output ~= format("    add %s, %s", temp.register, right);
+            state.render(format("    add %s, %s", temp.register, right));
             break;
         case OperatorType.Asterisk:
-            state.output ~= format("    imul %s, %s", temp.register, right);
+            state.render(format("    imul %s, %s", temp.register, right));
             break;
         default:
             throw new Exception(format("Unrecognized math operator type: %s",
@@ -1182,17 +1199,17 @@ Local generateRelationalOperator(GeneratorState state, Operator operator)
     auto right = renderNode(state, generateNode(state, operator.right));
 
     auto temp = state.addTemp(new Type(PrimitiveType.Bool));
-    state.output ~= format("    xor %s, %s", temp.register, temp.register);
+    state.render(format("    xor %s, %s", temp.register, temp.register));
 
-    state.output ~= format("    cmp %s, %s", left, right);
+    state.render(format("    cmp %s, %s", left, right));
 
     switch (operator.type)
     {
         case OperatorType.Equality:
-            state.output ~= format("    sete %s", lowByte(temp.register));
+            state.render(format("    sete %s", lowByte(temp.register)));
             break;
         case OperatorType.Inequality:
-            state.output ~= format("    setne %s", lowByte(temp.register));
+            state.render(format("    setne %s", lowByte(temp.register)));
             break;
         default:
             throw new Exception(format(
@@ -1206,25 +1223,25 @@ Local generateRelationalOperator(GeneratorState state, Operator operator)
 Local generateLogicalAndOperator(GeneratorState state, Operator operator)
 {
     auto temp = state.addTemp(new Type(PrimitiveType.Bool));
-    state.output ~= format("    xor %s, %s", temp.register, temp.register);
+    state.render(format("    xor %s, %s", temp.register, temp.register));
 
     auto endComparison = state.addLabel("end_comparison_");
 
     // Left operand
     auto left = renderNode(state, generateNode(state, operator.left));
-    state.output ~= format("    test %s, %s", left, left);
-    state.output ~= format("    je %s", endComparison);
+    state.render(format("    test %s, %s", left, left));
+    state.render(format("    je %s", endComparison));
 
     // Right operand
     auto right = renderNode(state, generateNode(state, operator.right));
-    state.output ~= format("    test %s, %s", right, right);
-    state.output ~= format("    je %s", endComparison);
+    state.render(format("    test %s, %s", right, right));
+    state.render(format("    je %s", endComparison));
 
     // Both were true
-    state.output ~= format("    mov %s, 1", temp.register);
+    state.render(format("    mov %s, 1", temp.register));
 
     // Either were false
-    state.output ~= format("%s:", endComparison);
+    state.render(format("%s:", endComparison));
 
     return temp;
 }
@@ -1292,8 +1309,8 @@ Register[] prepareCallParams(GeneratorState state, Node[] params)
     // Pass args which aren't currently located in registers
     foreach (arg; nonRegisterArgs)
     {
-        state.output ~= format("    mov %s, %s",
-                               arg.target, renderNode(state, arg.node));
+        state.render(format("    mov %s, %s",
+                            arg.target, renderNode(state, arg.node)));
     }
 
     return callerPreserved;
@@ -1306,7 +1323,7 @@ Local cleanupCall(GeneratorState state, Type returnType,
     auto temp = state.addTemp(returnType);
     if (temp.register != Register.RAX)
     {
-        state.output ~= format("    mov %s, rax", temp.register);
+        state.render(format("    mov %s, rax", temp.register));
     }
 
     // Restore caller-preserved registers
@@ -1330,7 +1347,7 @@ Local generateCall(GeneratorState state, Call call)
 
     // Make the actual call
     auto func = state.mod.findFunction(call);
-    state.output ~= format("    call %s", func.renderName());
+    state.render(format("    call %s", func.renderName()));
 
     // Make sure the function gets listed as an extern
     auto bshiftFunc = cast(Function)func;
@@ -1348,10 +1365,10 @@ Local generateSysCall(GeneratorState state, Call call)
 
     // Handle the system call code, which needs to go in rax
     auto callCode = generateNode(state, call.parameters[0]);
-    state.output ~= format("    mov rax, %s", renderNode(state, callCode));
+    state.render(format("    mov rax, %s", renderNode(state, callCode)));
 
     // Make the system call
-    state.output ~= format("    syscall");
+    state.render(format("    syscall"));
 
     return cleanupCall(state, new Type(PrimitiveType.U64), callerPreserved);
 }
@@ -1515,8 +1532,7 @@ void shuffleRegisters(GeneratorState state, RegisterMove[] moves)
         {
             for (auto i = chain.length - 1; i > 0; i--)
             {
-                state.output ~= format("    mov %s, %s",
-                                       chain[i], chain[i - 1]);
+                state.render(format("    mov %s, %s", chain[i], chain[i - 1]));
             }
 
             continue;
@@ -1525,7 +1541,7 @@ void shuffleRegisters(GeneratorState state, RegisterMove[] moves)
         // Circular chain with only two nodes (optimize to use xchg)
         if (chain.length == 2)
         {
-            state.output ~= format("    xchg %s, %s", chain[0], chain[1]);
+            state.render(format("    xchg %s, %s", chain[0], chain[1]));
             continue;
         }
 
@@ -1533,15 +1549,14 @@ void shuffleRegisters(GeneratorState state, RegisterMove[] moves)
         auto tempLocal = state.addTemp(new Type(PrimitiveType.U64));
         auto temp = tempLocal.register;
 
-        state.output ~= format("    mov %s, %s", temp, chain[$-1]);
+        state.render(format("    mov %s, %s", temp, chain[$-1]));
 
         for (auto i = chain.length - 1; i > 0; i--)
         {
-            state.output ~= format("    mov %s, %s",
-                                   chain[i], chain[i - 1]);
+            state.render(format("    mov %s, %s", chain[i], chain[i - 1]));
         }
 
-        state.output ~= format("    mov %s, %s", chain[0], temp);
+        state.render(format("    mov %s, %s", chain[0], temp));
 
         state.freeTemp(tempLocal);
     }

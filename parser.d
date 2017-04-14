@@ -318,7 +318,7 @@ LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
 
     if (current.match(TokenType.Symbol, "="))
     {
-        expression = parseExpression(tokens);
+        expression = new ExpressionParser(tokens).run();
     }
     else if (!current.match(TokenType.Symbol, ";"))
     {
@@ -340,7 +340,28 @@ Type parseType(TokenFeed tokens)
         tokens.next();
     }
 
-    return new Type(primitive, pointer=pointer);
+    int elements = 1;
+    next = tokens.peek(1);
+    if (next.match(TokenType.Symbol, "["))
+    {
+        tokens.next();
+
+        auto parser = new ExpressionParser(tokens);
+        parser.until ~= new Token(TokenType.Symbol, "]");
+        auto arraySize = parser.run();
+
+        auto u64literal = cast(U64Literal)arraySize;
+        if (u64literal is null)
+        {
+            throw new Exception(format("Can't convert %s to an array size",
+                        arraySize));
+        }
+
+        pointer = true;
+        elements = cast(int)u64literal.value;
+    }
+
+    return new Type(primitive, pointer=pointer, elements=elements);
 }
 
 TypeSignature parseTypeSignature(TokenFeed tokens)
@@ -369,7 +390,7 @@ Assignment parseAssignment(TokenFeed tokens)
 {
     // parseExpression always starts by calling .next()
     tokens.rewind(1);
-    auto lvalue = parseExpression(tokens);
+    auto lvalue = new ExpressionParser(tokens).run();
 
     auto current = tokens.current();
 
@@ -379,14 +400,14 @@ Assignment parseAssignment(TokenFeed tokens)
     }
 
     // Expression (rvalue)
-    auto expression = parseExpression(tokens);
+    auto expression = new ExpressionParser(tokens).run();
 
     return new Assignment(null, lvalue, expression);
 }
 
 Return parseReturn(TokenFeed tokens)
 {
-    return new Return(null, parseExpression(tokens));
+    return new Return(null, new ExpressionParser(tokens).run());
 }
 
 While parseWhile(TokenFeed tokens)
@@ -590,12 +611,18 @@ class ExpressionParser
     ParserItemStack output;
     ParserItemStack operators;
 
+    // Tokens to mark the end of an expression
+    Token[] until;
+
     this(TokenFeed input)
     {
         this.input = input;
 
         this.output = new ParserItemStack();
         this.operators = new ParserItemStack();
+
+        this.until ~= new Token(TokenType.Symbol, ";");
+        this.until ~= new Token(TokenType.Symbol, "=");
     }
 
     void printState()
@@ -820,6 +847,34 @@ class ExpressionParser
         return false;
     }
 
+    // Check for the end of the expression, returning true and consuming any
+    // remaining operators if the end is found.
+    bool checkForEnd()
+    {
+        bool end = false;
+
+        foreach (unt; this.until)
+        {
+            if (this.current.match(unt))
+            {
+                end = true;
+                break;
+            }
+        }
+
+        if (!end)
+        {
+            return false;
+        }
+
+        while (this.operators.len() > 0)
+        {
+            this.consume();
+        }
+
+        return true;
+    }
+
     bool next()
     {
         if (!this.input.next())
@@ -831,13 +886,8 @@ class ExpressionParser
         this.current = this.input.current();
         this.printState();
 
-        if (current.match(TokenType.Symbol, ";") ||
-            current.match(TokenType.Symbol, "="))
+        if (this.checkForEnd())
         {
-            while (this.operators.len() > 0)
-            {
-                this.consume();
-            }
             return false;
         }
 
@@ -989,22 +1039,20 @@ class ExpressionParser
         this.operators.push(current);
         return true;
     }
-}
 
-Node parseExpression(TokenFeed tokens)
-{
-    auto parser = new ExpressionParser(tokens);
-
-    while (parser.next())
+    Node run()
     {
-    }
+        while (this.next())
+        {
+        }
 
-    if (parser.output.len() != 1)
-    {
-        throw new Exception("Expected one node to be left in parser");
-    }
+        if (this.output.len() != 1)
+        {
+            throw new Exception("Expected one node to be left in parser");
+        }
 
-    return getOrParseNode(parser.output.pop());
+        return getOrParseNode(this.output.pop());
+    }
 }
 
 // Parse an expression in parenthesis, ending on the first close parenthesis

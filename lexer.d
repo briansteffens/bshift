@@ -81,6 +81,11 @@ class Token
     {
         return this.type == type && this.value == value;
     }
+
+    bool match(Token other)
+    {
+        return this.match(other.type, other.value);
+    }
 }
 
 Token parseDoubleSymbol(dchar first, dchar second)

@@ -92,11 +92,13 @@ class Type
 {
     PrimitiveType primitive;
     bool pointer;
+    int elements;
 
-    this(PrimitiveType primitive, bool pointer = false)
+    this(PrimitiveType primitive, bool pointer=false, int elements=1)
     {
         this.primitive = primitive;
         this.pointer = pointer;
+        this.elements = elements;
     }
 
     override string toString()
@@ -106,6 +108,11 @@ class Type
         if (this.pointer)
         {
             ret ~= "*";
+        }
+
+        if (this.elements > 1)
+        {
+            ret ~= format("[%d]", this.elements);
         }
 
         return ret;
@@ -147,6 +154,11 @@ int primitiveSize(PrimitiveType t)
 
 int typeSize(Type t)
 {
+    if (t.elements > 1)
+    {
+        return t.elements * primitiveSize(t.primitive);
+    }
+
     if (t.pointer)
     {
         return 8;
