@@ -346,8 +346,22 @@ string[] generate(Module mod)
         state.output ~= "_start:";
         state.output ~= format("    call %s", mainFunc.renderName());
         state.output ~= "    mov rdi, rax";
-        state.output ~= "    mov rax, 60";
+        version (OSX)
+        {
+            state.output ~= "    mov rax, 0x2000001";
+        }
+        else
+        {
+            state.output ~= "    mov rax, 60";
+        }
         state.output ~= "    syscall";
+
+        version (OSX)
+        {
+            // Mac requires dummy data section with dummy value for some reason
+            state.output ~= "section .data";
+            state.output ~= "_dummy: db 0";
+        }
     }
 
     // Render externs
