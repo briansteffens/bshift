@@ -803,7 +803,7 @@ void generateAssignmentShared(GeneratorState state, Node target,
         targetRendered = renderLocal(targetLocal);
         targetType = targetLocal.type;
 
-        // Deal with dereference if necessary
+	// Deal with dereference if necessary
         if (targetDereference)
         {
             tempTarget = state.addTemp(targetLocal.type);
@@ -811,12 +811,25 @@ void generateAssignmentShared(GeneratorState state, Node target,
                                 targetRendered));
             targetRendered = format("[%s]", tempTarget.register);
         }
+
+	state.render(format("; %s =", targetBinding.name));
     }
 
+    Type t;
     auto value = generateNode(state, expression);
-    auto valueRendered = renderNode(state, value);
+    auto valueRendered = renderNodeSetType(state, value, &t);
 
-    auto sizeHint = to!string(typeToOpSize(targetType));
+    auto sizeHint = to!string(typeToOpSize(t));
+
+    auto binding = cast(Binding)value;
+    if (binding !is null)
+    {
+        tempTarget = state.addTemp(binding.type);
+	state.render(format("    mov %s, %s", tempTarget.register,
+			    valueRendered));
+	valueRendered = format("%s", tempTarget.register);
+	state.render(format("; %s = %s", (cast(Binding)target).name, binding.name));
+    }
 
     state.render(format("    mov %s%s, %s", sizeHint, targetRendered,
                         valueRendered));
@@ -1492,24 +1505,27 @@ string renderLocal(Local local)
     }
 }
 
-string renderNode(GeneratorState state, Node node)
+string renderNodeSetType(GeneratorState state, Node node, Type *t)
 {
     auto binding = cast(Binding)node;
     if (binding !is null)
     {
         auto local = state.findLocal(binding.name);
+	*t = local.type;
         return renderLocal(local);
     }
 
     auto u64Literal = cast(U64Literal)node;
     if (u64Literal !is null)
     {
+        *t = u64Literal.type;
         return format("%d", u64Literal.value);
     }
 
     auto boolLiteral = cast(BoolLiteral)node;
     if (boolLiteral !is null)
     {
+        *t = boolLiteral.type;
         return boolLiteral.value ? "1" : "0";
     }
 
@@ -1517,10 +1533,16 @@ string renderNode(GeneratorState state, Node node)
     if (operator !is null)
     {
         auto local = generateOperator(state, operator);
+	*t = local.type;
         return format("%s", local.register);
     }
 
     throw new Exception(format("Node %s unrecognized", node));
+}
+
+string renderNode(GeneratorState state, Node node) {
+    Type t;
+    return renderNodeSetType(state, node, &t);
 }
 
 string generateBinding(GeneratorState state, Binding binding)

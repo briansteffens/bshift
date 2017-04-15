@@ -1,10 +1,8 @@
 u64 main()
 {
     u64 s = 2;
-    u64[s] ar;
+    auto t = s;
+    auto f = 4 + t;
 
-    ar[0] = 3;
-    ar[1] = 7;
-
-    return ar[0];
+    return f;
 }

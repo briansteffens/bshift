@@ -6,7 +6,7 @@ enum PrimitiveType
     U64,
     U8,
     Bool,
-    Void,
+    Auto,
 }
 
 class Type
@@ -56,6 +56,7 @@ class Type
     {
         return this.compare(other) ||
                this.primitive == PrimitiveType.U64 && other.pointer ||
+	       this.primitive == PrimitiveType.Auto || other.primitive == PrimitiveType.Auto ||
                this.pointer && other.primitive == PrimitiveType.U64;
     }
 
@@ -76,6 +77,8 @@ int primitiveSize(PrimitiveType t)
             return 1;
         case PrimitiveType.U8:
             return 1;
+	case PrimitiveType.Auto:
+	    return -1;
         default:
             throw new Exception(format("Unknown size for %s", t));
     }
@@ -91,6 +94,8 @@ PrimitiveType parsePrimitive(string s)
             return PrimitiveType.Bool;
         case "u8":
             return PrimitiveType.U8;
+        case "auto":
+	    return PrimitiveType.Auto;
         default:
             throw new Exception(format("Unrecognized type: %s", s));
     }
@@ -149,7 +154,7 @@ class Operator : Node
     Node left;
     Node right;
 
-    this(Node left, OperatorType type, Node right)
+    this(Node left, OperatorType operatorType, Node right)
     {
         this.type = left.type;
         this.operatorType = operatorType;
