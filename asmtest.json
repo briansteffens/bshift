@@ -1,0 +1,11 @@
+{
+    "init": [
+        "make"
+    ],
+    "rendered_file": "test.bs",
+    "before_each": [
+        "./main .asmtest/test.bs",
+        "basm .asmtest/test.asm",
+        "ld .asmtest/test.o -o .asmtest/test.a"
+    ]
+}

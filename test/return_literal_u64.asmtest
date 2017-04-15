@@ -1,0 +1,16 @@
+u64 main()
+{
+    return {{ literal }};
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "7",
+            "literal": "7",
+            "expect_status": "7"
+        }
+    ]
+}
