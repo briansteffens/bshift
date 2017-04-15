@@ -803,7 +803,7 @@ void generateAssignmentShared(GeneratorState state, Node target,
         targetRendered = renderLocal(targetLocal);
         targetType = targetLocal.type;
 
-        // Deal with dereference if necessary
+	// Deal with dereference if necessary
         if (targetDereference)
         {
             tempTarget = state.addTemp(targetLocal.type);
@@ -811,12 +811,25 @@ void generateAssignmentShared(GeneratorState state, Node target,
                                 targetRendered));
             targetRendered = format("[%s]", tempTarget.register);
         }
+
+	state.render(format("; %s =", targetBinding.name));
     }
 
+    Type t;
     auto value = generateNode(state, expression);
-    auto valueRendered = renderNode(state, value);
+    auto valueRendered = renderNodeSetType(state, value, &t);
 
-    auto sizeHint = to!string(typeToOpSize(targetType));
+    auto sizeHint = to!string(typeToOpSize(t));
+
+    auto binding = cast(Binding)value;
+    if (binding !is null)
+    {
+        tempTarget = state.addTemp(binding.type);
+	state.render(format("    mov %s, %s", tempTarget.register,
+			    valueRendered));
+	valueRendered = format("%s", tempTarget.register);
+	state.render(format("; %s = %s", (cast(Binding)target).name, binding.name));
+    }
 
     state.render(format("    mov %s%s, %s", sizeHint, targetRendered,
                         valueRendered));
@@ -939,9 +952,9 @@ Node generateNode(GeneratorState state, Node node)
     return node;
 }
 
-bool isPrimitiveIntegral(PrimitiveType type)
+bool isPrimitiveIntegral(Type type)
 {
-    return type == PrimitiveType.U64;
+    return type.primitive == PrimitiveType.U64;
 }
 
 bool isLiteralInteger(GeneratorState state, Node node)
@@ -969,7 +982,7 @@ bool isBindingInteger(GeneratorState state, Node node)
         return false;
     }
 
-    return isPrimitiveIntegral(local.type.primitive);
+    return isPrimitiveIntegral(local.type);
 }
 
 // If the given node is not in a register, move it into one
@@ -1212,25 +1225,25 @@ Local generateCastLocalIntegerToBool(GeneratorState state, Cast typeCast)
 
 Local generateOperator(GeneratorState state, Operator operator)
 {
-    if (operator.type == OperatorType.Plus ||
-        operator.type == OperatorType.Asterisk)
+    if (operator.operatorType == OperatorType.Plus ||
+        operator.operatorType == OperatorType.Asterisk)
     {
         return generateMathOperator(state, operator);
     }
 
-    if (operator.type == OperatorType.Equality ||
-        operator.type == OperatorType.Inequality)
+    if (operator.operatorType == OperatorType.Equality ||
+        operator.operatorType == OperatorType.Inequality)
     {
         return generateRelationalOperator(state, operator);
     }
 
-    if (operator.type == OperatorType.LogicalAnd)
+    if (operator.operatorType == OperatorType.LogicalAnd)
     {
         return generateLogicalAndOperator(state, operator);
     }
 
     throw new Exception(
-            format("Unrecognized operator type: %s", operator.type));
+            format("Unrecognized operator type: %s", operator.operatorType));
 }
 
 Type getType(GeneratorState state, Node node)
@@ -1238,7 +1251,7 @@ Type getType(GeneratorState state, Node node)
     auto literal = cast(Literal)node;
     if (literal !is null)
     {
-        return new Type(literal.type);
+        return literal.type;
     }
 
     auto binding = cast(Binding)node;
@@ -1277,7 +1290,7 @@ Local generateMathOperator(GeneratorState state, Operator operator)
     auto temp = state.addTemp(leftType);
     state.render(format("    mov %s, %s", temp.register, left));
 
-    switch (operator.type)
+    switch (operator.operatorType)
     {
         case OperatorType.Plus:
             state.render(format("    add %s, %s", temp.register, right));
@@ -1303,7 +1316,7 @@ Local generateRelationalOperator(GeneratorState state, Operator operator)
 
     state.render(format("    cmp %s, %s", left, right));
 
-    switch (operator.type)
+    switch (operator.operatorType)
     {
         case OperatorType.Equality:
             state.render(format("    sete %s", lowByte(temp.register)));
@@ -1492,24 +1505,27 @@ string renderLocal(Local local)
     }
 }
 
-string renderNode(GeneratorState state, Node node)
+string renderNodeSetType(GeneratorState state, Node node, Type *t)
 {
     auto binding = cast(Binding)node;
     if (binding !is null)
     {
         auto local = state.findLocal(binding.name);
+	*t = local.type;
         return renderLocal(local);
     }
 
     auto u64Literal = cast(U64Literal)node;
     if (u64Literal !is null)
     {
+        *t = u64Literal.type;
         return format("%d", u64Literal.value);
     }
 
     auto boolLiteral = cast(BoolLiteral)node;
     if (boolLiteral !is null)
     {
+        *t = boolLiteral.type;
         return boolLiteral.value ? "1" : "0";
     }
 
@@ -1517,10 +1533,16 @@ string renderNode(GeneratorState state, Node node)
     if (operator !is null)
     {
         auto local = generateOperator(state, operator);
+	*t = local.type;
         return format("%s", local.register);
     }
 
     throw new Exception(format("Node %s unrecognized", node));
+}
+
+string renderNode(GeneratorState state, Node node) {
+    Type t;
+    return renderNodeSetType(state, node, &t);
 }
 
 string generateBinding(GeneratorState state, Binding binding)
