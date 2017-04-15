@@ -438,22 +438,7 @@ void placeParameter(Local local, int index)
     local.location = Location.Register;
     local.register = parameterRegister(index);
 }
-/*
-LocalDeclaration[] filterConcreteDeclarations(LocalDeclaration[] all)
-{
-    LocalDeclaration[] ret;
 
-    foreach (decl; all)
-    {
-        if (decl.signature.type.isConcrete())
-        {
-            ret ~= decl;
-        }
-    }
-
-    return ret;
-}
-*/
 void generateFunction(GeneratorState state, Function func)
 {
     int stackOffset = 0;
