@@ -328,6 +328,8 @@ LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
     return new LocalDeclaration(null, typeSignature, expression);
 }
 
+
+
 Type parseType(TokenFeed tokens)
 {
     auto primitive = parsePrimitive(tokens.current().value);
@@ -340,7 +342,7 @@ Type parseType(TokenFeed tokens)
         tokens.next();
     }
 
-    int elements = 1;
+    Node elements = null;
     next = tokens.peek(1);
     if (next.match(TokenType.Symbol, "["))
     {
@@ -348,17 +350,9 @@ Type parseType(TokenFeed tokens)
 
         auto parser = new ExpressionParser(tokens);
         parser.until ~= new Token(TokenType.Symbol, "]");
-        auto arraySize = parser.run();
-
-        auto u64literal = cast(U64Literal)arraySize;
-        if (u64literal is null)
-        {
-            throw new Exception(format("Can't convert %s to an array size",
-                        arraySize));
-        }
+        elements = parser.run();
 
         pointer = true;
-        elements = cast(int)u64literal.value;
     }
 
     return new Type(primitive, pointer=pointer, elements=elements);

@@ -93,6 +93,32 @@ OpSize typeToOpSize(Type t)
     return primitiveToOpSize(t.primitive);
 }
 
+int typeSize(Type t)
+{
+    if (t.elements !is null)
+    {
+        if (!t.isConcrete())
+        {
+            throw new Exception("Cannot calculate size of non-concrete type");
+        }
+
+        auto arraySize = cast(U64Literal)t.elements;
+        if (arraySize is null)
+        {
+            throw new Exception("Bad type elements value");
+        }
+
+        return cast(int)arraySize.value * primitiveSize(t.primitive);
+    }
+
+    if (t.pointer)
+    {
+        return 8;
+    }
+
+    return primitiveSize(t.primitive);
+}
+
 enum Location
 {
     Register,
@@ -412,7 +438,22 @@ void placeParameter(Local local, int index)
     local.location = Location.Register;
     local.register = parameterRegister(index);
 }
+/*
+LocalDeclaration[] filterConcreteDeclarations(LocalDeclaration[] all)
+{
+    LocalDeclaration[] ret;
 
+    foreach (decl; all)
+    {
+        if (decl.signature.type.isConcrete())
+        {
+            ret ~= decl;
+        }
+    }
+
+    return ret;
+}
+*/
 void generateFunction(GeneratorState state, Function func)
 {
     int stackOffset = 0;
@@ -447,7 +488,20 @@ void generateFunction(GeneratorState state, Function func)
 
         local.location = Location.Stack;
 
-        stackOffset += typeSize(decl.signature.type);
+        auto size = 0;
+        if (local.type.isConcrete())
+        {
+            size = typeSize(local.type);
+        }
+        else
+        {
+            // Dynamic arrays need a single pointer in prologue space, which
+            // will later pointer to their actual data region, allocated higher
+            // in the stack.
+            size = 8;
+        }
+
+        stackOffset += size;
         local.stackOffset = stackOffset;
 
         state.locals ~= local;
@@ -477,10 +531,7 @@ void generateFunction(GeneratorState state, Function func)
         }
     }
 
-    for (int i = 0; i < func.block.statements.length; i++)
-    {
-        generateStatement(state, func.block.statements[i]);
-    }
+    generateBlock(state, func.block);
 
     state.locals.length = 0;
     state.temps.length = 0;
@@ -641,16 +692,80 @@ void generateBlock(GeneratorState state, Block block)
     {
         generateStatement(state, statement);
     }
+
+    cleanupBlock(state, block, null);
+}
+
+// When exiting a block (closing curly brace, continue, break) any arrays
+// dynamically allocated before the given termination statement (or null if
+// it's the end of the block) need to be freed.
+void cleanupBlock(GeneratorState state, Block block, Statement st)
+{
+    LocalDeclaration firstDynamicArray = null;
+
+    foreach (statement; block.statements)
+    {
+        if (statement == st)
+        {
+            break;
+        }
+
+        auto decl = cast(LocalDeclaration)statement;
+        if (decl is null)
+        {
+            continue;
+        }
+
+        if (!decl.signature.type.isConcrete())
+        {
+            firstDynamicArray = decl;
+            break;
+        }
+    }
+
+    if (firstDynamicArray is null)
+    {
+        return;
+    }
+
+    auto local = state.findLocal(firstDynamicArray.signature.name);
+
+    state.render(format("    mov rsp, %s", renderLocal(local)));
+    state.render(format("    add rsp, 8"));
 }
 
 void generateLocalDeclaration(GeneratorState state, LocalDeclaration st)
 {
+    if (!st.signature.type.isConcrete())
+    {
+        generateDynamicArray(state, st);
+        return;
+    }
+
     if (st.value is null)
     {
         return;
     }
 
     generateAssignmentShared(state, new Binding(st.signature.name), st.value);
+}
+
+void generateDynamicArray(GeneratorState state, LocalDeclaration st)
+{
+    auto arraySizeNode = generateNode(state, st.signature.type.elements);
+    auto arraySizeRegister = requireLocalInRegister(state, arraySizeNode);
+
+    auto arrayPtr = state.findLocal(st.signature.name);
+
+    // Save value of the start of the newly-allocated data in the array's
+    // pointer in the static area.
+    state.render(format("    mov %s, rsp", renderLocal(arrayPtr)));
+    state.render(format("    sub qword %s, 8", renderLocal(arrayPtr)));
+
+    // Allocate the requested space
+    state.render(format("    sub rsp, %s", arraySizeRegister.register));
+
+    state.freeTemp(arraySizeRegister);
 }
 
 void generateAssignment(GeneratorState state, Assignment a)
@@ -897,7 +1012,7 @@ Local requireLocalInRegister(GeneratorState state, Node node)
     auto ret = state.addTemp(retType);
 
     // Special handling for array locals
-    if (retType.elements > 1)
+    if (retType.elements !is null)
     {
         state.render(format("    lea %s, %s", ret.register,
                             renderNode(state, node)));

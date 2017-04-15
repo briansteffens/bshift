@@ -92,9 +92,9 @@ class Type
 {
     PrimitiveType primitive;
     bool pointer;
-    int elements;
+    Node elements;
 
-    this(PrimitiveType primitive, bool pointer=false, int elements=1)
+    this(PrimitiveType primitive, bool pointer=false, Node elements=null)
     {
         this.primitive = primitive;
         this.pointer = pointer;
@@ -105,14 +105,14 @@ class Type
     {
         auto ret = to!string(this.primitive);
 
-        if (this.pointer)
+        if (this.pointer && this.elements is null)
         {
             ret ~= "*";
         }
 
-        if (this.elements > 1)
+        if (this.elements !is null)
         {
-            ret ~= format("[%d]", this.elements);
+            ret ~= format("[%s]", this.elements);
         }
 
         return ret;
@@ -120,13 +120,15 @@ class Type
 
     Type clone()
     {
-        return new Type(this.primitive, this.pointer);
+        // TODO: deep clone node?
+        return new Type(this.primitive, this.pointer, this.elements);
     }
 
     bool compare(Type other)
     {
         return this.primitive == other.primitive &&
-               this.pointer == other.pointer;
+               this.pointer == other.pointer &&
+               this.elements == other.elements; // TODO: value-compare node?
     }
 
     bool compatibleWith(Type other)
@@ -134,6 +136,12 @@ class Type
         return this.compare(other) ||
                this.primitive == PrimitiveType.U64 && other.pointer ||
                this.pointer && other.primitive == PrimitiveType.U64;
+    }
+
+    // Makes sure the number of elements is known at compile-time
+    bool isConcrete()
+    {
+        return this.elements is null || cast(U64Literal)this.elements !is null;
     }
 }
 
@@ -150,21 +158,6 @@ int primitiveSize(PrimitiveType t)
         default:
             throw new Exception(format("Unknown size for %s", t));
     }
-}
-
-int typeSize(Type t)
-{
-    if (t.elements > 1)
-    {
-        return t.elements * primitiveSize(t.primitive);
-    }
-
-    if (t.pointer)
-    {
-        return 8;
-    }
-
-    return primitiveSize(t.primitive);
 }
 
 PrimitiveType parsePrimitive(string s)
