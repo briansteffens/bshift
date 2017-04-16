@@ -2,6 +2,7 @@
     "init": [
         "make"
     ],
+    "test_path": "tests",
     "rendered_file": "test.bs",
     "before_each": [
         "./main .asmtest/test.bs",
