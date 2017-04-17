@@ -4,6 +4,7 @@ import std.conv;
 import std.array;
 import std.file;
 
+import globals;
 import lexer;
 import ast;
 
@@ -811,6 +812,11 @@ class ExpressionParser
 
     void printState()
     {
+        if (!verbose)
+        {
+            return;
+        }
+
         writefln("----------------------------------------------");
         writefln("current: %s", this.current);
 

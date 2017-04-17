@@ -1,7 +1,7 @@
 .PHONY: bshift test clean
 default: main
 
-main: main.d lexer.d ast.d parser.d generator.d
+main: main.d globals.d lexer.d ast.d parser.d generator.d
 	ldc $^
 
 uname := $(shell uname -s)
@@ -11,8 +11,8 @@ ifeq ($(uname), Darwin)
 endif
 
 test: test.bs
-	./main $<
-	$(asm) ${@}.asm
+	./main -v $<
+	$(asm) -v ${@}.asm
 	ld -e _start ${@}.o -o $@
 	./$@
 

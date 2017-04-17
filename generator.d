@@ -2,6 +2,7 @@ import std.stdio;
 import std.format;
 import std.conv;
 
+import globals;
 import ast;
 
 enum Register
@@ -173,7 +174,11 @@ class GeneratorState
 
     void render(string line)
     {
-        writefln("RENDER: %s", line);
+        if (verbose)
+        {
+            writefln("RENDER: %s", line);
+        }
+
         this.output ~= line;
     }
 

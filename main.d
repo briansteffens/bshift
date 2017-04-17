@@ -4,6 +4,7 @@ import std.typecons;
 import std.file;
 import std.array;
 
+import globals;
 import ast;
 import lexer;
 import parser;
@@ -11,36 +12,58 @@ import generator;
 
 void main(string[] args)
 {
-    if (args.length != 2)
+    string sourceFilename = null;
+
+    foreach (arg; args[1..$])
+    {
+        if (arg == "-v")
+        {
+            verbose = true;
+        }
+        else
+        {
+            sourceFilename = arg;
+        }
+    }
+
+    if (sourceFilename is null)
     {
         writeln("Usage: ./main <filename>");
         return;
     }
 
     // Source code
-    auto sourceFilename = args[1];
     auto source = readText(sourceFilename);
 
-    writeln("bshift source code ------------------------------------------\n");
-    writeln(source);
+    if (verbose)
+    {
+        writeln("bshift source code --------------------------------------\n");
+        writeln(source);
+    }
 
     // Lexer
     auto tokens = lex(source);
 
-    writeln("bshift tokens -----------------------------------------------\n");
-    for (int i = 0; i < tokens.length; i++)
+    if (verbose)
     {
-        writeln(tokens[i]);
-    }
+        writeln("bshift tokens -------------------------------------------\n");
+        for (int i = 0; i < tokens.length; i++)
+        {
+            writeln(tokens[i]);
+        }
 
-    writeln();
+        writeln();
+    }
 
     // Parser
     auto moduleName = replace(sourceFilename, ".bs", "");
     auto mod = parse(moduleName, tokens);
 
-    writeln("bshift ast --------------------------------------------------\n");
-    writeln(mod);
+    if (verbose)
+    {
+        writeln("bshift ast ----------------------------------------------\n");
+        writeln(mod);
+    }
 
     // Generator
     auto output = generate(mod);
@@ -48,8 +71,11 @@ void main(string[] args)
     // Write assembly output
     auto contents = renderAsmFile(output);
 
-    writeln("bshift output -----------------------------------------------\n");
-    writeln(contents);
+    if (verbose)
+    {
+        writeln("bshift output -------------------------------------------\n");
+        writeln(contents);
+    }
 
     auto bytes = cast(ubyte[])contents;
 

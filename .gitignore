@@ -3,3 +3,4 @@ main
 *.o
 *.asm
 .asmtest
+test
