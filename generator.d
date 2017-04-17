@@ -1267,15 +1267,39 @@ Local generateMathOperator(GeneratorState state, Operator operator)
     return temp;
 }
 
+string renderSizeHint(Node left, Node right)
+{
+    // If there's a literal involved make sure it's on the right side
+    auto literal = cast(Literal)left;
+    if (literal !is null)
+    {
+        auto temp = left;
+        left = right;
+        right = temp;
+    }
+
+    auto rightLiteral = cast(Literal)right;
+    if (rightLiteral !is null)
+    {
+        return to!string(typeToOpSize(left.type)) ~ " ";
+    }
+
+    return "";
+}
+
 Local generateRelationalOperator(GeneratorState state, Operator operator)
 {
-    auto left = renderNode(state, generateNode(state, operator.left));
-    auto right = renderNode(state, generateNode(state, operator.right));
+    auto leftNode = generateNode(state, operator.left);
+    auto rightNode = generateNode(state, operator.right);
+
+    auto left = renderNode(state, leftNode);
+    auto right = renderNode(state, rightNode);
 
     auto temp = state.addTemp(new Type(PrimitiveType.Bool));
     state.render(format("    xor %s, %s", temp.register, temp.register));
 
-    state.render(format("    cmp %s, %s", left, right));
+    auto sizeHint = renderSizeHint(leftNode, rightNode);
+    state.render(format("    cmp %s%s, %s", sizeHint, left, right));
 
     switch (operator.operatorType)
     {

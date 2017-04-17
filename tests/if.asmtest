@@ -1,0 +1,50 @@
+u64 main()
+{
+    u64 x = {{ value }};
+
+    if (x == 2)
+    {
+        return 2;
+    }
+    else if (x == 3)
+    {
+        return 3;
+    }
+    else if (x == 4)
+    {
+        return 4;
+    }
+    else
+    {
+        return 5;
+    }
+
+    return 6;
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "if block",
+            "value": "2",
+            "expect_status": "2"
+        },
+        {
+            "name": "first else if block",
+            "value": "3",
+            "expect_status": "3"
+        },
+        {
+            "name": "second else if block",
+            "value": "4",
+            "expect_status": "4"
+        },
+        {
+            "name": "else block",
+            "value": "5",
+            "expect_status": "5"
+        }
+    ]
+}
