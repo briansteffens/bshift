@@ -129,6 +129,7 @@ abstract class Node
 enum OperatorType
 {
     Plus,
+    Minus,
     Asterisk,
     Equality,
     Inequality,
@@ -141,6 +142,8 @@ OperatorType parseOperatorType(string input)
     {
         case "+":
             return OperatorType.Plus;
+	case "-":
+	    return OperatorType.Minus;
         case "*":
             return OperatorType.Asterisk;
         case "==":
@@ -167,6 +170,7 @@ OperatorClass operatorTypeToClass(OperatorType t)
     switch (t)
     {
         case OperatorType.Plus:
+	case OperatorType.Minus:
         case OperatorType.Asterisk:
             return OperatorClass.Math;
         case OperatorType.Equality:
