@@ -56,7 +56,8 @@ class Type
     {
         return this.compare(other) ||
                this.primitive == PrimitiveType.U64 && other.pointer ||
-	       this.primitive == PrimitiveType.Auto || other.primitive == PrimitiveType.Auto ||
+               this.primitive == PrimitiveType.Auto ||
+               other.primitive == PrimitiveType.Auto ||
                this.pointer && other.primitive == PrimitiveType.U64;
     }
 
@@ -77,8 +78,8 @@ int primitiveSize(PrimitiveType t)
             return 1;
         case PrimitiveType.U8:
             return 1;
-	case PrimitiveType.Auto:
-	    return -1;
+        case PrimitiveType.Auto:
+            throw new Exception("Auto type has no size");
         default:
             throw new Exception(format("Unknown size for %s", t));
     }
@@ -95,7 +96,7 @@ PrimitiveType parsePrimitive(string s)
         case "u8":
             return PrimitiveType.U8;
         case "auto":
-	    return PrimitiveType.Auto;
+            return PrimitiveType.Auto;
         default:
             throw new Exception(format("Unrecognized type: %s", s));
     }
@@ -115,8 +116,14 @@ class Line
 
 abstract class Node
 {
-    Line line;
-    Type type;
+    Line   line;
+    Type   type;
+    Object parent;
+
+    Node[] childNodes()
+    {
+        return [];
+    }
 }
 
 enum OperatorType
@@ -148,6 +155,30 @@ OperatorType parseOperatorType(string input)
     }
 }
 
+enum OperatorClass
+{
+    Math,
+    Relational,
+    Logical
+}
+
+OperatorClass operatorTypeToClass(OperatorType t)
+{
+    switch (t)
+    {
+        case OperatorType.Plus:
+        case OperatorType.Asterisk:
+            return OperatorClass.Math;
+        case OperatorType.Equality:
+        case OperatorType.Inequality:
+            return OperatorClass.Relational;
+        case OperatorType.LogicalAnd:
+            return OperatorClass.Logical;
+        default:
+            throw new Exception(format("Unrecognized OperatorType: %s", t));
+    }
+}
+
 class Operator : Node
 {
     OperatorType operatorType;
@@ -156,30 +187,62 @@ class Operator : Node
 
     this(Node left, OperatorType operatorType, Node right)
     {
-        this.type = left.type;
         this.operatorType = operatorType;
         this.left = left;
         this.right = right;
+
+        this.left.parent = this;
+        this.right.parent = this;
+
+        switch (operatorTypeToClass(operatorType))
+        {
+            case OperatorClass.Math:
+                if (!left.type.compatibleWith(right.type))
+                {
+                    throw new Exception(format("Can't combine types %s and %s",
+                            left.type, right.type));
+                }
+                this.type = left.type;
+                break;
+
+            case OperatorClass.Relational:
+            case OperatorClass.Logical:
+                this.type = new Type(PrimitiveType.Bool);
+                break;
+
+            default:
+                throw new Exception(format("Unrecognized type %s",
+                                           operatorType));
+        }
     }
 
     override string toString()
     {
         return format("(%s %s %s)", left, operatorType, right);
     }
+
+    override Node[] childNodes()
+    {
+        return [left, right];
+    }
 }
 
 class Binding : Node
 {
     string name;
+    LocalDeclaration local;
 
-    this(string name)
+    this(LocalDeclaration local, string name)
     {
+        this.local = local;
         this.name = name;
+
+        this.type = local.signature.type;
     }
 
     override string toString()
     {
-        return this.name;
+        return this.local.signature.name;
     }
 }
 
@@ -228,12 +291,19 @@ class Call : Node
     string moduleName;
     string functionName;
     Node[] parameters;
+    FunctionSignature targetSignature;
 
     this(string moduleName, string functionName, Node[] parameters)
     {
+        // TODO: set return type
         this.moduleName = moduleName;
         this.functionName = functionName;
         this.parameters = parameters;
+
+        foreach (param; this.parameters)
+        {
+            param.parent = this;
+        }
     }
 
     override string toString()
@@ -248,22 +318,33 @@ class Call : Node
                           this.parameters);
         }
     }
+
+    override Node[] childNodes()
+    {
+        return this.parameters;
+    }
 }
 
 class Cast : Node
 {
-    Type newType;
     Node target;
 
     this(Type newType, Node target)
     {
-        this.newType = newType;
         this.target = target;
+        this.target.parent = this;
+
+        this.type = newType;
     }
 
     override string toString()
     {
-        return format("(%s)%s", this.newType, this.target);
+        return format("(%s)%s", this.type, this.target);
+    }
+
+    override Node[] childNodes()
+    {
+        return [this.target];
     }
 }
 
@@ -274,11 +355,20 @@ class Reference : Node
     this(Node source)
     {
         this.source = source;
+        this.source.parent = this;
+
+        this.type = source.type.clone();
+        this.type.pointer = true;
     }
 
     override string toString()
     {
         return format("&%s", this.source);
+    }
+
+    override Node[] childNodes()
+    {
+        return [this.source];
     }
 }
 
@@ -289,11 +379,20 @@ class Dereference : Node
     this(Node source)
     {
         this.source = source;
+        this.source.parent = this;
+
+        this.type = source.type.clone();
+        this.type.pointer = false;
     }
 
     override string toString()
     {
         return format("*%s", this.source);
+    }
+
+    override Node[] childNodes()
+    {
+        return [this.source];
     }
 }
 
@@ -316,7 +415,8 @@ class TypeSignature
 
 abstract class Statement
 {
-    Line line;
+    Line   line;
+    Object parent;
 
     this(Line line)
     {
@@ -326,6 +426,45 @@ abstract class Statement
     LocalDeclaration[] declarations()
     {
         return [];
+    }
+
+    Statement[] childStatements()
+    {
+        return [];
+    }
+
+    Node[] childNodes()
+    {
+        return [];
+    }
+}
+
+class Indexer : Node
+{
+    Node source;
+    Node index;
+
+    this(Node source, Node index)
+    {
+        this.source = source;
+        this.index = index;
+
+        this.source.parent = this;
+        this.source.parent = this;
+
+        this.type = this.source.type.clone();
+        this.type.pointer = false;
+        this.type.elements = null;
+    }
+
+    override string toString()
+    {
+        return format("%s[%s]", this.source, this.index);
+    }
+
+    override Node[] childNodes()
+    {
+        return [this.source, this.index];
     }
 }
 
@@ -340,6 +479,22 @@ class LocalDeclaration : Statement
 
         this.signature = signature;
         this.value = value;
+
+        if (this.value !is null)
+        {
+            this.value.parent = this;
+        }
+
+        if (this.signature.type.primitive == PrimitiveType.Auto)
+        {
+            if (this.value is null)
+            {
+                throw new Exception(format("Can't infer type for %s",
+                        signature));
+            }
+
+            this.signature.type = value.type;
+        }
     }
 
     override string toString()
@@ -358,22 +513,17 @@ class LocalDeclaration : Statement
     {
         return [this];
     }
-}
 
-class Indexer : Node
-{
-    Node source;
-    Node index;
-
-    this(Node source, Node index)
+    override Node[] childNodes()
     {
-        this.source = source;
-        this.index = index;
-    }
-
-    override string toString()
-    {
-        return format("%s[%s]", this.source, this.index);
+        if (this.value is null)
+        {
+            return [];
+        }
+        else
+        {
+            return [this.value];
+        }
     }
 }
 
@@ -388,11 +538,19 @@ class Assignment : Statement
 
         this.lvalue = lvalue;
         this.value = value;
+
+        this.lvalue.parent = this;
+        this.value.parent = this;
     }
 
     override string toString()
     {
         return format("%s = %s", this.lvalue, this.value);
+    }
+
+    override Node[] childNodes()
+    {
+        return [this.lvalue, this.value];
     }
 }
 
@@ -407,6 +565,9 @@ class ConditionalBlock : Statement
 
         this.conditional = conditional;
         this.block = block;
+
+        this.conditional.parent = this;
+        this.block.parent = this;
     }
 
     override string toString()
@@ -417,6 +578,16 @@ class ConditionalBlock : Statement
     override LocalDeclaration[] declarations()
     {
         return block.declarations();
+    }
+
+    override Statement[] childStatements()
+    {
+        return [this.block];
+    }
+
+    override Node[] childNodes()
+    {
+        return [this.conditional];
     }
 }
 
@@ -447,6 +618,13 @@ class If : Statement
         this.ifBlock = ifBlock;
         this.elseIfBlocks = elseIfBlocks;
         this.elseBlock = elseBlock;
+
+        this.ifBlock.parent = this;
+        foreach (elseIf; this.elseIfBlocks)
+        {
+            elseIf.parent = this;
+        }
+        this.elseBlock.parent = this;
     }
 
     override string toString()
@@ -484,6 +662,20 @@ class If : Statement
 
         return ret;
     }
+
+    override Statement[] childStatements()
+    {
+        Statement[] ret = [this.ifBlock];
+
+        ret ~= this.elseIfBlocks;
+
+        if (this.elseBlock !is null)
+        {
+            ret ~= this.elseBlock;
+        }
+
+        return ret;
+    }
 }
 
 class Return : Statement
@@ -495,11 +687,25 @@ class Return : Statement
         super(line);
 
         this.expression = expression;
+
+        this.expression.parent = this;
     }
 
     override string toString()
     {
         return format("return %s", this.expression);
+    }
+
+    override Node[] childNodes()
+    {
+        if (this.expression is null)
+        {
+            return [];
+        }
+        else
+        {
+            return [this.expression];
+        }
     }
 }
 
@@ -512,6 +718,11 @@ class Block : Statement
         super(null);
 
         this.statements = statements;
+
+        foreach (st; this.statements)
+        {
+            st.parent = this;
+        }
     }
 
     override string toString()
@@ -536,6 +747,11 @@ class Block : Statement
         }
 
         return ret;
+    }
+
+    override Statement[] childStatements()
+    {
+        return this.statements;
     }
 }
 
@@ -572,11 +788,6 @@ class FunctionSignature : Definition
 
         return format("%s %s(%s)", this.returnType, this.name, params);
     }
-
-    string renderName()
-    {
-        return this.name;
-    }
 }
 
 class Function : FunctionSignature
@@ -587,28 +798,63 @@ class Function : FunctionSignature
     this(Type returnType, string name, TypeSignature[] parameters, Block block)
     {
         super(returnType, name, parameters);
+
         this.block = block;
+
+        this.block.parent = this;
     }
 
     override string toString()
     {
         return format("%s\n%s", super.toString(), this.block);
     }
+}
 
-    override string renderName()
+class Import
+{
+    string name;
+    FunctionSignature[] functions;
+
+    this(string name, FunctionSignature[] functions)
     {
-        return format("function_%s_%s", this.mod.name, this.name);
+        this.name = name;
+        this.functions = functions;
+    }
+
+    override string toString()
+    {
+        auto ret = format("import %s", this.name);
+
+        foreach (func; this.functions)
+        {
+            ret ~= format("    %s", func);
+        }
+
+        return ret;
+    }
+
+    FunctionSignature findFunction(string name)
+    {
+        foreach (func; this.functions)
+        {
+            if (func.name == name)
+            {
+                return func;
+            }
+        }
+
+        throw new Exception(format("Function %s not found", name));
     }
 }
 
 class Module
 {
     string name;
-    Module[] imports;
+    Import[] imports;
     Function[] functions;
     FunctionSignature[] externs;
 
-    this(string name, Module[] imports, Function[] functions,
+    this(string name, Import[] imports, Function[] functions,
          FunctionSignature[] externs)
     {
         this.name = name;
@@ -692,10 +938,10 @@ class Module
 
         // Search imported modules
         auto imp = this.findImport(call.moduleName);
-        return imp.findFunction(call);
+        return imp.findFunction(call.functionName);
     }
 
-    Module findImport(string name)
+    Import findImport(string name)
     {
         foreach (imp; this.imports)
         {

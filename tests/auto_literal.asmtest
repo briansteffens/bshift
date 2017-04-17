@@ -1,0 +1,27 @@
+u64 main()
+{
+    auto ret = {{ val }};
+    return ret;
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "u64 value",
+            "val": "7",
+            "expect_status": "7"
+        },
+        {
+            "name": "bool value",
+            "val": "true",
+            "expect_status": "1"
+        },
+        {
+            "name": "u64 added to u64",
+            "val": "3 + 4",
+            "expect_status": "7"
+        }
+    ]
+}

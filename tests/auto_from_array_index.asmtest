@@ -1,0 +1,20 @@
+u64 main()
+{
+    u64[2] ar;
+    ar[0] = 3;
+    ar[1] = 7;
+
+    auto x = ar[0];
+    return x;
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "make an auto from an array index",
+            "expect_status": "3"
+        }
+    ]
+}

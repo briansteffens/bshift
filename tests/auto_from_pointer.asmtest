@@ -1,0 +1,18 @@
+u64 main()
+{
+    auto x = 3;
+    auto p = &x;
+    auto y = *p;
+    return y;
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "make an auto from a pointer",
+            "expect_status": "3"
+        }
+    ]
+}

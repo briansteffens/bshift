@@ -1,0 +1,21 @@
+u64 f(u64 x)
+{
+    return x + 1;
+}
+
+u64 main()
+{
+    auto ret = f(6);
+    return ret;
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "make an auto from a function call",
+            "expect_status": "7"
+        }
+    ]
+}

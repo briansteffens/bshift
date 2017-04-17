@@ -1,8 +1,9 @@
+u64 f(u64 x)
+{
+    return x + 1;
+}
+
 u64 main()
 {
-    u64 s = 2;
-    auto t = s;
-    auto f = 4 + t;
-
-    return f;
+    return f(6) + 3;
 }
