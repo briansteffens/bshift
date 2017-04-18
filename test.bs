@@ -1,26 +1,18 @@
-import string;
-
-struct point {
+struct point
+{
     u64 x;
     u64 y;
 }
 
-struct b {
-}
-
-u64 inc(u64 x)
-{
-    return x + 1;
-}
-
 u64 main()
 {
-    u8[4] str;
+    point p;
 
-    str[0] = 72;
-    str[1] = 105;
-    str[2] = 33;
-    str[3] = 0;
+    p.x = 3;
+    p.y = 7;
 
-    return string::len(&str);
+    auto x = p.x;
+    auto y = p.y;
+
+    return x + y;
 }

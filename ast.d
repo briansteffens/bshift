@@ -65,6 +65,16 @@ abstract class Type
     {
         return this.isPrimitive() && (cast(PrimitiveType)this).primitive == p;
     }
+
+    bool isStruct()
+    {
+        return cast(StructType)this !is null;
+    }
+
+    bool isStruct(Struct s)
+    {
+        return this.isStruct() && (cast(StructType)this).struct_ == s;
+    }
 }
 
 // A type where the base type (u64 or a struct name) is still a string and has
@@ -113,6 +123,50 @@ class IncompleteType : Type
     }
 }
 
+class StructType : Type
+{
+    Struct struct_;
+
+    this(Struct struct_, bool pointer=false, Node elements=null)
+    {
+        super(pointer=pointer, elements=elements);
+        this.struct_ = struct_;
+    }
+
+    override string baseTypeToString()
+    {
+        return to!string(this.struct_.name);
+    }
+
+    override Type clone()
+    {
+        return new StructType(this.struct_, pointer=this.pointer,
+                elements=this.elements);
+    }
+
+    override bool compare(Type other)
+    {
+        return other.isStruct(this.struct_);
+    }
+
+    override bool compatibleWith(Type other)
+    {
+        throw new Exception("Structs aren't compatible with other types");
+    }
+
+    override int baseTypeSize()
+    {
+        auto ret = 0;
+
+        foreach (member; this.struct_.members)
+        {
+            ret += member.type.baseTypeSize();
+        }
+
+        return ret;
+    }
+}
+
 class PrimitiveType : Type
 {
     Primitive primitive;
@@ -120,6 +174,7 @@ class PrimitiveType : Type
     this(Primitive primitive, bool pointer=false, Node elements=null)
     {
         super(pointer=pointer, elements=elements);
+        this.primitive = primitive;
     }
 
     override string baseTypeToString()
@@ -256,6 +311,7 @@ enum OperatorType
     Equality,
     Inequality,
     LogicalAnd,
+    DotAccessor,
 }
 
 OperatorType parseOperatorType(string input)
@@ -272,6 +328,8 @@ OperatorType parseOperatorType(string input)
             return OperatorType.Inequality;
         case "&&":
             return OperatorType.LogicalAnd;
+        case ".":
+            return OperatorType.DotAccessor;
         default:
             throw new Exception(
                     format("Unrecognized OperatorType: %s", input));
@@ -576,6 +634,69 @@ class Dereference : Node
     override Node[] childNodes()
     {
         return [this.source];
+    }
+}
+
+class DotAccessor : Node
+{
+    Node container;
+
+    string memberName;
+    TypeSignature member;
+
+    this(Node container, string memberName)
+    {
+        this.container = container;
+        this.memberName = memberName;
+
+        this.container.parent = this;
+
+        this.retype();
+    }
+
+    override string toString()
+    {
+        return format("%s.%s", container, memberName);
+    }
+
+    override void retype()
+    {
+        if (this.container.type is null || !this.container.type.isComplete())
+        {
+            return;
+        }
+
+        auto containerStruct = cast(StructType)this.container.type;
+        if (containerStruct is null)
+        {
+            throw new Exception("Dot accessor with non-struct container");
+        }
+
+        // Look up struct member
+        this.member = null;
+
+        foreach (m; containerStruct.struct_.members)
+        {
+            if (m.name == this.memberName)
+            {
+                this.member = m;
+            }
+        }
+
+        if (this.member is null)
+        {
+            throw new Exception(format("Can't find member %s",
+                    this.memberName));
+        }
+
+        this.type = this.member.type;
+
+        super.retype();
+    }
+
+    override Node[] childNodes()
+    {
+        return [this.container];
     }
 }
 

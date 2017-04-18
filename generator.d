@@ -783,15 +783,24 @@ void generateAssignmentShared(GeneratorState state, Node target,
     string targetRendered = null;
     Type targetType = null;
 
-    // Assigning to an indexer
     auto indexer = cast(Indexer)target;
     IndexerResolveData indexerData;
+
+    auto dot = cast(DotAccessor)target;
+
+    // Assigning to an indexer
     if (indexer !is null)
     {
         indexerData = resolveIndexer(state, indexer);
         targetRendered = indexerData.address;
         targetType = indexerData.sourceRegister.type.clone();
         targetType.pointer = false;
+    }
+    // Assigning to a dot accessor
+    else if (dot !is null)
+    {
+        tempTarget = resolveDotAccessor(state, dot);
+        targetRendered = format("[%s]", tempTarget.register);
     }
     // Assigning to a binding
     else
@@ -956,6 +965,13 @@ Node generateNode(GeneratorState state, Node node)
         return generateIndexer(state, indexer);
     }
 
+    // Special handling for dot accessor
+    auto accessor = cast(DotAccessor)node;
+    if (accessor !is null)
+    {
+        return generateDotAccessor(state, accessor);
+    }
+
     return node;
 }
 
@@ -1015,8 +1031,8 @@ Local requireLocalInRegister(GeneratorState state, Node node)
     // Not in a register: make a new temp and copy it there
     auto ret = state.addTemp(node.type);
 
-    // Special handling for array locals
-    if (node.type.elements !is null)
+    // Special handling for arrays and structs
+    if (node.type.elements !is null || node.type.isStruct())
     {
         state.render(format("    lea %s, %s", ret.register,
                             renderNode(state, node)));
@@ -1074,6 +1090,50 @@ Local generateIndexer(GeneratorState state, Indexer indexer)
 
     state.freeTemp(data.sourceRegister);
     state.freeTemp(data.indexerRegister);
+
+    return output;
+}
+
+// Return a register with the address of the dot-accessed struct member
+Local resolveDotAccessor(GeneratorState state, DotAccessor dot)
+{
+    auto containerNode = generateNode(state, dot.container);
+    auto containerRegister = requireLocalInRegister(state, containerNode);
+
+    auto structType = cast(StructType)dot.container.type;
+    if (structType is null)
+    {
+        throw new Exception(format(
+                "Can't apply a dot accessor to a non-struct %s",
+                dot.container.type));
+    }
+
+    // Calculate member offset
+    int memberOffset = 0;
+    foreach (member; structType.struct_.members)
+    {
+        if (member == dot.member)
+        {
+            break;
+        }
+
+        memberOffset += member.type.baseTypeSize();
+    }
+
+    state.render(format("    add %s, %d", containerRegister.register,
+                        memberOffset));
+
+    return containerRegister;
+}
+
+Local generateDotAccessor(GeneratorState state, DotAccessor dot)
+{
+    auto member = resolveDotAccessor(state, dot);
+    auto output = state.addTemp(dot.type);
+
+    state.render(format("    mov %s, [%s]", output.register, member.register));
+
+    state.freeTemp(member);
 
     return output;
 }

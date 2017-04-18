@@ -732,11 +732,24 @@ class ExpressionParser
             throw new Exception("Not enough on the stack(s) to consume!");
         }
 
-        auto right = getOrParseNode(this.output.pop());
+        auto rightItem = this.output.pop();
         auto operator = parseOperatorType(this.operators.pop().token.value);
-        auto left = getOrParseNode(this.output.pop());
+        auto leftItem = this.output.pop();
 
-        this.outputPush(new ParserItem(new Operator(left, operator, right)));
+        auto right = getOrParseNode(rightItem);
+        auto left = getOrParseNode(leftItem);
+
+        Node op = null;
+        if (operator == OperatorType.DotAccessor)
+        {
+            op = new DotAccessor(left, rightItem.token.value);
+        }
+        else
+        {
+            op = new Operator(left, operator, right);
+        }
+
+        this.outputPush(new ParserItem(op));
     }
 
     // Function calls can start like "func(" or "mod::func("
@@ -1098,6 +1111,8 @@ class ExpressionParser
 
     Node run()
     {
+        writeln("\nStarting ExpressionParser run\n");
+
         while (this.next())
         {
         }
@@ -1216,9 +1231,40 @@ Type completeType(Module mod, Type type)
     }
 
     // Complete the type
-    auto ret = new PrimitiveType(parsePrimitive(incomplete.name));
-    ret.pointer=incomplete.pointer;
-    ret.elements=incomplete.elements;
+    Type ret = null;
+
+    // Try primitives
+    if (ret is null)
+    {
+        try
+        {
+            ret = new PrimitiveType(parsePrimitive(incomplete.name));
+        }
+        catch
+        {
+        }
+    }
+
+    // Try structs
+    if (ret is null)
+    {
+        foreach (struct_; mod.structs)
+        {
+            if (struct_.name == incomplete.name)
+            {
+                ret = new StructType(struct_);
+            }
+        }
+    }
+
+    if (ret is null)
+    {
+        throw new Exception(format("Can't complete type %s", type));
+    }
+
+    ret.pointer = incomplete.pointer;
+    ret.elements = incomplete.elements;
+
     return ret;
 }
 
