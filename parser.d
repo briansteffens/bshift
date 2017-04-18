@@ -341,26 +341,30 @@ Statement parseStatement(TokenFeed tokens)
             case "while":
                 return parseWhile(tokens);
             default:
-                try
+                auto localDeclaration = parseLocalDeclaration(tokens);
+                if (localDeclaration !is null)
                 {
-                    parsePrimitive(current.value);
-                    return parseLocalDeclaration(tokens);
-                }
-                catch
-                {
-                    // Not a local declaration. Bury exception.
+                    return localDeclaration;
                 }
         }
-
     }
 
     return parseAssignment(tokens);
 }
 
+// Try to parse a local declaration (like "u64 x = 3;") and return null if it
+// can't be done.
 LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
 {
+    auto rewindTarget = tokens.index;
+
+    // Try to parse the lvalue
     auto typeSignature = parseTypeSignature(tokens);
-    Node expression = null;
+    if (typeSignature is null)
+    {
+        tokens.index = rewindTarget;
+        return null;
+    }
 
     // Assignment operator (=) or semi-colon
     if (!tokens.next())
@@ -370,6 +374,8 @@ LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
 
     auto current = tokens.current();
 
+    // Try to parse the rvalue if there is one
+    Node expression = null;
     if (current.match(TokenType.Symbol, "="))
     {
         expression = new ExpressionParser(tokens).run();
@@ -407,29 +413,22 @@ Type parseType(TokenFeed tokens)
         pointer = true;
     }
 
-    return new Type(name, pointer=pointer, elements=elements);
+    return new IncompleteType(name, pointer=pointer, elements=elements);
 }
 
+// Try to parse a type signature (like "u64* x"), returning null if it can't
+// be done.
 TypeSignature parseTypeSignature(TokenFeed tokens)
 {
     auto type = parseType(tokens);
 
     // New local name
-    if (!tokens.next())
+    if (!tokens.next() || tokens.current().type != TokenType.Word)
     {
-        throw new Exception("Expected new local name");
+        return null;
     }
 
-    auto current = tokens.current();
-
-    if (current.type != TokenType.Word)
-    {
-        throw new Exception("Expected new local name");
-    }
-
-    auto name = current.value;
-
-    return new TypeSignature(type, name);
+    return new TypeSignature(type, tokens.current().value);
 }
 
 Assignment parseAssignment(TokenFeed tokens)
@@ -837,7 +836,7 @@ class ExpressionParser
             return false;
         }
 
-        PrimitiveType castType;
+        Primitive castType;
         try
         {
             castType = parsePrimitive(cur.value);
@@ -859,7 +858,10 @@ class ExpressionParser
         this.input.next();
         this.input.next();
 
-        this.outputPush(new ParserItem(new Cast(new Type(castType), null)));
+        // TODO: Allow casting to a complete type signature, not just a
+        // primtive
+        this.outputPush(new ParserItem(new Cast(new PrimitiveType(castType),
+                        null)));
 
         return true;
     }
@@ -1142,14 +1144,23 @@ Node parseExpressionParenthesis(TokenFeed tokens)
 
 void validate(Module mod)
 {
+    // Complete struct definitions
+    foreach (struct_; mod.structs)
+    {
+        foreach (member; struct_.members)
+        {
+            member.type = completeType(mod, member.type);
+        }
+    }
+
     // Complete function signatures
     foreach (func; mod.functions)
     {
-        completeType(mod, func.returnType);
+        func.returnType = completeType(mod, func.returnType);
 
         foreach (param; func.parameters)
         {
-            completeType(mod, param.type);
+            param.type = completeType(mod, param.type);
         }
     }
 
@@ -1170,9 +1181,9 @@ void validateStatement(Module mod, Statement st)
     auto local = cast(LocalDeclaration)st;
     if (local !is null)
     {
-        completeType(mod, local.signature.type);
+        local.signature.type = completeType(mod, local.signature.type);
 
-        if (local.signature.type.primitive == PrimitiveType.Auto)
+        if (local.signature.type.isPrimitive(Primitive.Auto))
         {
             if (local.value is null)
             {
@@ -1190,17 +1201,25 @@ void validateStatement(Module mod, Statement st)
     }
 }
 
-bool completeType(Module mod, Type type)
+Type completeType(Module mod, Type type)
 {
-    if (type is null || type.complete)
+    if (type is null)
     {
-        return false;
+        return null;
     }
 
-    type.primitive = parsePrimitive(type.name);
-    type.complete = true;
+    // Already completed, do nothing
+    auto incomplete = cast(IncompleteType)type;
+    if (incomplete is null)
+    {
+        return type;
+    }
 
-    return true;
+    // Complete the type
+    auto ret = new PrimitiveType(parsePrimitive(incomplete.name));
+    ret.pointer=incomplete.pointer;
+    ret.elements=incomplete.elements;
+    return ret;
 }
 
 void validateNode(Module mod, Node node)
@@ -1226,10 +1245,8 @@ void validateNode(Module mod, Node node)
         return;
     }
 
-    if (completeType(mod, node.type))
-    {
-        node.retype();
-    }
+    node.type = completeType(mod, node.type);
+    node.retype();
 }
 
 TypeSignature findLocal(Node node, string name)

@@ -4,7 +4,7 @@ u64 main()
     ar[0] = 3;
     ar[1] = 7;
 
-    auto ar2 = ar;
+    auto ar2 = &ar;
 
     return ar2[0];
 }

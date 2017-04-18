@@ -69,15 +69,15 @@ enum OpSize
     Qword,
 }
 
-OpSize primitiveToOpSize(PrimitiveType t)
+OpSize primitiveToOpSize(Primitive t)
 {
     switch (t)
     {
-        case PrimitiveType.Bool:
+        case Primitive.Bool:
             return OpSize.Byte;
-        case PrimitiveType.U64:
+        case Primitive.U64:
             return OpSize.Qword;
-        case PrimitiveType.U8:
+        case Primitive.U8:
             return OpSize.Byte;
         default:
             throw new Exception(format("Unknown type %s", t));
@@ -91,7 +91,12 @@ OpSize typeToOpSize(Type t)
         return OpSize.Qword;
     }
 
-    return primitiveToOpSize(t.primitive);
+    if (t.isPrimitive())
+    {
+        return primitiveToOpSize((cast(PrimitiveType)t).primitive);
+    }
+
+    throw new Exception(format("Can't calculate size of %s", t));
 }
 
 int typeSize(Type t)
@@ -109,7 +114,7 @@ int typeSize(Type t)
             throw new Exception("Bad type elements value");
         }
 
-        return cast(int)arraySize.value * primitiveSize(t.primitive);
+        return cast(int)arraySize.value * t.baseTypeSize();
     }
 
     if (t.pointer)
@@ -117,7 +122,7 @@ int typeSize(Type t)
         return 8;
     }
 
-    return primitiveSize(t.primitive);
+    return t.baseTypeSize();
 }
 
 enum Location
@@ -956,7 +961,7 @@ Node generateNode(GeneratorState state, Node node)
 
 bool isPrimitiveIntegral(Type type)
 {
-    return type.primitive == PrimitiveType.U64;
+    return type.isPrimitive(Primitive.U64);
 }
 
 bool isLiteralInteger(GeneratorState state, Node node)
@@ -1048,7 +1053,7 @@ IndexerResolveData resolveIndexer(GeneratorState state, Indexer indexer)
     auto sourceNode = generateNode(state, indexer.source);
     data.sourceRegister = requireLocalInRegister(state, sourceNode);
 
-    auto scale = primitiveSize(data.sourceRegister.type.primitive);
+    auto scale = data.sourceRegister.type.baseTypeSize();
 
     data.address = format("[%s * %d + %s]", data.indexerRegister.register,
                           scale, data.sourceRegister.register);
@@ -1099,23 +1104,23 @@ Local generateDereference(GeneratorState state, Dereference dereference)
     outputType.pointer = false;
 
     auto outputLocal = state.addTemp(outputType);
-    auto temp = state.addTemp(new Type(PrimitiveType.U64));
+    auto temp = state.addTemp(new PrimitiveType(Primitive.U64));
 
     state.render(format("    mov %s, %s", temp.register,
                         renderNode(state, sourceNode)));
 
     string targetRegister;
-    switch (outputType.primitive)
+    if (outputType.isPrimitive(Primitive.U64))
     {
-        case PrimitiveType.U64:
-            targetRegister = to!string(outputLocal.register);
-            break;
-        case PrimitiveType.U8:
-            targetRegister = lowByte(outputLocal.register);
-            break;
-        default:
-            throw new Exception(format("Can't dereference type %s",
-                                outputType));
+        targetRegister = to!string(outputLocal.register);
+    }
+    else if (outputType.isPrimitive(Primitive.U8))
+    {
+        targetRegister = lowByte(outputLocal.register);
+    }
+    else
+    {
+        throw new Exception(format("Can't dereference type %s", outputType));
     }
 
     state.render(format("    mov %s, [%s]", targetRegister, temp.register));
@@ -1163,7 +1168,7 @@ Local generateCast(GeneratorState state, Cast typeCast)
             typeCast.target, typeCast.type));
 
     if (typeCast.type.pointer ||
-        typeCast.type.primitive == PrimitiveType.Bool)
+        typeCast.type.isPrimitive(Primitive.Bool))
     {
         if (isLiteralInteger(state, typeCast.target))
         {
@@ -1197,7 +1202,7 @@ Local generateCastLiteralIntegerToBool(GeneratorState state, Cast typeCast)
                             typeCast.target));
     }
 
-    auto target = state.addTemp(new Type(PrimitiveType.Bool));
+    auto target = state.addTemp(new PrimitiveType(Primitive.Bool));
 
     if (castedValue)
     {
@@ -1215,7 +1220,7 @@ Local generateCastLiteralIntegerToBool(GeneratorState state, Cast typeCast)
 Local generateCastLocalIntegerToBool(GeneratorState state, Cast typeCast)
 {
     auto source = renderNode(state, generateNode(state, typeCast.target));
-    auto target = state.addTemp(new Type(PrimitiveType.Bool));
+    auto target = state.addTemp(new PrimitiveType(Primitive.Bool));
 
     state.render(format("    xor %s, %s", target.register, target.register));
     state.render(format("    cmp %s, 0", source));
@@ -1295,7 +1300,7 @@ Local generateRelationalOperator(GeneratorState state, Operator operator)
     auto left = renderNode(state, leftNode);
     auto right = renderNode(state, rightNode);
 
-    auto temp = state.addTemp(new Type(PrimitiveType.Bool));
+    auto temp = state.addTemp(new PrimitiveType(Primitive.Bool));
     state.render(format("    xor %s, %s", temp.register, temp.register));
 
     auto sizeHint = renderSizeHint(leftNode, rightNode);
@@ -1320,7 +1325,7 @@ Local generateRelationalOperator(GeneratorState state, Operator operator)
 
 Local generateLogicalAndOperator(GeneratorState state, Operator operator)
 {
-    auto temp = state.addTemp(new Type(PrimitiveType.Bool));
+    auto temp = state.addTemp(new PrimitiveType(Primitive.Bool));
     state.render(format("    xor %s, %s", temp.register, temp.register));
 
     auto endComparison = state.addLabel("end_comparison_");
@@ -1468,7 +1473,8 @@ Local generateSysCall(GeneratorState state, Call call)
     // Make the system call
     state.render(format("    syscall"));
 
-    return cleanupCall(state, new Type(PrimitiveType.U64), callerPreserved);
+    return cleanupCall(state, new PrimitiveType(Primitive.U64),
+            callerPreserved);
 }
 
 string renderLocal(Local local)
@@ -1476,8 +1482,7 @@ string renderLocal(Local local)
     switch (local.location)
     {
         case Location.Register:
-            if (!local.type.pointer &&
-                primitiveSize(local.type.primitive) == 1)
+            if (!local.type.pointer && local.type.baseTypeSize() == 1)
             {
                 return format("%s", lowByte(local.register));
             }
@@ -1650,7 +1655,7 @@ void shuffleRegisters(GeneratorState state, RegisterMove[] moves)
         }
 
         // Circular chain
-        auto tempLocal = state.addTemp(new Type(PrimitiveType.U64));
+        auto tempLocal = state.addTemp(new PrimitiveType(Primitive.U64));
         auto temp = tempLocal.register;
 
         state.render(format("    mov %s, %s", temp, chain[$-1]));

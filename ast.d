@@ -2,7 +2,7 @@ import std.stdio;
 import std.format;
 import std.conv;
 
-enum PrimitiveType
+enum Primitive
 {
     U64,
     U8,
@@ -10,33 +10,22 @@ enum PrimitiveType
     Auto,
 }
 
-class Type
+abstract class Type
 {
-    bool complete;
-    string name;
-    PrimitiveType primitive;
     bool pointer;
     Node elements;
 
-    this(PrimitiveType primitive, bool pointer=false, Node elements=null)
+    this(bool pointer=false, Node elements=null)
     {
-        this.complete = true;
-        this.primitive = primitive;
         this.pointer = pointer;
         this.elements = elements;
     }
 
-    this(string name, bool pointer=false, Node elements=null)
-    {
-        this.complete = false;
-        this.name = name;
-        this.pointer = pointer;
-        this.elements = elements;
-    }
+    abstract string baseTypeToString();
 
     override string toString()
     {
-        auto ret = to!string(this.primitive);
+        auto ret = this.baseTypeToString();
 
         if (this.pointer && this.elements is null)
         {
@@ -51,80 +40,175 @@ class Type
         return ret;
     }
 
-    Type clone()
-    {
-        // TODO: deep clone node?
-        return new Type(this.primitive, this.pointer, this.elements);
-    }
-
-    bool compare(Type other)
-    {
-        if (!this.complete || !other.complete)
-        {
-            throw new Exception("Can't compare incomplete types");
-        }
-
-        return this.primitive == other.primitive &&
-               this.pointer == other.pointer &&
-               this.elements == other.elements; // TODO: value-compare node?
-    }
-
-    bool compatibleWith(Type other)
-    {
-        if (!this.complete || !other.complete)
-        {
-            throw new Exception("Can't compare incomplete types");
-        }
-
-        return this.compare(other) ||
-               this.primitive == PrimitiveType.U64 && other.pointer ||
-               this.primitive == PrimitiveType.Auto ||
-               other.primitive == PrimitiveType.Auto ||
-               this.pointer && other.primitive == PrimitiveType.U64;
-    }
+    abstract Type clone();
+    abstract bool compare(Type other);
+    abstract bool compatibleWith(Type other);
+    abstract int baseTypeSize();
 
     // Makes sure the number of elements is known at compile-time
     bool isConcrete()
     {
-        if (!this.complete)
-        {
-            throw new Exception(format(
-                    "Can't tell if an incomplete type %s is concrete", this));
-        }
-
         return this.elements is null || cast(U64Literal)this.elements !is null;
+    }
+
+    bool isComplete()
+    {
+        return cast(IncompleteType)this is null;
+    }
+
+    bool isPrimitive()
+    {
+        return cast(PrimitiveType)this !is null;
+    }
+
+    bool isPrimitive(Primitive p)
+    {
+        return this.isPrimitive() && (cast(PrimitiveType)this).primitive == p;
     }
 }
 
-int primitiveSize(PrimitiveType t)
+// A type where the base type (u64 or a struct name) is still a string and has
+// not yet been parsed or linked up to the AST.
+class IncompleteType : Type
+{
+    string name;
+
+    this(string name, bool pointer=false, Node elements=null)
+    {
+        super(pointer=pointer, elements=elements);
+        this.name = name;
+    }
+
+    override string baseTypeToString()
+    {
+        return this.name;
+    }
+
+    override string toString()
+    {
+        return "Incomplete(" ~ super.toString() ~ ")";
+    }
+
+    override Type clone()
+    {
+        return new IncompleteType(this.name, pointer=this.pointer,
+                elements=this.elements);
+    }
+
+    override bool compare(Type other)
+    {
+        throw new Exception("Cannot compare incomplete types");
+    }
+
+    override bool compatibleWith(Type other)
+    {
+        throw new Exception(
+                "Incomplete types are not compatible with anything");
+    }
+
+    override int baseTypeSize()
+    {
+        throw new Exception(format(
+                "Incomplete type (%s) has no known base type size", this));
+    }
+}
+
+class PrimitiveType : Type
+{
+    Primitive primitive;
+
+    this(Primitive primitive, bool pointer=false, Node elements=null)
+    {
+        super(pointer=pointer, elements=elements);
+    }
+
+    override string baseTypeToString()
+    {
+        return to!string(this.primitive);
+    }
+
+    override Type clone()
+    {
+        return new PrimitiveType(this.primitive, pointer=this.pointer,
+                elements=this.elements);
+    }
+
+    override bool compare(Type other)
+    {
+        if (!this.isComplete() || !other.isComplete())
+        {
+            throw new Exception("Can't compare incomplete types");
+        }
+
+        auto otherPrimitive = cast(PrimitiveType)other;
+        if (otherPrimitive is null)
+        {
+            return false;
+        }
+
+        return this.primitive == otherPrimitive.primitive &&
+               this.pointer == otherPrimitive.pointer &&
+               this.elements == otherPrimitive.elements; // TODO: value-compare
+                                                         // node?
+    }
+
+    // TODO: maybe compare should depend on compatibleWith instead of the
+    // other way around.
+    override bool compatibleWith(Type other)
+    {
+        if (!this.isComplete() || !other.isComplete())
+        {
+            throw new Exception("Can't compare incomplete types");
+        }
+
+        auto otherPrimitive = cast(PrimitiveType)other;
+        if (otherPrimitive is null)
+        {
+            return false;
+        }
+
+        return this.compare(other) ||
+               this.primitive == Primitive.U64 && other.pointer ||
+               this.primitive == Primitive.Auto ||
+               otherPrimitive.primitive == Primitive.Auto ||
+               this.pointer && otherPrimitive.primitive == Primitive.U64;
+    }
+
+    override int baseTypeSize()
+    {
+        return primitiveSize(this.primitive);
+    }
+}
+
+int primitiveSize(Primitive t)
 {
     switch (t)
     {
-        case PrimitiveType.U64:
+        case Primitive.U64:
             return 8;
-        case PrimitiveType.Bool:
+        case Primitive.Bool:
             return 1;
-        case PrimitiveType.U8:
+        case Primitive.U8:
             return 1;
-        case PrimitiveType.Auto:
+        case Primitive.Auto:
             throw new Exception("Auto type has no size");
         default:
             throw new Exception(format("Unknown size for %s", t));
     }
 }
 
-PrimitiveType parsePrimitive(string s)
+Primitive parsePrimitive(string s)
 {
     switch (s)
     {
         case "u64":
-            return PrimitiveType.U64;
+            return Primitive.U64;
         case "bool":
-            return PrimitiveType.Bool;
+            return Primitive.Bool;
         case "u8":
-            return PrimitiveType.U8;
+            return Primitive.U8;
         case "auto":
-            return PrimitiveType.Auto;
+            return Primitive.Auto;
         default:
             throw new Exception(format("Unrecognized type: %s", s));
     }
@@ -239,7 +323,7 @@ class Operator : Node
     override void retype()
     {
         if (this.left.type is null || this.right.type is null ||
-            !this.left.type.complete || !this.right.type.complete)
+            !this.left.type.isComplete() || !this.right.type.isComplete())
         {
             return;
         }
@@ -257,7 +341,7 @@ class Operator : Node
 
             case OperatorClass.Relational:
             case OperatorClass.Logical:
-                this.type = new Type(PrimitiveType.Bool);
+                this.type = new PrimitiveType(Primitive.Bool);
                 break;
 
             default:
@@ -312,9 +396,9 @@ class Binding : Node
 
 abstract class Literal : Node
 {
-    this(PrimitiveType type)
+    this(Primitive type)
     {
-        this.type = new Type(type);
+        this.type = new PrimitiveType(type);
     }
 }
 
@@ -324,7 +408,7 @@ class U64Literal : Literal
 
     this(ulong value)
     {
-        super(PrimitiveType.U64);
+        super(Primitive.U64);
         this.value = value;
     }
 
@@ -340,7 +424,7 @@ class BoolLiteral : Literal
 
     this(bool value)
     {
-        super(PrimitiveType.Bool);
+        super(Primitive.Bool);
         this.value = value;
     }
 
