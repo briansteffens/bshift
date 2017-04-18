@@ -1,3 +1,4 @@
+import std.stdio;
 import std.format;
 import std.conv;
 
@@ -11,13 +12,24 @@ enum PrimitiveType
 
 class Type
 {
+    bool complete;
+    string name;
     PrimitiveType primitive;
     bool pointer;
     Node elements;
 
     this(PrimitiveType primitive, bool pointer=false, Node elements=null)
     {
+        this.complete = true;
         this.primitive = primitive;
+        this.pointer = pointer;
+        this.elements = elements;
+    }
+
+    this(string name, bool pointer=false, Node elements=null)
+    {
+        this.complete = false;
+        this.name = name;
         this.pointer = pointer;
         this.elements = elements;
     }
@@ -47,6 +59,11 @@ class Type
 
     bool compare(Type other)
     {
+        if (!this.complete || !other.complete)
+        {
+            throw new Exception("Can't compare incomplete types");
+        }
+
         return this.primitive == other.primitive &&
                this.pointer == other.pointer &&
                this.elements == other.elements; // TODO: value-compare node?
@@ -54,6 +71,11 @@ class Type
 
     bool compatibleWith(Type other)
     {
+        if (!this.complete || !other.complete)
+        {
+            throw new Exception("Can't compare incomplete types");
+        }
+
         return this.compare(other) ||
                this.primitive == PrimitiveType.U64 && other.pointer ||
                this.primitive == PrimitiveType.Auto ||
@@ -64,6 +86,12 @@ class Type
     // Makes sure the number of elements is known at compile-time
     bool isConcrete()
     {
+        if (!this.complete)
+        {
+            throw new Exception(format(
+                    "Can't tell if an incomplete type %s is concrete", this));
+        }
+
         return this.elements is null || cast(U64Literal)this.elements !is null;
     }
 }
@@ -123,6 +151,17 @@ abstract class Node
     Node[] childNodes()
     {
         return [];
+    }
+
+    // Called when a descendant node has been changed or its type has been
+    // completed to trigger a walk up the tree changing any ancestor types.
+    void retype()
+    {
+        auto parentNode = cast(Node)this.parent;
+        if (parentNode !is null)
+        {
+            parentNode.retype();
+        }
     }
 }
 
@@ -194,15 +233,26 @@ class Operator : Node
         this.left.parent = this;
         this.right.parent = this;
 
-        switch (operatorTypeToClass(operatorType))
+        this.retype();
+    }
+
+    override void retype()
+    {
+        if (this.left.type is null || this.right.type is null ||
+            !this.left.type.complete || !this.right.type.complete)
+        {
+            return;
+        }
+
+        switch (operatorTypeToClass(this.operatorType))
         {
             case OperatorClass.Math:
-                if (!left.type.compatibleWith(right.type))
+                if (!this.left.type.compatibleWith(this.right.type))
                 {
                     throw new Exception(format("Can't combine types %s and %s",
-                            left.type, right.type));
+                            this.left.type, this.right.type));
                 }
-                this.type = left.type;
+                this.type = this.left.type;
                 break;
 
             case OperatorClass.Relational:
@@ -214,6 +264,8 @@ class Operator : Node
                 throw new Exception(format("Unrecognized type %s",
                                            operatorType));
         }
+
+        super.retype();
     }
 
     override string toString()
@@ -230,19 +282,31 @@ class Operator : Node
 class Binding : Node
 {
     string name;
-    LocalDeclaration local;
+    TypeSignature local;
 
-    this(LocalDeclaration local, string name)
+    this(TypeSignature local, string name)
     {
         this.local = local;
         this.name = name;
 
-        this.type = local.signature.type;
+        this.retype();
+    }
+
+    override void retype()
+    {
+        if (this.local is null)
+        {
+            return;
+        }
+
+        this.type = this.local.type;
+
+        super.retype();
     }
 
     override string toString()
     {
-        return this.local.signature.name;
+        return this.name;
     }
 }
 
@@ -295,7 +359,6 @@ class Call : Node
 
     this(string moduleName, string functionName, Node[] parameters)
     {
-        // TODO: set return type
         this.moduleName = moduleName;
         this.functionName = functionName;
         this.parameters = parameters;
@@ -304,6 +367,18 @@ class Call : Node
         {
             param.parent = this;
         }
+    }
+
+    override void retype()
+    {
+        if (this.targetSignature is null)
+        {
+            return;
+        }
+
+        this.type = this.targetSignature.returnType;
+
+        super.retype();
     }
 
     override string toString()
@@ -357,8 +432,20 @@ class Reference : Node
         this.source = source;
         this.source.parent = this;
 
-        this.type = source.type.clone();
+        this.retype();
+    }
+
+    override void retype()
+    {
+        if (this.source.type is null)
+        {
+            return;
+        }
+
+        this.type = this.source.type.clone();
         this.type.pointer = true;
+
+        super.retype();
     }
 
     override string toString()
@@ -381,8 +468,20 @@ class Dereference : Node
         this.source = source;
         this.source.parent = this;
 
-        this.type = source.type.clone();
+        this.retype();
+    }
+
+    override void retype()
+    {
+        if (this.source.type is null)
+        {
+            return;
+        }
+
+        this.type = this.source.type.clone();
         this.type.pointer = false;
+
+        super.retype();
     }
 
     override string toString()
@@ -410,6 +509,30 @@ class TypeSignature
     override string toString()
     {
         return format("%s %s", this.type, this.name);
+    }
+}
+
+class Struct
+{
+    string name;
+    TypeSignature[] members;
+
+    this(string name, TypeSignature[] members)
+    {
+        this.name = name;
+        this.members = members;
+    }
+
+    override string toString()
+    {
+        auto ret = format("struct %s {\n", this.name);
+
+        foreach (member; this.members)
+        {
+            ret ~= format("    %s;\n", member);
+        }
+
+        return ret ~ "}";
     }
 }
 
@@ -452,9 +575,21 @@ class Indexer : Node
         this.source.parent = this;
         this.source.parent = this;
 
+        this.retype();
+    }
+
+    override void retype()
+    {
+        if (this.source.type is null)
+        {
+            return;
+        }
+
         this.type = this.source.type.clone();
         this.type.pointer = false;
         this.type.elements = null;
+
+        super.retype();
     }
 
     override string toString()
@@ -483,17 +618,6 @@ class LocalDeclaration : Statement
         if (this.value !is null)
         {
             this.value.parent = this;
-        }
-
-        if (this.signature.type.primitive == PrimitiveType.Auto)
-        {
-            if (this.value is null)
-            {
-                throw new Exception(format("Can't infer type for %s",
-                        signature));
-            }
-
-            this.signature.type = value.type;
         }
     }
 
@@ -620,11 +744,16 @@ class If : Statement
         this.elseBlock = elseBlock;
 
         this.ifBlock.parent = this;
+
         foreach (elseIf; this.elseIfBlocks)
         {
             elseIf.parent = this;
         }
-        this.elseBlock.parent = this;
+
+        if (this.elseBlock !is null)
+        {
+            this.elseBlock.parent = this;
+        }
     }
 
     override string toString()
@@ -814,6 +943,7 @@ class Import
 {
     string name;
     FunctionSignature[] functions;
+    Struct[] structs;
 
     this(string name, FunctionSignature[] functions)
     {
@@ -828,6 +958,11 @@ class Import
         foreach (func; this.functions)
         {
             ret ~= format("    %s", func);
+        }
+
+        foreach (s; this.structs)
+        {
+            ret ~= format("    %s", s);
         }
 
         return ret;
@@ -851,14 +986,16 @@ class Module
 {
     string name;
     Import[] imports;
+    Struct[] structs;
     Function[] functions;
     FunctionSignature[] externs;
 
-    this(string name, Import[] imports, Function[] functions,
+    this(string name, Import[] imports, Struct[] structs, Function[] functions,
          FunctionSignature[] externs)
     {
         this.name = name;
         this.imports = imports;
+        this.structs = structs;
         this.functions = functions;
         this.externs = externs;
     }
@@ -875,6 +1012,11 @@ class Module
         foreach (ext; this.externs)
         {
             ret ~= ext.toString() ~ "\n";
+        }
+
+        foreach (s; this.structs)
+        {
+            ret ~= s.toString() ~ "\n";
         }
 
         foreach (func; this.functions)

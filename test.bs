@@ -1,9 +1,26 @@
-u64 f(u64 x)
+import string;
+
+struct point {
+    u64 x;
+    u64 y;
+}
+
+struct b {
+}
+
+u64 inc(u64 x)
 {
     return x + 1;
 }
 
 u64 main()
 {
-    return f(6) + 3;
+    u8[4] str;
+
+    str[0] = 72;
+    str[1] = 105;
+    str[2] = 33;
+    str[3] = 0;
+
+    return string::len(&str);
 }

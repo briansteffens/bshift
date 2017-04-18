@@ -8,103 +8,6 @@ import globals;
 import lexer;
 import ast;
 
-class PreParseData
-{
-    Import[] imports;
-    FunctionSignature[] functions;
-    FunctionSignature[] externs;
-
-    FunctionSignature[] allSignatures()
-    {
-        FunctionSignature[] ret;
-
-        foreach (imp; this.imports)
-        {
-            ret ~= imp.functions;
-        }
-
-        ret ~= this.functions;
-        ret ~= this.externs;
-
-        return ret;
-    }
-}
-
-class ParserContext
-{
-    string moduleName;
-    PreParseData preParseData;
-    LocalDeclaration[] locals;
-
-    this(string moduleName, PreParseData preParseData)
-    {
-        this.moduleName = moduleName;
-        this.preParseData = preParseData;
-    }
-
-    // Shallow clone of locals list
-    ParserContext clone()
-    {
-        auto ret = new ParserContext(this.moduleName, this.preParseData);
-        ret.locals ~= this.locals;
-        return ret;
-    }
-
-    FunctionSignature findFunction(Call call)
-    {
-        // Search the current module
-        if (call.moduleName is null)
-        {
-            // Search local functions
-            foreach (func; this.preParseData.functions)
-            {
-                if (call.functionName == func.name)
-                {
-                    return func;
-                }
-            }
-
-            // Search externs
-            foreach (ext; this.preParseData.externs)
-            {
-                if (call.functionName == ext.name)
-                {
-                    return ext;
-                }
-            }
-
-            throw new Exception(format("Call %s not resolved", call));
-        }
-
-        // Search imports
-        Import imp = null;
-        foreach (im; this.preParseData.imports)
-        {
-            if (im.name == call.moduleName)
-            {
-                imp = im;
-                break;
-            }
-        }
-
-        if (imp is null)
-        {
-            throw new Exception(format("Module %s not imported",
-                    call.moduleName));
-        }
-
-        foreach (func; imp.functions)
-        {
-            if (func.name == call.functionName)
-            {
-                return func;
-            }
-        }
-
-        throw new Exception(format("Call %s not resolved", call));
-    }
-}
-
 class TokenFeed
 {
     Token[] tokens;
@@ -163,69 +66,7 @@ class TokenFeed
     }
 }
 
-// Parse out only the function definitions from a module before the real parse
-PreParseData preParse(Token[] tokenArray)
-{
-    auto tokens = new TokenFeed(tokenArray);
-    auto ret = new PreParseData();
-
-    while (tokens.next())
-    {
-        auto imp = preParseImport(tokens);
-        if (imp !is null)
-        {
-            ret.imports ~= imp;
-            continue;
-        }
-
-        auto ext = parseExtern(tokens);
-        if (ext !is null)
-        {
-            ret.externs ~= ext;
-            continue;
-        }
-
-        auto current = tokens.current();
-
-        if (current.type != TokenType.Word)
-        {
-            throw new Exception("Unexpected token; expected function");
-        }
-
-        ret.functions ~= preParseFunction(tokens);
-    }
-
-    return ret;
-}
-
-FunctionSignature preParseFunction(TokenFeed tokens)
-{
-    auto ret = parseFunctionSignature(tokens);
-
-    // Skip the function body
-    int braceDepth = 0;
-    while (tokens.next())
-    {
-        if (tokens.current().match(TokenType.Symbol, "{"))
-        {
-            braceDepth++;
-        }
-
-        if (tokens.current().match(TokenType.Symbol, "}"))
-        {
-            braceDepth--;
-
-            if (braceDepth == 0)
-            {
-                break;
-            }
-        }
-    }
-
-    return ret;
-}
-
-Import preParseImport(TokenFeed tokens)
+Import parseImport(TokenFeed tokens)
 {
     if (!tokens.current().match(TokenType.Word, "import"))
     {
@@ -241,25 +82,29 @@ Import preParseImport(TokenFeed tokens)
     tokens.next();
 
     // Parse the import
-    auto parsed = preParse(lex(readText(name ~ ".bs")));
-    return new Import(name, parsed.functions);
+    auto parsed = parse(name, lex(readText(name ~ ".bs")));
+
+    FunctionSignature[] signatures;
+    foreach (func; parsed.functions)
+    {
+        signatures ~= func;
+    }
+
+    return new Import(name, signatures);
 }
 
 Module parse(string name, Token[] tokenArray)
 {
-    // Pre-parse to get function definitions
-    auto preParseData = preParse(tokenArray);
-    auto ctx = new ParserContext(name, preParseData);
-
     auto tokens = new TokenFeed(tokenArray);
 
     Import[] imports;
     Function[] functions;
     FunctionSignature[] externs;
+    Struct[] structs;
 
     while (tokens.next())
     {
-        auto imp = preParseImport(tokens);
+        auto imp = parseImport(tokens);
         if (imp !is null)
         {
             imports ~= imp;
@@ -273,6 +118,13 @@ Module parse(string name, Token[] tokenArray)
             continue;
         }
 
+        auto struct_ = parseStruct(tokens);
+        if (struct_ !is null)
+        {
+            structs ~= struct_;
+            continue;
+        }
+
         auto current = tokens.current();
 
         if (current.type != TokenType.Word)
@@ -280,17 +132,54 @@ Module parse(string name, Token[] tokenArray)
             throw new Exception("Unexpected token; expected function");
         }
 
-        functions ~= parseFunction(ctx.clone(), tokens);
+        functions ~= parseFunction(tokens);
     }
 
-    auto ret = new Module(name, imports, functions, externs);
+    auto ret = new Module(name, imports, structs, functions, externs);
 
     foreach (func; functions)
     {
         func.mod = ret;
     }
 
+    validate(ret);
+
     return ret;
+}
+
+Struct parseStruct(TokenFeed tokens)
+{
+    if (!tokens.current().match(TokenType.Word, "struct"))
+    {
+        return null;
+    }
+
+    if (!tokens.next() || tokens.current().type != TokenType.Word)
+    {
+        throw new Exception("Expected a struct name");
+    }
+
+    auto name = tokens.current().value;
+
+    if (!tokens.next() || !tokens.current().match(TokenType.Symbol, "{"))
+    {
+        throw new Exception("Expected a { after struct");
+    }
+
+    // Parse struct members
+    TypeSignature[] members;
+    while (tokens.next() && !tokens.current().match(TokenType.Symbol, "}"))
+    {
+        members ~= parseTypeSignature(tokens);
+
+        // Assignment operator (=) or semi-colon
+        if (!tokens.next() || !tokens.current().match(TokenType.Symbol, ";"))
+        {
+            throw new Exception("Expected semi-colon");
+        }
+    }
+
+    return new Struct(name, members);
 }
 
 FunctionSignature parseExtern(TokenFeed tokens)
@@ -325,7 +214,7 @@ FunctionSignature parseFunctionSignature(TokenFeed tokens)
         throw new Exception("Expected a function return type");
     }
 
-    auto type = parseType(new ParserContext(null, new PreParseData()), tokens);
+    auto type = parseType(tokens);
 
     // Function name
     if (!tokens.next())
@@ -368,8 +257,7 @@ FunctionSignature parseFunctionSignature(TokenFeed tokens)
             break;
         }
 
-        parameters ~= parseTypeSignature(
-                new ParserContext(null, new PreParseData()), tokens);
+        parameters ~= parseTypeSignature(tokens);
 
         // Commas separate parameters
         auto next = tokens.peek(1);
@@ -384,23 +272,17 @@ FunctionSignature parseFunctionSignature(TokenFeed tokens)
     return new FunctionSignature(type, name, parameters);
 }
 
-Function parseFunction(ParserContext ctx, TokenFeed tokens)
+Function parseFunction(TokenFeed tokens)
 {
     auto sig = parseFunctionSignature(tokens);
 
-    // Make the function parameters into fake locals so lookups work
-    foreach (param; sig.parameters)
-    {
-        ctx.locals ~= new LocalDeclaration(null, param, null);
-    }
-
-    auto functionBody = parseBlock(ctx, tokens);
+    auto functionBody = parseBlock(tokens);
 
     return new Function(sig.returnType, sig.name, sig.parameters,
                         functionBody);
 }
 
-Block parseBlock(ParserContext ctx, TokenFeed tokens)
+Block parseBlock(TokenFeed tokens)
 {
     // Open bracket
     if (!tokens.next())
@@ -427,21 +309,13 @@ Block parseBlock(ParserContext ctx, TokenFeed tokens)
             break;
         }
 
-        auto statement = parseStatement(ctx.clone(), tokens);
-
-        auto local = cast(LocalDeclaration)statement;
-        if (local !is null)
-        {
-            ctx.locals ~= local;
-        }
-
-        statements ~= statement;
+        statements ~= parseStatement(tokens);
     }
 
     return new Block(statements);
 }
 
-Statement parseStatement(ParserContext ctx, TokenFeed tokens)
+Statement parseStatement(TokenFeed tokens)
 {
     auto current = tokens.current();
 
@@ -453,7 +327,7 @@ Statement parseStatement(ParserContext ctx, TokenFeed tokens)
             throw new Exception("Can't rewind?");
         }
 
-        return parseBlock(ctx.clone(), tokens);
+        return parseBlock(tokens);
     }
 
     if (current.type == TokenType.Word)
@@ -461,16 +335,16 @@ Statement parseStatement(ParserContext ctx, TokenFeed tokens)
         switch (current.value)
         {
             case "return":
-                return parseReturn(ctx.clone(), tokens);
+                return parseReturn(tokens);
             case "if":
-                return parseIf(ctx.clone(), tokens);
+                return parseIf(tokens);
             case "while":
-                return parseWhile(ctx.clone(), tokens);
+                return parseWhile(tokens);
             default:
                 try
                 {
                     parsePrimitive(current.value);
-                    return parseLocalDeclaration(ctx.clone(), tokens);
+                    return parseLocalDeclaration(tokens);
                 }
                 catch
                 {
@@ -480,12 +354,12 @@ Statement parseStatement(ParserContext ctx, TokenFeed tokens)
 
     }
 
-    return parseAssignment(ctx.clone(), tokens);
+    return parseAssignment(tokens);
 }
 
-LocalDeclaration parseLocalDeclaration(ParserContext ctx, TokenFeed tokens)
+LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
 {
-    auto typeSignature = parseTypeSignature(ctx.clone(), tokens);
+    auto typeSignature = parseTypeSignature(tokens);
     Node expression = null;
 
     // Assignment operator (=) or semi-colon
@@ -498,7 +372,7 @@ LocalDeclaration parseLocalDeclaration(ParserContext ctx, TokenFeed tokens)
 
     if (current.match(TokenType.Symbol, "="))
     {
-        expression = new ExpressionParser(ctx.clone(), tokens).run();
+        expression = new ExpressionParser(tokens).run();
     }
     else if (!current.match(TokenType.Symbol, ";"))
     {
@@ -508,9 +382,9 @@ LocalDeclaration parseLocalDeclaration(ParserContext ctx, TokenFeed tokens)
     return new LocalDeclaration(null, typeSignature, expression);
 }
 
-Type parseType(ParserContext ctx, TokenFeed tokens)
+Type parseType(TokenFeed tokens)
 {
-    auto primitive = parsePrimitive(tokens.current().value);
+    auto name = tokens.current().value;
 
     bool pointer = false;
     auto next = tokens.peek(1);
@@ -526,19 +400,19 @@ Type parseType(ParserContext ctx, TokenFeed tokens)
     {
         tokens.next();
 
-        auto parser = new ExpressionParser(ctx.clone(), tokens);
+        auto parser = new ExpressionParser(tokens);
         parser.until ~= new Token(TokenType.Symbol, "]");
         elements = parser.run();
 
         pointer = true;
     }
 
-    return new Type(primitive, pointer=pointer, elements=elements);
+    return new Type(name, pointer=pointer, elements=elements);
 }
 
-TypeSignature parseTypeSignature(ParserContext ctx, TokenFeed tokens)
+TypeSignature parseTypeSignature(TokenFeed tokens)
 {
-    auto type = parseType(ctx.clone(), tokens);
+    auto type = parseType(tokens);
 
     // New local name
     if (!tokens.next())
@@ -558,11 +432,11 @@ TypeSignature parseTypeSignature(ParserContext ctx, TokenFeed tokens)
     return new TypeSignature(type, name);
 }
 
-Assignment parseAssignment(ParserContext ctx, TokenFeed tokens)
+Assignment parseAssignment(TokenFeed tokens)
 {
     // parseExpression always starts by calling .next()
     tokens.rewind(1);
-    auto lvalue = new ExpressionParser(ctx.clone(), tokens).run();
+    auto lvalue = new ExpressionParser(tokens).run();
 
     auto current = tokens.current();
 
@@ -572,26 +446,26 @@ Assignment parseAssignment(ParserContext ctx, TokenFeed tokens)
     }
 
     // Expression (rvalue)
-    auto expression = new ExpressionParser(ctx.clone(), tokens).run();
+    auto expression = new ExpressionParser(tokens).run();
 
     return new Assignment(null, lvalue, expression);
 }
 
-Return parseReturn(ParserContext ctx, TokenFeed tokens)
+Return parseReturn(TokenFeed tokens)
 {
-    return new Return(null, new ExpressionParser(ctx.clone(), tokens).run());
+    return new Return(null, new ExpressionParser(tokens).run());
 }
 
-While parseWhile(ParserContext ctx, TokenFeed tokens)
+While parseWhile(TokenFeed tokens)
 {
-    auto block = parseConditionalBlock(ctx.clone(), tokens);
+    auto block = parseConditionalBlock(tokens);
 
     return new While(block.conditional, block.block);
 }
 
-If parseIf(ParserContext ctx, TokenFeed tokens)
+If parseIf(TokenFeed tokens)
 {
-    auto ifBlock = parseConditionalBlock(ctx.clone(), tokens);
+    auto ifBlock = parseConditionalBlock(tokens);
     ConditionalBlock[] elseIfBlocks;
     Statement elseBlock = null;
 
@@ -612,14 +486,14 @@ If parseIf(ParserContext ctx, TokenFeed tokens)
         {
             tokens.next();
 
-            elseIfBlocks ~= parseConditionalBlock(ctx.clone(), tokens);
+            elseIfBlocks ~= parseConditionalBlock(tokens);
 
             continue;
         }
 
         // "else" block
         tokens.next();
-        elseBlock = parseStatement(ctx.clone(), tokens);
+        elseBlock = parseStatement(tokens);
         break;
     }
 
@@ -627,8 +501,7 @@ If parseIf(ParserContext ctx, TokenFeed tokens)
 }
 
 // Parse a conditional expression followed by a statement or block
-ConditionalBlock parseConditionalBlock(ParserContext ctx,
-                                       TokenFeed tokens)
+ConditionalBlock parseConditionalBlock(TokenFeed tokens)
 {
     // Make sure there's an open parenthesis
     auto next = tokens.peek(1);
@@ -638,8 +511,8 @@ ConditionalBlock parseConditionalBlock(ParserContext ctx,
         throw new Exception("Expected an if conditional");
     }
 
-    auto conditional = parseExpressionParenthesis(ctx.clone(), tokens);
-    auto block = parseStatement(ctx.clone(), tokens);
+    auto conditional = parseExpressionParenthesis(tokens);
+    auto block = parseStatement(tokens);
 
     return new ConditionalBlock(conditional, block);
 }
@@ -743,7 +616,7 @@ class ParserItemStack
     }
 }
 
-Node parseToken(ParserContext ctx, Token t)
+Node parseToken(Token t)
 {
     switch (t.type)
     {
@@ -757,17 +630,7 @@ Node parseToken(ParserContext ctx, Token t)
                 case "false":
                     return new BoolLiteral(false);
                 default:
-                    // Link up the binding to its local
-                    for (int i = cast(int)ctx.locals.length - 1; i >= 0; i--)
-                    {
-                        if (ctx.locals[i].signature.name == t.value)
-                        {
-                            return new Binding(ctx.locals[i], t.value);
-                        }
-                    }
-
-                    throw new Exception(format("Can't find a local named %s",
-                                               t.value));
+                    return new Binding(null, t.value);
             }
         default:
             throw new Exception(format("Unrecognized token type: %s", t.type));
@@ -775,19 +638,18 @@ Node parseToken(ParserContext ctx, Token t)
 }
 
 // If a ParserItem is a Node, return it. If it's a Token, parse it into a Node.
-Node getOrParseNode(ParserContext ctx, ParserItem i)
+Node getOrParseNode(ParserItem i)
 {
     if (i.isNode())
     {
         return i.node;
     }
 
-    return parseToken(ctx.clone(), i.token);
+    return parseToken(i.token);
 }
 
 class ExpressionParser
 {
-    ParserContext ctx;
     TokenFeed input;
 
     Token current;
@@ -798,9 +660,8 @@ class ExpressionParser
     // Tokens to mark the end of an expression
     Token[] until;
 
-    this(ParserContext ctx, TokenFeed input)
+    this(TokenFeed input)
     {
-        this.ctx = ctx;
         this.input = input;
 
         this.output = new ParserItemStack();
@@ -872,9 +733,9 @@ class ExpressionParser
             throw new Exception("Not enough on the stack(s) to consume!");
         }
 
-        auto right = getOrParseNode(this.ctx, this.output.pop());
+        auto right = getOrParseNode(this.output.pop());
         auto operator = parseOperatorType(this.operators.pop().token.value);
-        auto left = getOrParseNode(this.ctx, this.output.pop());
+        auto left = getOrParseNode(this.output.pop());
 
         this.outputPush(new ParserItem(new Operator(left, operator, right)));
     }
@@ -947,14 +808,12 @@ class ExpressionParser
                 auto call = new Call(topOutput.moduleName,
                         topOutput.token.value, parameters);
 
-                call.targetSignature = this.ctx.findFunction(call);
-                call.type = call.targetSignature.returnType;
-
                 this.outputPush(new ParserItem(call));
+
                 break;
             }
 
-            insertInPlace(parameters, 0, getOrParseNode(this.ctx, topOutput));
+            insertInPlace(parameters, 0, getOrParseNode(topOutput));
         }
     }
 
@@ -1034,7 +893,7 @@ class ExpressionParser
             (newItem.token.type == TokenType.Integer ||
              newItem.token.type == TokenType.Word))
         {
-            castNode.target = parseToken(this.ctx, newItem.token);
+            castNode.target = parseToken(newItem.token);
             return true;
         }
 
@@ -1101,9 +960,10 @@ class ExpressionParser
                 topOperator.token.match(TokenType.Symbol, "&"))
             {
                 this.output.push(new ParserItem(new Reference(
-                            parseToken(this.ctx, current))));
+                            parseToken(current))));
 
                 this.operators.pop();
+
                 return true;
             }
         }
@@ -1131,7 +991,7 @@ class ExpressionParser
                 if (next.type == TokenType.Word)
                 {
                     this.output.push(new ParserItem(new Dereference(
-                            parseToken(this.ctx, next))));
+                            parseToken(next))));
 
                     this.input.next();
                     return true;
@@ -1168,7 +1028,7 @@ class ExpressionParser
                     Node valueNode;
                     if (valueItem.isToken())
                     {
-                        valueNode = parseToken(this.ctx, valueItem.token);
+                        valueNode = parseToken(valueItem.token);
                     }
                     else
                     {
@@ -1178,7 +1038,7 @@ class ExpressionParser
                     Node indexerNode;
                     if (indexerItem.isToken())
                     {
-                        indexerNode = parseToken(this.ctx, indexerItem.token);
+                        indexerNode = parseToken(indexerItem.token);
                     }
                     else
                     {
@@ -1245,15 +1105,15 @@ class ExpressionParser
             throw new Exception("Expected one node to be left in parser");
         }
 
-        return getOrParseNode(this.ctx, this.output.pop());
+        return getOrParseNode(this.output.pop());
     }
 }
 
 // Parse an expression in parenthesis, ending on the first close parenthesis
 // with no open parenthesis on the stack
-Node parseExpressionParenthesis(ParserContext ctx, TokenFeed tokens)
+Node parseExpressionParenthesis(TokenFeed tokens)
 {
-    auto parser = new ExpressionParser(ctx, tokens);
+    auto parser = new ExpressionParser(tokens);
 
     while (parser.next())
     {
@@ -1271,9 +1131,195 @@ Node parseExpressionParenthesis(ParserContext ctx, TokenFeed tokens)
                 throw new Exception("Expected one node to be left in parser");
             }
 
-            return getOrParseNode(ctx, parser.output.pop());
+            return getOrParseNode(parser.output.pop());
         }
     }
 
     throw new Exception("Expected a close parenthesis");
+}
+
+// Validation pass ------------------------------------------------------------
+
+void validate(Module mod)
+{
+    // Complete function signatures
+    foreach (func; mod.functions)
+    {
+        completeType(mod, func.returnType);
+
+        foreach (param; func.parameters)
+        {
+            completeType(mod, param.type);
+        }
+    }
+
+    // Complete function bodies
+    foreach (func; mod.functions)
+    {
+        validateStatement(mod, func.block);
+    }
+}
+
+void validateStatement(Module mod, Statement st)
+{
+    foreach (childNode; st.childNodes)
+    {
+        validateNode(mod, childNode);
+    }
+
+    auto local = cast(LocalDeclaration)st;
+    if (local !is null)
+    {
+        completeType(mod, local.signature.type);
+
+        if (local.signature.type.primitive == PrimitiveType.Auto)
+        {
+            if (local.value is null)
+            {
+                throw new Exception(format("Can't infer type for %s",
+                        local.signature));
+            }
+
+            local.signature.type = local.value.type;
+        }
+    }
+
+    foreach (childStatement; st.childStatements)
+    {
+        validateStatement(mod, childStatement);
+    }
+}
+
+bool completeType(Module mod, Type type)
+{
+    if (type is null || type.complete)
+    {
+        return false;
+    }
+
+    type.primitive = parsePrimitive(type.name);
+    type.complete = true;
+
+    return true;
+}
+
+void validateNode(Module mod, Node node)
+{
+    foreach (childNode; node.childNodes())
+    {
+        validateNode(mod, childNode);
+    }
+
+    auto call = cast(Call)node;
+    if (call !is null)
+    {
+        call.targetSignature = mod.findFunction(call);
+        node.retype();
+        return;
+    }
+
+    auto binding = cast(Binding)node;
+    if (binding !is null)
+    {
+        binding.local = findLocal(binding, binding.name);
+        node.retype();
+        return;
+    }
+
+    if (completeType(mod, node.type))
+    {
+        node.retype();
+    }
+}
+
+TypeSignature findLocal(Node node, string name)
+{
+    // Walk up the tree until the first statement
+    while (node.parent !is null)
+    {
+        auto parentNode = cast(Node)node.parent;
+        if (parentNode !is null)
+        {
+            node = parentNode;
+            continue;
+        }
+
+        auto statement = cast(Statement)node.parent;
+        if (statement !is null)
+        {
+            return findLocal(statement, name);
+        }
+    }
+
+    throw new Exception("Found an orphaned node");
+}
+
+Statement nextWithBlockParent(Statement st)
+{
+    while (cast(Block)st.parent is null)
+    {
+        auto parentStatement = cast(Statement)st.parent;
+        if (parentStatement !is null)
+        {
+            st = parentStatement;
+            continue;
+        }
+
+        return null;
+    }
+
+    return st;
+}
+
+TypeSignature findLocal(Statement statement, string name)
+{
+    // Find the nearest Block ancestor
+    statement = nextWithBlockParent(statement);
+    if (statement is null)
+    {
+        throw new Exception("No more parents");
+    }
+
+    auto parent = cast(Block)statement.parent;
+
+    // Check sibling statements that come before this statement in the block
+    // for locals
+    foreach (st; parent.statements)
+    {
+        if (st == statement)
+        {
+            continue;
+        }
+
+        auto local = cast(LocalDeclaration)st;
+        if (local !is null)
+        {
+            if (local.signature.name == name)
+            {
+                return local.signature;
+            }
+        }
+    }
+
+    // Local not found in this block: continue walking up the tree
+    auto parentStatement = cast(Statement)parent.parent;
+    if (parentStatement !is null)
+    {
+        return findLocal(parentStatement, name);
+    }
+
+    // Local not found in this function: check the function parameters
+    auto func = cast(Function)parent.parent;
+    if (func !is null)
+    {
+        foreach (param; func.parameters)
+        {
+            if (param.name == name)
+            {
+                return param;
+            }
+        }
+    }
+
+    throw new Exception(format("Local %s not in scope", name));
 }

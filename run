@@ -5,16 +5,15 @@ echo && echo && echo && echo && echo && echo && echo && echo && echo && \
 echo && echo && echo && echo && echo && echo && echo && echo && echo && \
 echo && echo && echo && echo && echo && echo && echo && echo && echo && \
 
-ldc main.d globals.d lexer.d ast.d parser.d generator.d && \
+ldc -g main.d globals.d lexer.d ast.d parser.d generator.d && \
 
-#./main string.bs && \
-#basm string.asm && \
+./main string.bs && \
+basm string.asm && \
 
 ./main -v "${1}.bs" && \
 basm -v "${1}.asm" && \
 
-ld "${1}.o" && \
-# string.o && \
+ld "${1}.o" string.o && \
 
 ./a.out; \
 OUTPUT="$?" && \

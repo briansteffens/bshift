@@ -753,8 +753,8 @@ void generateLocalDeclaration(GeneratorState state, LocalDeclaration st)
         return;
     }
 
-    generateAssignmentShared(state, new Binding(st, st.signature.name),
-                             st.value);
+    generateAssignmentShared(state,
+            new Binding(st.signature, st.signature.name), st.value);
 }
 
 void generateAssignment(GeneratorState state, Assignment a)
