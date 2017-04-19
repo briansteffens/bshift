@@ -1,0 +1,32 @@
+struct point
+{
+    u64 x;
+    u64 y;
+}
+
+struct rect
+{
+    point pos;
+    point size;
+}
+
+u64 main()
+{
+    rect r;
+
+    r.pos.y = 3;
+    r.size.x = 10;
+
+    return r.pos.y + r.size.x;
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "make and use a nested struct",
+            "expect_status": "13"
+        }
+    ]
+}

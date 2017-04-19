@@ -314,28 +314,6 @@ enum OperatorType
     DotAccessor,
 }
 
-OperatorType parseOperatorType(string input)
-{
-    switch (input)
-    {
-        case "+":
-            return OperatorType.Plus;
-        case "*":
-            return OperatorType.Asterisk;
-        case "==":
-            return OperatorType.Equality;
-        case "!=":
-            return OperatorType.Inequality;
-        case "&&":
-            return OperatorType.LogicalAnd;
-        case ".":
-            return OperatorType.DotAccessor;
-        default:
-            throw new Exception(
-                    format("Unrecognized OperatorType: %s", input));
-    }
-}
-
 enum OperatorClass
 {
     Math,
@@ -656,7 +634,7 @@ class DotAccessor : Node
 
     override string toString()
     {
-        return format("%s.%s", container, memberName);
+        return format("(%s.%s)", container, memberName);
     }
 
     override void retype()

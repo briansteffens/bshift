@@ -4,15 +4,21 @@ struct point
     u64 y;
 }
 
+struct rect
+{
+    point pos;
+    point size;
+}
+
 u64 main()
 {
-    point p;
+    rect r;
 
-    p.x = 3;
-    p.y = 7;
+    r.pos.x = 3;
+    r.pos.y = 7;
 
-    auto x = p.x;
-    auto y = p.y;
+    r.size.x = 5;
+    r.size.y = 10;
 
-    return x + y;
+    return r.size.x + r.pos.y;
 }

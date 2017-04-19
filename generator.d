@@ -1097,8 +1097,18 @@ Local generateIndexer(GeneratorState state, Indexer indexer)
 // Return a register with the address of the dot-accessed struct member
 Local resolveDotAccessor(GeneratorState state, DotAccessor dot)
 {
-    auto containerNode = generateNode(state, dot.container);
-    auto containerRegister = requireLocalInRegister(state, containerNode);
+    Local containerRegister;
+
+    auto containerDot = cast(DotAccessor)dot.container;
+    if (containerDot is null)
+    {
+        auto containerNode = generateNode(state, dot.container);
+        containerRegister = requireLocalInRegister(state, containerNode);
+    }
+    else
+    {
+        containerRegister = resolveDotAccessor(state, containerDot);
+    }
 
     auto structType = cast(StructType)dot.container.type;
     if (structType is null)

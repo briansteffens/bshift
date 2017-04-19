@@ -8,6 +8,48 @@ import globals;
 import lexer;
 import ast;
 
+OperatorType parseOperatorType(string input)
+{
+    switch (input)
+    {
+        case "+":
+            return OperatorType.Plus;
+        case "*":
+            return OperatorType.Asterisk;
+        case "==":
+            return OperatorType.Equality;
+        case "!=":
+            return OperatorType.Inequality;
+        case "&&":
+            return OperatorType.LogicalAnd;
+        case ".":
+            return OperatorType.DotAccessor;
+        default:
+            throw new Exception(
+                    format("Unrecognized OperatorType: %s", input));
+    }
+}
+
+int operatorPrecedence(OperatorType t)
+{
+    switch (t)
+    {
+        case OperatorType.DotAccessor:
+            return 19;
+        case OperatorType.Asterisk:
+            return 14;
+        case OperatorType.Plus:
+            return 13;
+        case OperatorType.Equality:
+        case OperatorType.Inequality:
+            return 10;
+        case OperatorType.LogicalAnd:
+            return 6;
+        default:
+            throw new Exception(format("Unknown precedence for %s", t));
+    }
+}
+
 class TokenFeed
 {
     Token[] tokens;
@@ -959,6 +1001,25 @@ class ExpressionParser
             return false;
         }
 
+        if (current.type == TokenType.Symbol)
+        {
+            try
+            {
+                int cur = operatorPrecedence(parseOperatorType(current.value));
+                int prev = operatorPrecedence(parseOperatorType(
+                        this.operators.peek(0).token.value));
+
+                if (prev >= cur)
+                {
+                    this.consume();
+                    //return true;
+                }
+            }
+            catch
+            {
+            }
+        }
+
         // Check for the beginning of a function call
         if (this.startFunctionCall())
         {
@@ -1111,8 +1172,6 @@ class ExpressionParser
 
     Node run()
     {
-        writeln("\nStarting ExpressionParser run\n");
-
         while (this.next())
         {
         }
