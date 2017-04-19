@@ -1331,6 +1331,9 @@ Local generateMathOperator(GeneratorState state, Operator operator)
         case OperatorType.Plus:
             state.render(format("    add %s, %s", temp.register, right));
             break;
+        case OperatorType.Minus:
+            state.render(format("    sub %s, %s", temp.register, right));
+            break;
         case OperatorType.Asterisk:
             state.render(format("    imul %s, %s", temp.register, right));
             break;
