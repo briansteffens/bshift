@@ -1,0 +1,33 @@
+struct point
+{
+    u64 x;
+    u64 y;
+}
+
+u64 set_point(point* p)
+{
+    p.x = 3;
+    p.y = 7;
+
+    return 0;
+}
+
+u64 main()
+{
+    point p;
+
+    auto r = set_point(&p);
+
+    return p.x + p.y;
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "pass a struct pointer to a function",
+            "expect_status": "10"
+        }
+    ]
+}

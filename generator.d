@@ -1031,8 +1031,9 @@ Local requireLocalInRegister(GeneratorState state, Node node)
     // Not in a register: make a new temp and copy it there
     auto ret = state.addTemp(node.type);
 
-    // Special handling for arrays and structs
-    if (node.type.elements !is null || node.type.isStruct())
+    // Special handling for arrays and non-pointer structs
+    if (node.type.elements !is null ||
+        (node.type.isStruct() && !node.type.pointer))
     {
         state.render(format("    lea %s, %s", ret.register,
                             renderNode(state, node)));
