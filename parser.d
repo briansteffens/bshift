@@ -143,6 +143,7 @@ Module parse(string name, Token[] tokenArray)
     Function[] functions;
     FunctionSignature[] externs;
     Struct[] structs;
+    Global[] globals;
 
     while (tokens.next())
     {
@@ -167,17 +168,24 @@ Module parse(string name, Token[] tokenArray)
             continue;
         }
 
-        auto current = tokens.current();
-
-        if (current.type != TokenType.Word)
+        auto func = parseFunction(tokens);
+        if (func !is null)
         {
-            throw new Exception("Unexpected token; expected function");
+            functions ~= func;
+            continue;
         }
 
-        functions ~= parseFunction(tokens);
+        auto global = parseGlobal(tokens);
+        if (global !is null)
+        {
+            globals ~= global;
+            continue;
+        }
+
+        throw new Exception("Unexpected token");
     }
 
-    auto ret = new Module(name, imports, structs, functions, externs);
+    auto ret = new Module(name, imports, structs, functions, globals, externs);
 
     foreach (func; functions)
     {
@@ -187,6 +195,37 @@ Module parse(string name, Token[] tokenArray)
     validate(ret);
 
     return ret;
+}
+
+Global parseGlobal(TokenFeed tokens)
+{
+    int rewindTarget = tokens.index;
+
+    auto signature = parseTypeSignature(tokens);
+    if (signature is null)
+    {
+        tokens.index = rewindTarget;
+        return null;
+    }
+
+    if (!tokens.next())
+    {
+        tokens.index = rewindTarget;
+        return null;
+    }
+
+    Node value = null;
+    if (tokens.current().match(TokenType.Symbol, "="))
+    {
+        value = new ExpressionParser(tokens).run();
+    }
+    else if (!tokens.current().match(TokenType.Symbol, ";"))
+    {
+        tokens.index = rewindTarget;
+        return null;
+    }
+
+    return new Global(signature, value);
 }
 
 Struct parseStruct(TokenFeed tokens)
@@ -253,7 +292,7 @@ FunctionSignature parseFunctionSignature(TokenFeed tokens)
 
     if (token.type != TokenType.Word)
     {
-        throw new Exception("Expected a function return type");
+        return null;
     }
 
     auto type = parseType(tokens);
@@ -261,14 +300,14 @@ FunctionSignature parseFunctionSignature(TokenFeed tokens)
     // Function name
     if (!tokens.next())
     {
-        throw new Exception("Expected a function name");
+        return null;
     }
 
     token = tokens.current();
 
     if (token.type != TokenType.Word)
     {
-        throw new Exception("Expected a function name");
+        return null;
     }
 
     auto name = token.value;
@@ -276,14 +315,14 @@ FunctionSignature parseFunctionSignature(TokenFeed tokens)
     // Open parenthesis
     if (!tokens.next())
     {
-        throw new Exception("Expected a function parameter list");
+        return null;
     }
 
     token = tokens.current();
 
     if (token.type != TokenType.Symbol || token.value != "(")
     {
-        throw new Exception("Expected a function parameter list");
+        return null;
     }
 
     // Parameter list
@@ -316,7 +355,14 @@ FunctionSignature parseFunctionSignature(TokenFeed tokens)
 
 Function parseFunction(TokenFeed tokens)
 {
+    auto rewindTarget = tokens.index;
+
     auto sig = parseFunctionSignature(tokens);
+    if (sig is null)
+    {
+        tokens.index = rewindTarget;
+        return null;
+    }
 
     auto functionBody = parseBlock(tokens);
 
@@ -1227,6 +1273,12 @@ void validate(Module mod)
         }
     }
 
+    // Complete globals
+    foreach (global; mod.globals)
+    {
+        global.signature.type = completeType(mod, global.signature.type);
+    }
+
     // Complete function signatures
     foreach (func; mod.functions)
     {
@@ -1345,7 +1397,7 @@ void validateNode(Module mod, Node node)
     auto binding = cast(Binding)node;
     if (binding !is null)
     {
-        binding.local = findLocal(binding, binding.name);
+        binding.local = findLocal(mod, binding, binding.name);
         node.retype();
         return;
     }
@@ -1354,7 +1406,7 @@ void validateNode(Module mod, Node node)
     node.retype();
 }
 
-TypeSignature findLocal(Node node, string name)
+TypeSignature findLocal(Module mod, Node node, string name)
 {
     // Walk up the tree until the first statement
     while (node.parent !is null)
@@ -1369,7 +1421,7 @@ TypeSignature findLocal(Node node, string name)
         auto statement = cast(Statement)node.parent;
         if (statement !is null)
         {
-            return findLocal(statement, name);
+            return findLocal(mod, statement, name);
         }
     }
 
@@ -1393,7 +1445,7 @@ Statement nextWithBlockParent(Statement st)
     return st;
 }
 
-TypeSignature findLocal(Statement statement, string name)
+TypeSignature findLocal(Module mod, Statement statement, string name)
 {
     // Find the nearest Block ancestor
     statement = nextWithBlockParent(statement);
@@ -1427,7 +1479,7 @@ TypeSignature findLocal(Statement statement, string name)
     auto parentStatement = cast(Statement)parent.parent;
     if (parentStatement !is null)
     {
-        return findLocal(parentStatement, name);
+        return findLocal(mod, parentStatement, name);
     }
 
     // Local not found in this function: check the function parameters
@@ -1440,6 +1492,15 @@ TypeSignature findLocal(Statement statement, string name)
             {
                 return param;
             }
+        }
+    }
+
+    // Last resort: check the globals
+    foreach (global; mod.globals)
+    {
+        if (global.signature.name == name)
+        {
+            return global.signature;
         }
     }
 

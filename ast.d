@@ -1167,21 +1167,47 @@ class Import
     }
 }
 
+class Global
+{
+    TypeSignature signature;
+    Node value;
+
+    this(TypeSignature signature, Node value)
+    {
+        this.signature = signature;
+        this.value = value;
+    }
+
+    override string toString()
+    {
+        if (this.value is null)
+        {
+            return this.signature.toString();
+        }
+        else
+        {
+            return format("%s = %s", this.signature, this.value);
+        }
+    }
+}
+
 class Module
 {
     string name;
     Import[] imports;
     Struct[] structs;
     Function[] functions;
+    Global[] globals;
     FunctionSignature[] externs;
 
     this(string name, Import[] imports, Struct[] structs, Function[] functions,
-         FunctionSignature[] externs)
+         Global[] globals, FunctionSignature[] externs)
     {
         this.name = name;
         this.imports = imports;
         this.structs = structs;
         this.functions = functions;
+        this.globals = globals;
         this.externs = externs;
     }
 
@@ -1197,6 +1223,11 @@ class Module
         foreach (ext; this.externs)
         {
             ret ~= ext.toString() ~ "\n";
+        }
+
+        foreach (g; this.globals)
+        {
+            ret ~= g.toString() ~ "\n";
         }
 
         foreach (s; this.structs)

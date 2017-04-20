@@ -129,14 +129,15 @@ enum Location
 {
     Register,
     Stack,
+    DataSection,
 }
 
 class Local : Node
 {
     string name;
     Location location;
-    Register register;
-    int stackOffset;
+    Register register; // For Location.Register
+    int stackOffset;   // For Location.Stack
 
     this(Type type, string name)
     {
@@ -346,20 +347,34 @@ class GeneratorState
     Local findLocal(string name)
     {
         // Look in locals
-        for (int i = 0; i < this.locals.length; i++)
+        foreach (local; this.locals)
         {
-            if (this.locals[i].name == name)
+            if (local.name == name)
             {
-                return this.locals[i];
+                return local;
             }
         }
 
         // Look in temps
-        for (int i = 0; i < this.temps.length; i++)
+        foreach (temp; this.temps)
         {
-            if (this.temps[i].name == name)
+            if (temp.name == name)
             {
-                return this.temps[i];
+                return temp;
+            }
+        }
+
+        // Look in globals
+        foreach (global; this.mod.globals)
+        {
+            if (global.signature.name == name)
+            {
+                auto ret = new Local(global.signature.type,
+                        global.signature.name);
+
+                ret.location = Location.DataSection;
+
+                return ret;
             }
         }
 
@@ -367,10 +382,70 @@ class GeneratorState
     }
 }
 
+void renderGlobal(GeneratorState state, Global global)
+{
+    string type = null;
+
+    auto primitiveType = cast(PrimitiveType)global.signature.type;
+    if (primitiveType !is null)
+    {
+        switch (primitiveType.primitive)
+        {
+            case Primitive.U64:
+                type = "dq";
+                break;
+            case Primitive.U8:
+            case Primitive.Bool:
+                type = "db";
+                break;
+            default:
+                throw new Exception(format("Can't convert %s to asm data type",
+                        primitiveType));
+        }
+    }
+
+    if (type is null)
+    {
+        throw new Exception(format("Can't convert %s to asm data type",
+                    primitiveType));
+    }
+
+    auto value = "0";
+
+    if (global.value !is null)
+    {
+        value = renderNode(state, global.value);
+    }
+
+    state.render(format("    %s: %s %s", global.signature.name, type, value));
+}
+
 string[] generate(Module mod)
 {
     auto state = new GeneratorState(mod);
 
+    // Render data section
+    auto data = "";
+    if (mod.globals.length > 0)
+    {
+        state.render("section .data");
+
+        foreach (global; mod.globals)
+        {
+            renderGlobal(state, global);
+        }
+    }
+    else
+    {
+        version (OSX)
+        {
+            // Mac requires dummy data section with dummy value for some reason
+            state.render("section .data");
+            state.render("_dummy: db 0");
+        }
+    }
+
+    // Render text section
     state.render("section .text");
 
     for (int i = 0; i < mod.functions.length; i++)
@@ -396,13 +471,6 @@ string[] generate(Module mod)
             state.render("    mov rax, 60");
         }
         state.render("    syscall");
-
-        version (OSX)
-        {
-            // Mac requires dummy data section with dummy value for some reason
-            state.render("section .data");
-            state.render("_dummy: db 0");
-        }
     }
 
     // Render externs
@@ -411,6 +479,7 @@ string[] generate(Module mod)
     {
         externs ~= format("extern %s", ext);
     }
+
     state.output = externs ~ state.output;
 
     return state.output;
@@ -1564,6 +1633,8 @@ string renderLocal(Local local)
             return format("%s", local.register);
         case Location.Stack:
             return format("[rbp-%d]", local.stackOffset);
+        case Location.DataSection:
+            return format("[%s]", local.name);
         default:
             throw new Exception(format("Unknown location %s", local.location));
     }
