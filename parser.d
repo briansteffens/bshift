@@ -14,6 +14,8 @@ OperatorType parseOperatorType(string input)
     {
         case "+":
             return OperatorType.Plus;
+        case "-":
+            return OperatorType.Minus;
         case "*":
             return OperatorType.Asterisk;
         case "==":
@@ -39,6 +41,7 @@ int operatorPrecedence(OperatorType t)
         case OperatorType.Asterisk:
             return 14;
         case OperatorType.Plus:
+        case OperatorType.Minus:
             return 13;
         case OperatorType.Equality:
         case OperatorType.Inequality:
