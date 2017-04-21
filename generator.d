@@ -386,8 +386,13 @@ void renderGlobal(GeneratorState state, Global global)
 {
     string type = null;
 
+    if (global.signature.type.pointer)
+    {
+        type = "dq";
+    }
+
     auto primitiveType = cast(PrimitiveType)global.signature.type;
-    if (primitiveType !is null)
+    if (type is null && primitiveType !is null)
     {
         switch (primitiveType.primitive)
         {
