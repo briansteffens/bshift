@@ -490,36 +490,37 @@ string[] generate(Module mod)
     return state.output;
 }
 
-// Figure out which register a parameter should be in based on its index in
-// the parameter list
-Register parameterRegister(int index)
-{
-    switch (index)
-    {
-        case 0:
-            return Register.RDI;
-        case 1:
-            return Register.RSI;
-        case 2:
-            return Register.RDX;
-        case 3:
-            return Register.RCX;
-        case 4:
-            return Register.R8;
-        case 5:
-            return Register.R9;
-        default:
-            throw new Exception(format(
-                    "Not enough registers for parameter %d", index));
-    }
-}
+Register[] callRegisters = [
+    Register.RDI,
+    Register.RSI,
+    Register.RDX,
+    Register.RCX,
+    Register.R8,
+    Register.R9
+];
+
+Register[] syscallRegisters = [
+    Register.RDI,
+    Register.RSI,
+    Register.RDX,
+    Register.R10,
+    Register.R8,
+    Register.R9
+];
 
 // Place a parameter in the appropriate location (register etc) based on its
 // index within the parameter list
-void placeParameter(Local local, int index)
+void placeParameter(Local local, Register[] registerList, int index)
 {
     local.location = Location.Register;
-    local.register = parameterRegister(index);
+
+    if (index < 0 || index >= registerList.length)
+    {
+        throw new Exception(format(
+                "Not enough registers for parameter %d", index));
+    }
+
+    local.register = registerList[index];
 }
 
 void generateFunction(GeneratorState state, Function func)
@@ -532,7 +533,7 @@ void generateFunction(GeneratorState state, Function func)
         auto local = new Local(func.parameters[i].type,
                                func.parameters[i].name);
 
-        placeParameter(local, i);
+        placeParameter(local, callRegisters, i);
 
         stackOffset += typeSize(func.parameters[i].type);
         local.stackOffset = stackOffset;
@@ -1509,7 +1510,8 @@ class NonRegisterArg
     }
 }
 
-Register[] prepareCallParams(GeneratorState state, Node[] params)
+Register[] prepareCallParams(GeneratorState state, Node[] params,
+        Register[] registerList)
 {
     // Generate all parameters
     for (int i = 0; i < params.length; i++)
@@ -1531,7 +1533,13 @@ Register[] prepareCallParams(GeneratorState state, Node[] params)
     NonRegisterArg[] nonRegisterArgs;
     for (int i = 0; i < params.length; i++)
     {
-        auto targetRegister = parameterRegister(i);
+        if (i >= registerList.length)
+        {
+            throw new Exception(format(
+                    "Not enough registers for parameter %d", i));
+        }
+
+        auto targetRegister = registerList[i];
 
         auto binding = cast(Binding)params[i];
         if (binding is null)
@@ -1594,7 +1602,8 @@ Local generateCall(GeneratorState state, Call call)
         return generateSysCall(state, call);
     }
 
-    auto callerPreserved = prepareCallParams(state, call.parameters);
+    auto callerPreserved = prepareCallParams(state, call.parameters,
+            callRegisters);
 
     // Make the actual call
     auto func = call.targetSignature;
@@ -1612,7 +1621,8 @@ Local generateCall(GeneratorState state, Call call)
 
 Local generateSysCall(GeneratorState state, Call call)
 {
-    auto callerPreserved = prepareCallParams(state, call.parameters[1..$]);
+    auto callerPreserved = prepareCallParams(state, call.parameters[1..$],
+            syscallRegisters);
 
     // Handle the system call code, which needs to go in rax
     auto callCode = generateNode(state, call.parameters[0]);
