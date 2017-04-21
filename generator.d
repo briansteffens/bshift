@@ -1047,7 +1047,24 @@ Node generateNode(GeneratorState state, Node node)
         return generateDotAccessor(state, accessor);
     }
 
+    // Special handling for sizeof
+    auto sizeof = cast(SizeOf)node;
+    if (sizeof !is null)
+    {
+        return generateSizeOf(state, sizeof);
+    }
+
     return node;
+}
+
+Node generateSizeOf(GeneratorState state, SizeOf sizeof)
+{
+    auto ret = state.addTemp(sizeof.type);
+
+    state.render(format("    mov %s, %d", ret.register,
+            sizeof.argument.baseTypeSize()));
+
+    return ret;
 }
 
 bool isPrimitiveIntegral(Type type)

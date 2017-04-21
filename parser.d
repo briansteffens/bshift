@@ -909,7 +909,7 @@ class ExpressionParser
             {
                 // Push the new call onto the output stack
                 auto call = new Call(topOutput.moduleName,
-                        topOutput.token.value, parameters);
+                            topOutput.token.value, parameters);
 
                 this.outputPush(new ParserItem(call));
 
@@ -918,6 +918,37 @@ class ExpressionParser
 
             insertInPlace(parameters, 0, getOrParseNode(topOutput));
         }
+    }
+
+    bool consumeSizeOf()
+    {
+        if (!this.input.current().match(TokenType.Word, "sizeof"))
+        {
+            return false;
+        }
+
+        if (!this.input.next() ||
+            !this.input.current().match(TokenType.Symbol, "("))
+        {
+            throw new Exception("Expected open parenthesis after sizeof");
+        }
+
+        if (!this.input.next())
+        {
+            throw new Exception("Expected a type in sizeof");
+        }
+
+        auto type = parseType(this.input);
+
+        if (!this.input.next() ||
+            !this.input.current().match(TokenType.Symbol, ")"))
+        {
+            throw new Exception("Expected close parenthesis after sizeof");
+        }
+
+        this.outputPush(new ParserItem(new SizeOf(type)));
+
+        return true;
     }
 
     // A cast start looks like '(bool)' and isn't completed until the target
@@ -1067,6 +1098,12 @@ class ExpressionParser
             catch
             {
             }
+        }
+
+        // Detect sizeof
+        if (this.consumeSizeOf())
+        {
+            return true;
         }
 
         // Check for the beginning of a function call
@@ -1401,6 +1438,14 @@ void validateNode(Module mod, Node node)
     if (binding !is null)
     {
         binding.local = findLocal(mod, binding, binding.name);
+        node.retype();
+        return;
+    }
+
+    auto sizeof = cast(SizeOf)node;
+    if (sizeof !is null)
+    {
+        sizeof.argument = completeType(mod, sizeof.argument);
         node.retype();
         return;
     }

@@ -156,6 +156,11 @@ class StructType : Type
 
     override int baseTypeSize()
     {
+        if (this.pointer)
+        {
+            return 8;
+        }
+
         auto ret = 0;
 
         foreach (member; this.struct_.members)
@@ -231,6 +236,11 @@ class PrimitiveType : Type
 
     override int baseTypeSize()
     {
+        if (this.pointer && this.elements is null)
+        {
+            return 8;
+        }
+
         return primitiveSize(this.primitive);
     }
 }
@@ -469,6 +479,22 @@ class BoolLiteral : Literal
     override string toString()
     {
         return to!string(this.value);
+    }
+}
+
+class SizeOf : Node
+{
+    Type argument;
+
+    this(Type argument)
+    {
+        this.argument = argument;
+        this.type = new PrimitiveType(Primitive.U64);
+    }
+
+    override string toString()
+    {
+        return format("sizeof(%s)", this.argument);
     }
 }
 

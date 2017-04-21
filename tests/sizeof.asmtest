@@ -1,0 +1,53 @@
+struct point
+{
+    u64 x;
+    u64 y;
+}
+
+struct rect
+{
+    point pos;
+    point size;
+}
+
+u64 main()
+{
+    return sizeof({{ type }});
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "get the size of a u64",
+            "type": "u64",
+            "expect_status": "8"
+        },
+        {
+            "name": "get the size of a u8",
+            "type": "u8",
+            "expect_status": "1"
+        },
+        {
+            "name": "get the size of a u8 pointer",
+            "type": "u8*",
+            "expect_status": "8"
+        },
+        {
+            "name": "get the size of a struct",
+            "type": "point",
+            "expect_status": "16"
+        },
+        {
+            "name": "get the size of a nested struct",
+            "type": "rect",
+            "expect_status": "32"
+        },
+        {
+            "name": "get the size of a struct pointer",
+            "type": "point*",
+            "expect_status": "8"
+        }
+    ]
+}
