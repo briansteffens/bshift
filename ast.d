@@ -1271,6 +1271,12 @@ class Module
 
     FunctionSignature findFunction(Call call)
     {
+        if (call.functionName == "syscall")
+        {
+            return new FunctionSignature(new PrimitiveType(Primitive.U64),
+                    "syscall", []);
+        }
+
         // Search the current module
         if (call.moduleName is null)
         {
