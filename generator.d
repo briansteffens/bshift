@@ -920,8 +920,7 @@ void generateAssignmentShared(GeneratorState state, Node target,
         state.render(format("    mov %s, %s", tempTarget.register,
                             valueRendered));
         valueRendered = format("%s", tempTarget.register);
-        state.render(format("; %s = %s", (cast(Binding)target).name,
-                     binding.name));
+        state.render(format("; %s = %s", target, binding.name));
     }
 
     state.render(format("    mov %s%s, %s", sizeHint, targetRendered,
@@ -1458,10 +1457,35 @@ string renderSizeHint(Node left, Node right)
     return "";
 }
 
+bool isInMemory(GeneratorState state, Node node)
+{
+    auto local = cast(Local)node;
+    if (local is null)
+    {
+        auto binding = cast(Binding)node;
+        if (binding !is null)
+        {
+            local = state.findLocal(binding.name);
+        }
+    }
+
+    if (local is null)
+    {
+        return false;
+    }
+
+    return local.location != Location.Register;
+}
+
 Local generateRelationalOperator(GeneratorState state, Operator operator)
 {
     auto leftNode = generateNode(state, operator.left);
     auto rightNode = generateNode(state, operator.right);
+
+    if (isInMemory(state, leftNode) && isInMemory(state, rightNode))
+    {
+        leftNode = requireLocalInRegister(state, leftNode);
+    }
 
     auto left = renderNode(state, leftNode);
     auto right = renderNode(state, rightNode);
