@@ -321,6 +321,10 @@ enum OperatorType
     Asterisk,
     Equality,
     Inequality,
+    GreaterThan,
+    GreaterThanOrEqual,
+    LessThan,
+    LessThanOrEqual,
     LogicalAnd,
     DotAccessor,
 }
@@ -342,6 +346,10 @@ OperatorClass operatorTypeToClass(OperatorType t)
             return OperatorClass.Math;
         case OperatorType.Equality:
         case OperatorType.Inequality:
+        case OperatorType.GreaterThan:
+        case OperatorType.GreaterThanOrEqual:
+        case OperatorType.LessThan:
+        case OperatorType.LessThanOrEqual:
             return OperatorClass.Relational;
         case OperatorType.LogicalAnd:
             return OperatorClass.Logical;

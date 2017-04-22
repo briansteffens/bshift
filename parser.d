@@ -22,6 +22,14 @@ OperatorType parseOperatorType(string input)
             return OperatorType.Equality;
         case "!=":
             return OperatorType.Inequality;
+        case ">":
+            return OperatorType.GreaterThan;
+        case ">=":
+            return OperatorType.GreaterThanOrEqual;
+        case "<":
+            return OperatorType.LessThan;
+        case "<=":
+            return OperatorType.LessThanOrEqual;
         case "&&":
             return OperatorType.LogicalAnd;
         case ".":

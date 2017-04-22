@@ -91,24 +91,16 @@ class Token
 
 Token parseDoubleSymbol(dchar first, dchar second)
 {
-    if (first == '=' && second == '=')
-    {
-        return new Token(TokenType.Symbol, "==");
-    }
+    auto both = format("%c%c", first, second);
 
-    if (first == '!' && second == '=')
+    if (both == "==" ||
+        both == "!=" ||
+        both == "&&" ||
+        both == "::" ||
+        both == ">=" ||
+        both == "<=")
     {
-        return new Token(TokenType.Symbol, "!=");
-    }
-
-    if (first == '&' && second == '&')
-    {
-        return new Token(TokenType.Symbol, "&&");
-    }
-
-    if (first == ':' && second == ':')
-    {
-        return new Token(TokenType.Symbol, "::");
+        return new Token(TokenType.Symbol, both);
     }
 
     return null;

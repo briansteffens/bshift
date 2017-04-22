@@ -1496,19 +1496,34 @@ Local generateRelationalOperator(GeneratorState state, Operator operator)
     auto sizeHint = renderSizeHint(leftNode, rightNode);
     state.render(format("    cmp %s%s, %s", sizeHint, left, right));
 
+    string op = null;
     switch (operator.operatorType)
     {
         case OperatorType.Equality:
-            state.render(format("    sete %s", lowByte(temp.register)));
+            op = "sete";
             break;
         case OperatorType.Inequality:
-            state.render(format("    setne %s", lowByte(temp.register)));
+            op = "setne";
+            break;
+        case OperatorType.GreaterThan:
+            op = "setg";
+            break;
+        case OperatorType.GreaterThanOrEqual:
+            op = "setge";
+            break;
+        case OperatorType.LessThan:
+            op = "setl";
+            break;
+        case OperatorType.LessThanOrEqual:
+            op = "setle";
             break;
         default:
             throw new Exception(format(
                     "Unrecognized relational operator type: %s",
                     operator.type));
     }
+
+    state.render(format("    %s %s", op, lowByte(temp.register)));
 
     return temp;
 }
