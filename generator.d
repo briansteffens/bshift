@@ -957,11 +957,15 @@ string renderImmediate(Literal literal)
     {
         return to!string(u64Literal.value);
     }
-    else
+
+    auto boolLiteral = cast(BoolLiteral)literal;
+    if (boolLiteral !is null)
     {
-        throw new Exception(
-                format("Can't render literal as immediate: %s", literal));
+        return boolLiteral.value ? "1" : "0";
     }
+
+    throw new Exception(
+            format("Can't render literal as immediate: %s", literal));
 }
 
 void generateReturn(GeneratorState state, Return r)
