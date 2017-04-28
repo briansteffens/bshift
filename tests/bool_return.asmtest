@@ -1,0 +1,22 @@
+u64 main()
+{
+    auto ret = {{ ret }};
+    return ret;
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "Return a boolean local 'true'",
+            "ret": "true",
+            "expect_status": "1"
+        },
+        {
+            "name": "Return a boolean local 'false'",
+            "ret": "false",
+            "expect_status": "0"
+        }
+    ]
+}

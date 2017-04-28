@@ -21,44 +21,21 @@ enum Register
     R13,
     R14,
     R15,
-}
 
-string lowByte(Register full)
-{
-    switch (full)
-    {
-        case Register.RAX:
-            return "al";
-        case Register.RBX:
-            return "bl";
-        case Register.RCX:
-            return "cl";
-        case Register.RDX:
-            return "dl";
-        case Register.RSI:
-            return "sil";
-        case Register.RDI:
-            return "dil";
-        case Register.R8:
-            return "r8b";
-        case Register.R9:
-            return "r9b";
-        case Register.R10:
-            return "r10b";
-        case Register.R11:
-            return "r11b";
-        case Register.R12:
-            return "r12b";
-        case Register.R13:
-            return "r13b";
-        case Register.R14:
-            return "r14b";
-        case Register.R15:
-            return "r15b";
-        default:
-            throw new Exception(
-                    format("Can't find the low byte for %s", full));
-    }
+    AL,
+    BL,
+    CL,
+    DL,
+    SIL,
+    DIL,
+    R8B,
+    R9B,
+    R10B,
+    R11B,
+    R12B,
+    R13B,
+    R14B,
+    R15B
 }
 
 enum OpSize
@@ -67,6 +44,92 @@ enum OpSize
     Word,
     Dword,
     Qword,
+}
+
+bool isRegister64(Register r)
+{
+    return r == Register.RAX || r == Register.RBX || r == Register.RCX ||
+           r == Register.RDX || r == Register.RSI || r == Register.RDI ||
+           r == Register.R8  || r == Register.R9  || r == Register.R10 ||
+           r == Register.R11 || r == Register.R12 || r == Register.R13 ||
+           r == Register.R14 || r == Register.R15;
+}
+
+bool isRegisterLow8(Register r)
+{
+    return r == Register.AL   || r == Register.BL   || r == Register.CL   ||
+           r == Register.DL   || r == Register.SIL  || r == Register.DIL  ||
+           r == Register.R8B  || r == Register.R9B  || r == Register.R10B ||
+           r == Register.R11B || r == Register.R12B || r == Register.R13B ||
+           r == Register.R14B || r == Register.R15B;
+}
+
+OpSize registerSize(Register r)
+{
+    if (isRegister64(r))
+    {
+        return OpSize.Qword;
+    }
+
+    if (isRegisterLow8(r))
+    {
+        return OpSize.Byte;
+    }
+
+    throw new Exception(format("Unrecognized register: %s", r));
+}
+
+Register lowByteRegister(Register full)
+{
+    switch (full)
+    {
+        case Register.RAX:
+            return Register.AL;
+        case Register.RBX:
+            return Register.BL;
+        case Register.RCX:
+            return Register.CL;
+        case Register.RDX:
+            return Register.DL;
+        case Register.RSI:
+            return Register.SIL;
+        case Register.RDI:
+            return Register.DIL;
+        case Register.R8:
+            return Register.R8B;
+        case Register.R9:
+            return Register.R9B;
+        case Register.R10:
+            return Register.R10B;
+        case Register.R11:
+            return Register.R11B;
+        case Register.R12:
+            return Register.R12B;
+        case Register.R13:
+            return Register.R13B;
+        case Register.R14:
+            return Register.R14B;
+        case Register.R15:
+            return Register.R15B;
+        default:
+            throw new Exception(
+                    format("Can't find the low byte for %s", full));
+    }
+}
+
+string lowByte(Register full)
+{
+    return to!string(lowByteRegister(full));
+}
+
+Register convertRegisterSize(Register r, OpSize size)
+{
+    if (size == OpSize.Byte)
+    {
+        return lowByteRegister(r);
+    }
+
+    throw new Exception(format("Can't convert %s to size %s", r, size));
 }
 
 OpSize primitiveToOpSize(Primitive t)
@@ -1000,7 +1063,17 @@ void generateReturn(GeneratorState state, Return r)
             local.register != Register.RAX)
         {
             auto localRendered = renderLocal(local);
-            state.render(format("    mov rax, %s", localRendered));
+            auto opSize = typeToOpSize(local.type);
+
+            auto target = Register.RAX;
+
+            if (opSize != OpSize.Qword)
+            {
+                target = convertRegisterSize(target, opSize);
+                state.render(format("    xor rax, rax"));
+            }
+
+            state.render(format("    mov %s, %s", target, localRendered));
         }
     }
 
