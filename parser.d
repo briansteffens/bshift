@@ -140,7 +140,7 @@ Import parseImport(TokenFeed tokens)
     FunctionSignature[] signatures;
     foreach (func; parsed.functions)
     {
-        signatures ~= func;
+        signatures ~= func.signature;
     }
 
     return new Import(name, signatures);
@@ -176,6 +176,13 @@ Module parse(string name, Token[] tokenArray)
         if (struct_ !is null)
         {
             structs ~= struct_;
+            continue;
+        }
+
+        auto method = parseMethod(tokens);
+        if (method !is null)
+        {
+            functions ~= method;
             continue;
         }
 
@@ -309,39 +316,77 @@ FunctionSignature parseFunctionSignature(TokenFeed tokens)
     auto type = parseType(tokens);
 
     // Function name
-    if (!tokens.next())
+    if (!tokens.next() || tokens.current().type != TokenType.Word)
     {
         return null;
     }
 
-    token = tokens.current();
+    auto name = tokens.current().value;
+
+    TypeSignature[] params;
+    if (!parseParameterList(tokens, &params))
+    {
+        return null;
+    }
+
+    return new FunctionSignature(type, name, params);
+}
+
+MethodSignature parseMethodSignature(TokenFeed tokens)
+{
+    // Return value
+    auto token = tokens.current();
 
     if (token.type != TokenType.Word)
     {
         return null;
     }
 
-    auto name = token.value;
+    auto returnType = parseType(tokens);
 
-    // Open parenthesis
+    // Container type
     if (!tokens.next())
     {
         return null;
     }
 
-    token = tokens.current();
+    auto containerType = parseType(tokens);
 
-    if (token.type != TokenType.Symbol || token.value != "(")
+    // Member operator ::
+    if (!tokens.next() || !tokens.current().match(TokenType.Symbol, "::"))
     {
         return null;
     }
 
-    // Parameter list
-    TypeSignature[] parameters;
+    // Function name
+    if (!tokens.next() || tokens.current().type != TokenType.Word)
+    {
+        return null;
+    }
+
+    auto functionName = tokens.current().value;
+
+    TypeSignature[] params;
+    if (!parseParameterList(tokens, &params))
+    {
+        return null;
+    }
+
+    return new MethodSignature(returnType, containerType, functionName,
+                               params);
+}
+
+bool parseParameterList(TokenFeed tokens, TypeSignature[]* params)
+{
+    // Open parenthesis
+    if (!tokens.next() || !tokens.current().match(TokenType.Symbol, "("))
+    {
+        return false;
+    }
 
     while (tokens.next())
     {
-        token = tokens.current();
+        auto token = tokens.current();
 
         // End of parameter list
         if (token.type == TokenType.Symbol && token.value == ")")
@@ -349,7 +394,7 @@ FunctionSignature parseFunctionSignature(TokenFeed tokens)
             break;
         }
 
-        parameters ~= parseTypeSignature(tokens);
+        *params ~= parseTypeSignature(tokens);
 
         // Commas separate parameters
         auto next = tokens.peek(1);
@@ -361,7 +406,7 @@ FunctionSignature parseFunctionSignature(TokenFeed tokens)
         }
     }
 
-    return new FunctionSignature(type, name, parameters);
+    return true;
 }
 
 Function parseFunction(TokenFeed tokens)
@@ -377,8 +422,23 @@ Function parseFunction(TokenFeed tokens)
 
     auto functionBody = parseBlock(tokens);
 
-    return new Function(sig.returnType, sig.name, sig.parameters,
-                        functionBody);
+    return new Function(sig, functionBody);
+}
+
+Method parseMethod(TokenFeed tokens)
+{
+    auto rewindTarget = tokens.index;
+
+    auto sig = parseMethodSignature(tokens);
+    if (sig is null)
+    {
+        tokens.index = rewindTarget;
+        return null;
+    }
+
+    auto functionBody = parseBlock(tokens);
+
+    return new Method(sig, functionBody);
 }
 
 Block parseBlock(TokenFeed tokens)
@@ -393,6 +453,7 @@ Block parseBlock(TokenFeed tokens)
 
     if (token.type != TokenType.Symbol || token.value != "{")
     {
+        writeln(token);
         throw new Exception("Expected a function body");
     }
 
@@ -841,7 +902,16 @@ class ExpressionParser
         Node op = null;
         if (operator == OperatorType.DotAccessor)
         {
-            op = new DotAccessor(left, rightItem.token.value);
+            // Check for a member call
+            auto call = cast(Call)rightItem.node;
+            if (call !is null)
+            {
+                op = new MethodCall(left, call.functionName, call.parameters);
+            }
+            else
+            {
+                op = new DotAccessor(left, rightItem.token.value);
+            }
         }
         else
         {
@@ -1310,6 +1380,26 @@ Node parseExpressionParenthesis(TokenFeed tokens)
 
 // Validation pass ------------------------------------------------------------
 
+void completeFunction(Module mod, FunctionSignature func)
+{
+    func.returnType = completeType(mod, func.returnType);
+
+    foreach (param; func.parameters)
+    {
+        param.type = completeType(mod, param.type);
+    }
+
+    // Inject 'this' parameter
+    auto method = cast(MethodSignature)func;
+    if (method !is null)
+    {
+        auto thisType = method.containerType.clone();
+        thisType.pointer = true;
+        auto thisParam = new TypeSignature(thisType, "this");
+        func.parameters = thisParam ~ func.parameters;
+    }
+}
+
 void validate(Module mod)
 {
     // Complete struct definitions
@@ -1327,15 +1417,17 @@ void validate(Module mod)
         global.signature.type = completeType(mod, global.signature.type);
     }
 
+    // Complete method container types
+    foreach (method; mod.justMethods())
+    {
+        method.methodSignature.containerType = completeType(mod,
+                method.methodSignature.containerType);
+    }
+
     // Complete function signatures
     foreach (func; mod.functions)
     {
-        func.returnType = completeType(mod, func.returnType);
-
-        foreach (param; func.parameters)
-        {
-            param.type = completeType(mod, param.type);
-        }
+        completeFunction(mod, func.signature);
     }
 
     // Complete function bodies
@@ -1434,6 +1526,20 @@ void validateNode(Module mod, Node node)
         validateNode(mod, childNode);
     }
 
+    auto methodCall = cast(MethodCall)node;
+    if (methodCall !is null)
+    {
+        methodCall.methodSignature = mod.findMethod(methodCall);
+        node.retype();
+
+        // Inject 'this' argument
+        auto thisArg = new Reference(methodCall.container);
+        thisArg.retype();
+        methodCall.parameters = thisArg ~ methodCall.parameters;
+
+        return;
+    }
+
     auto call = cast(Call)node;
     if (call !is null)
     {
@@ -1481,7 +1587,7 @@ TypeSignature findLocal(Module mod, Node node, string name)
         }
     }
 
-    throw new Exception("Found an orphaned node");
+    throw new Exception(format("Found an orphaned node: %s", node));
 }
 
 Statement nextWithBlockParent(Statement st)
@@ -1538,11 +1644,12 @@ TypeSignature findLocal(Module mod, Statement statement, string name)
         return findLocal(mod, parentStatement, name);
     }
 
-    // Local not found in this function: check the function parameters
+    // Local not found in this function: check the function/method parameters
     auto func = cast(Function)parent.parent;
     if (func !is null)
     {
-        foreach (param; func.parameters)
+        auto parameters = func.signature.parameters;
+        foreach (param; parameters)
         {
             if (param.name == name)
             {

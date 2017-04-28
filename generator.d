@@ -453,9 +453,10 @@ string[] generate(Module mod)
     // Render text section
     state.render("section .text");
 
-    for (int i = 0; i < mod.functions.length; i++)
+    // Generate functions
+    foreach (func; mod.functions)
     {
-        generateFunction(state, mod.functions[i]);
+        generateFunction(state, func);
     }
 
     // Bootstrap the main function if there is one
@@ -465,7 +466,7 @@ string[] generate(Module mod)
 
         state.render("global _start");
         state.render("_start:");
-        state.render(format("    call %s", mainFunc.name));
+        state.render(format("    call %s", mainFunc.signature.name));
         state.render(format("    mov rdi, rax"));
         version (OSX)
         {
@@ -523,19 +524,30 @@ void placeParameter(Local local, Register[] registerList, int index)
     local.register = registerList[index];
 }
 
+string renderName(FunctionSignature sig)
+{
+    auto method = cast(MethodSignature)sig;
+    if (method !is null)
+    {
+        return format("%s_%s", method.containerType, method.name);
+    }
+
+    return sig.name;
+}
+
 void generateFunction(GeneratorState state, Function func)
 {
     int stackOffset = 0;
 
     // Function parameters need to be added to locals
-    for (int i = 0; i < func.parameters.length; i++)
+    for (int i = 0; i < func.signature.parameters.length; i++)
     {
-        auto local = new Local(func.parameters[i].type,
-                               func.parameters[i].name);
+        auto local = new Local(func.signature.parameters[i].type,
+                               func.signature.parameters[i].name);
 
         placeParameter(local, callRegisters, i);
 
-        stackOffset += typeSize(func.parameters[i].type);
+        stackOffset += typeSize(func.signature.parameters[i].type);
         local.stackOffset = stackOffset;
 
         state.locals ~= local;
@@ -577,8 +589,8 @@ void generateFunction(GeneratorState state, Function func)
     }
 
     // Function prologue TODO: add export/public keyword to control this
-    state.render(format("global %s", func.name));
-    state.render(format("%s:", func.name));
+    state.render(format("global %s", renderName(func.signature)));
+    state.render(format("%s:", renderName(func.signature)));
     state.render(format("    push rbp"));
     state.render(format("    mov rbp, rsp"));
 
@@ -1663,11 +1675,14 @@ Local generateCall(GeneratorState state, Call call)
 
     // Make the actual call
     auto func = call.targetSignature;
-    state.render(format("    call %s", func.name));
+    state.render(format("    call %s", renderName(func)));
 
     // Make sure the function gets listed as an extern
     auto bshiftFunc = cast(Function)func;
-    if (bshiftFunc is null || bshiftFunc.mod != state.mod)
+    auto funcLocal = bshiftFunc !is null && bshiftFunc.mod == state.mod;
+    auto bshiftMethod = cast(Method)func;
+    auto methodLocal = bshiftMethod !is null && bshiftMethod.mod == state.mod;
+    if (!funcLocal && !methodLocal)
     {
         state.addExtern(func.name);
     }

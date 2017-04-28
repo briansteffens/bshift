@@ -508,6 +508,7 @@ class SizeOf : Node
 
 class Call : Node
 {
+    // TODO: doesn't apply to MethodCall
     string moduleName;
     string functionName;
     Node[] parameters;
@@ -553,6 +554,70 @@ class Call : Node
     override Node[] childNodes()
     {
         return this.parameters;
+    }
+}
+
+class MethodCall : Call
+{
+    Node container;
+
+    this(Node container, string functionName, Node[] parameters)
+    {
+        super(null, functionName, parameters);
+
+        this.container = container;
+
+        this.container.parent = this;
+    }
+
+    override string toString()
+    {
+        return format("%s.%s", this.container, super.toString());
+    }
+
+    override Node[] childNodes()
+    {
+        auto ret = super.childNodes();
+
+        // Add container if it isn't already a parameter
+        bool found = false;
+        foreach (r; ret)
+        {
+            if (r == this.container)
+            {
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+        {
+            ret ~= this.container;
+        }
+
+        return ret;
+    }
+
+    @property MethodSignature methodSignature()
+    {
+        if (this.targetSignature is null)
+        {
+            return null;
+        }
+
+        auto ret = cast(MethodSignature)this.targetSignature;
+        if (ret is null)
+        {
+            throw new Exception(format(
+                    "MethodCall has a bad target %s", this));
+        }
+
+        return ret;
+    }
+
+    @property MethodSignature methodSignature(MethodSignature sig)
+    {
+        this.targetSignature = sig;
+        return this.methodSignature;
     }
 }
 
@@ -751,7 +816,7 @@ class Struct
             ret ~= format("    %s;\n", member);
         }
 
-        return ret ~ "}";
+        return ret ~ "}\n";
     }
 }
 
@@ -1103,11 +1168,7 @@ class Block : Statement
     }
 }
 
-class Definition
-{
-}
-
-class FunctionSignature : Definition
+class FunctionSignature
 {
     Type returnType;
     string name;
@@ -1118,6 +1179,11 @@ class FunctionSignature : Definition
         this.returnType = returnType;
         this.name = name;
         this.parameters = parameters;
+    }
+
+    string fullName()
+    {
+        return this.name;
     }
 
     override string toString()
@@ -1134,19 +1200,42 @@ class FunctionSignature : Definition
             params ~= param.toString();
         }
 
-        return format("%s %s(%s)", this.returnType, this.name, params);
+        return format("%s %s(%s)", this.returnType, this.fullName(), params);
     }
 }
 
-class Function : FunctionSignature
+class MethodSignature : FunctionSignature
 {
+    Type containerType;
+
+    this(Type returnType, Type containerType, string methodName,
+         TypeSignature[] parameters)
+    {
+        super(returnType, methodName, parameters);
+        this.containerType = containerType;
+    }
+
+    override string fullName()
+    {
+        return format("%s::%s", this.containerType, this.name);
+    }
+
+    bool matchMethodCall(MethodCall call)
+    {
+        return call.container.type.compare(this.containerType) &&
+               call.functionName == this.name;
+    }
+}
+
+class Function
+{
+    FunctionSignature signature;
     Module mod;
     Block block;
 
-    this(Type returnType, string name, TypeSignature[] parameters, Block block)
+    this(FunctionSignature signature, Block block)
     {
-        super(returnType, name, parameters);
-
+        this.signature = signature;
         this.block = block;
 
         this.block.parent = this;
@@ -1154,7 +1243,37 @@ class Function : FunctionSignature
 
     override string toString()
     {
-        return format("%s\n%s", super.toString(), this.block);
+        return format("%s\n%s", this.signature, this.block);
+    }
+}
+
+class Method : Function
+{
+    this(MethodSignature signature, Block block)
+    {
+        super(signature, block);
+    }
+
+    @property MethodSignature methodSignature()
+    {
+        if (this.signature is null)
+        {
+            return null;
+        }
+
+        auto ret = cast(MethodSignature)this.signature;
+        if (ret is null)
+        {
+            throw new Exception(format("Method has a bad signature %s", this));
+        }
+
+        return ret;
+    }
+
+    @property MethodSignature methodSignature(MethodSignature sig)
+    {
+        this.signature = sig;
+        return this.methodSignature;
     }
 }
 
@@ -1277,11 +1396,42 @@ class Module
         return ret;
     }
 
-    bool functionExists(string name)
+    Function[] justFunctions()
     {
+        Function[] ret;
+
         foreach (func; this.functions)
         {
-            if (func.name == name)
+            if (cast(Method)func is null)
+            {
+                ret ~= func;
+            }
+        }
+
+        return ret;
+    }
+
+    Method[] justMethods()
+    {
+        Method[] ret;
+
+        foreach (func; this.functions)
+        {
+            auto method = cast(Method)func;
+            if (method !is null)
+            {
+                ret ~= method;
+            }
+        }
+
+        return ret;
+    }
+
+    bool functionExists(string name)
+    {
+        foreach (func; this.justFunctions())
+        {
+            if (func.signature.name == name)
             {
                 return true;
             }
@@ -1292,15 +1442,30 @@ class Module
 
     Function findFunction(string name)
     {
-        foreach (func; this.functions)
+        foreach (func; this.justFunctions())
         {
-            if (func.name == name)
+            if (func.signature.name == name)
             {
                 return func;
             }
         }
 
         throw new Exception(format("Function %s not found", name));
+    }
+
+    MethodSignature findMethod(MethodCall call)
+    {
+        // Search the current module
+        foreach (method; this.justMethods())
+        {
+            if (method.methodSignature.matchMethodCall(call))
+            {
+                return method.methodSignature;
+            }
+        }
+
+        // TODO: Search imports
+        throw new Exception(format("Method %s not found", call));
     }
 
     FunctionSignature findFunction(Call call)
@@ -1314,11 +1479,11 @@ class Module
         // Search the current module
         if (call.moduleName is null)
         {
-            foreach (func; this.functions)
+            foreach (func; this.justFunctions())
             {
-                if (func.name == call.functionName)
+                if (func.signature.name == call.functionName)
                 {
-                    return func;
+                    return func.signature;
                 }
             }
 
@@ -1331,7 +1496,8 @@ class Module
                 }
             }
 
-            throw new Exception(format("Function %s not found", name));
+            throw new Exception(format("Function %s not found",
+                    call.functionName));
         }
 
         // Search imported modules

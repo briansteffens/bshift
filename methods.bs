@@ -1,0 +1,33 @@
+struct rect
+{
+    u64 width;
+    u64 height;
+}
+
+u64 rect::equals(rect* other)
+{
+    if (this.width != other.width)
+    {
+        return 0;
+    }
+
+    if (this.height != other.height)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+u64 main()
+{
+    rect r1;
+    r1.width = 3;
+    r1.height = 7;
+
+    rect r2;
+    r2.width = 3;
+    r2.height = 7;
+
+    return r1.equals(&r2);
+}
