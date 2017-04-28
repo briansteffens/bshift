@@ -1,0 +1,52 @@
+struct point
+{
+    u64 x;
+    u64 y;
+}
+
+u64 point::equals(point* other)
+{
+    if (this.x != other.x)
+    {
+        return 0;
+    }
+
+    if (this.y != other.y)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+u64 main()
+{
+    point p1;
+    p1.x = 3;
+    p1.y = 7;
+
+    point p2;
+    p2.x = {{ p2.x }};
+    p2.y = {{ p2.y }};
+
+    return p1.equals(&p2);
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "call a struct method that takes an argument; returns 1",
+            "p2.x": "3",
+            "p2.y": "7",
+            "expect_status": "1"
+        },
+        {
+            "name": "call a struct method that takes an argument; returns 1",
+            "p2.x": "4",
+            "p2.y": "7",
+            "expect_status": "0"
+        }
+    ]
+}
