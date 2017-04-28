@@ -1143,6 +1143,35 @@ class ExpressionParser
         return true;
     }
 
+    bool consumeOperator()
+    {
+        this.current = this.input.current();
+
+        if (current.type != TokenType.Symbol)
+        {
+            return false;
+        }
+
+        try
+        {
+            int cur = operatorPrecedence(parseOperatorType(current.value));
+            int prev = operatorPrecedence(parseOperatorType(
+                    this.operators.peek(0).token.value));
+
+            if (prev >= cur)
+            {
+                this.consume();
+                return true;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
+        return false;
+    }
+
     bool next()
     {
         if (!this.input.next())
@@ -1159,24 +1188,8 @@ class ExpressionParser
             return false;
         }
 
-        if (current.type == TokenType.Symbol)
-        {
-            try
-            {
-                int cur = operatorPrecedence(parseOperatorType(current.value));
-                int prev = operatorPrecedence(parseOperatorType(
-                        this.operators.peek(0).token.value));
-
-                if (prev >= cur)
-                {
-                    this.consume();
-                    //return true;
-                }
-            }
-            catch
-            {
-            }
-        }
+        // Consume as many operators as possible
+        while (this.consumeOperator()) {}
 
         // Detect sizeof
         if (this.consumeSizeOf())
