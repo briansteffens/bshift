@@ -143,7 +143,7 @@ string[] assemble(Assembler assembler, string[] sources)
             throw new Exception(format("Failed to assemble %s", source));
         }
 
-        ret ~= source.replace(".asm", ".o");
+        ret ~= source[0..$-4] ~ ".o";
     }
 
     return ret;
