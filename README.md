@@ -7,9 +7,12 @@
 * nasm on OS X
 * [basm](https://github.com/briansteffens/basm) on Linux
 * GNU make
+* [asmtest](https://github.com/briansteffens/asmtest) for tests
 
 ### Usage
 
 ```
-make && make test
+make
+bin/bshift test.bs
+./a.out
 ```

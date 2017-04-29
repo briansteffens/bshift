@@ -4,3 +4,7 @@ main
 *.asm
 .asmtest
 test
+bin/bshift
+bin/bshift.o
+lib/*.asm
+lib/*.o

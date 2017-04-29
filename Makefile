@@ -1,21 +1,8 @@
 .PHONY: bshift test clean
-default: main
+default: bin/bshift
 
-main: main.d globals.d lexer.d ast.d parser.d generator.d
-	ldc $^
-
-uname := $(shell uname -s)
-asm = basm
-ifeq ($(uname), Darwin)
-	asm = nasm -f macho64
-endif
-
-test: test.bs
-	./main -v $<
-	$(asm) -v ${@}.asm
-	ld -e _start ${@}.o -o $@
-	./$@
-
+bin/bshift: src/main.d src/globals.d src/lexer.d src/ast.d src/parser.d src/generator.d
+	ldc -of=bin/bshift $^
 
 clean:
-	rm -rf main test *.asm *.o a.out
+	rm -rf bin/bshift bin/bshift.o *.asm *.o lib/*.asm lib/*.o

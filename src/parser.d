@@ -149,8 +149,7 @@ Import parseImport(TokenFeed tokens)
     string filename = null;
     foreach (possible; possibilities)
     {
-        writeln(possible);
-        if (possible.isFile)
+        if (exists(possible))
         {
             filename = possible;
             break;
@@ -159,20 +158,9 @@ Import parseImport(TokenFeed tokens)
 
     if (filename is null)
     {
-        string paths = "";
-        foreach (possible; possibilities)
-        {
-            if (paths != "")
-            {
-                paths ~= ", ";
-            }
-
-            paths ~= possible;
-        }
-
         throw new Exception(format(
                 "Couldn't find a file to match the imported module %s. " ~
-                "Checked: %s", name, paths));
+                "Checked: %s", name, possibilities));
     }
 
     // Parse the import
@@ -184,7 +172,7 @@ Import parseImport(TokenFeed tokens)
         signatures ~= func.signature;
     }
 
-    return new Import(name, signatures);
+    return new Import(filename, name, signatures);
 }
 
 Module parse(string name, Token[] tokenArray)

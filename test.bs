@@ -1,24 +1,15 @@
-struct point
-{
-    u64 x;
-    u64 y;
-}
-
-struct rect
-{
-    point pos;
-    point size;
-}
+import heap;
 
 u64 main()
 {
-    rect r;
+    auto t0 = heap::init();
 
-    r.pos.x = 3;
-    r.pos.y = 7;
+    u64* a = heap::allocate(sizeof(u64));
+    *a = 3;
 
-    r.size.x = 5;
-    r.size.y = 10;
+    auto t1 = heap::free(a);
 
-    return r.size.x + r.pos.y;
+    u64* b = heap::allocate(sizeof(u64));
+
+    return *b;
 }

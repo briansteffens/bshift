@@ -1279,12 +1279,14 @@ class Method : Function
 
 class Import
 {
+    string filename;
     string name;
     FunctionSignature[] functions;
     Struct[] structs;
 
-    this(string name, FunctionSignature[] functions)
+    this(string filename, string name, FunctionSignature[] functions)
     {
+        this.filename = filename;
         this.name = name;
         this.functions = functions;
     }

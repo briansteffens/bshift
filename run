@@ -5,12 +5,9 @@ echo && echo && echo && echo && echo && echo && echo && echo && echo && \
 echo && echo && echo && echo && echo && echo && echo && echo && echo && \
 echo && echo && echo && echo && echo && echo && echo && echo && echo && \
 
-ldc -g main.d globals.d lexer.d ast.d parser.d generator.d && \
+make && \
 
-./main -v "${1}.bs" && \
-basm "${1}.asm" && \
-
-ld "${1}.o" && \
+bin/bshift -v "${1}" && \
 
 ./a.out; \
 OUTPUT="$?" && \
