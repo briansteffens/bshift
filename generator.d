@@ -353,11 +353,11 @@ class GeneratorState
 
     Register findFreeRegister()
     {
-        Register ret = Register.min;
+        Register ret = Register.RAX;
 
         while (registerTaken(ret))
         {
-            if (ret == Register.max)
+            if (ret == Register.R15)
             {
                 throw new Exception("Out of registers!");
             }
@@ -922,6 +922,7 @@ void generateAssignmentShared(GeneratorState state, Node target,
 {
     bool targetDereference = false;
     Local tempTarget = null;
+    Local tempTarget2 = null;
 
     auto deref = cast(Dereference)target;
     if (deref !is null)
@@ -991,19 +992,30 @@ void generateAssignmentShared(GeneratorState state, Node target,
     auto binding = cast(Binding)value;
     if (binding !is null)
     {
-        tempTarget = state.addTemp(binding.type);
-        state.render(format("    mov %s, %s", tempTarget.register,
+        tempTarget2 = state.addTemp(binding.type);
+        state.render(format("    mov %s, %s", tempTarget2.register,
                             valueRendered));
-        valueRendered = format("%s", tempTarget.register);
+        valueRendered = format("%s", tempTarget2.register);
         state.render(format("; %s = %s", target, binding.name));
     }
 
     state.render(format("    mov %s%s, %s", sizeHint, targetRendered,
                         valueRendered));
 
+    auto valueLocal = cast(Local)value;
+    if (valueLocal !is null)
+    {
+        state.freeTemp(valueLocal);
+    }
+
     if (tempTarget !is null)
     {
         state.freeTemp(tempTarget);
+    }
+
+    if (tempTarget2 !is null)
+    {
+        state.freeTemp(tempTarget2);
     }
 
     if (indexer !is null)
