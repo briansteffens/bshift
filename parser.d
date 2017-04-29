@@ -1054,7 +1054,7 @@ class ExpressionParser
         {
             castType = parsePrimitive(cur.value);
         }
-        catch
+        catch (Throwable)
         {
             return false;
         }
@@ -1164,7 +1164,7 @@ class ExpressionParser
                 return true;
             }
         }
-        catch
+        catch (Throwable)
         {
             return false;
         }
@@ -1504,7 +1504,7 @@ Type completeType(Module mod, Type type)
         {
             ret = new PrimitiveType(parsePrimitive(incomplete.name));
         }
-        catch
+        catch (Throwable)
         {
         }
     }
