@@ -163,6 +163,15 @@ Token[] lex(string src)
     return tokens;
 }
 
+alias readFunction = Token function(Reader);
+
+immutable readFunction[] readFunctions = [
+    &readNumeric,
+    &readSymbol,
+    &readQuote,
+    &readWord,
+];
+
 // Read the next token from the reader.
 Token read(Reader r)
 {
@@ -180,34 +189,15 @@ Token read(Reader r)
         return null;
     }
 
-    Token ret;
-
-    // Try to read a numeric token
-    ret = tryRead(r, &readNumeric);
-    if (ret !is null)
+    // Try all the classes of token we know how to read
+    foreach (readFunc; readFunctions)
     {
-        return ret;
-    }
+        auto ret = tryRead(r, readFunc);
 
-    // Try to read a symbol tokoen
-    ret = tryRead(r, &readSymbol);
-    if (ret !is null)
-    {
-        return ret;
-    }
-
-    // Try to read a double quote
-    ret = tryRead(r, &readQuote);
-    if (ret !is null)
-    {
-        return ret;
-    }
-
-    // Try to read a word token
-    ret = tryRead(r, &readWord);
-    if (ret !is null)
-    {
-        return ret;
+        if (ret !is null)
+        {
+            return ret;
+        }
     }
 
     throw new Exception(format(
@@ -216,7 +206,7 @@ Token read(Reader r)
 
 // Run the function f and advance the reader only if f successfully read a
 // token from the reader.
-Token tryRead(Reader r, Token function(Reader) f)
+Token tryRead(Reader r, readFunction f)
 {
     // Pass f a clone of the reader so if it fails to read a token it won't
     // mess up the reader in the process.
