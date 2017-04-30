@@ -820,6 +820,8 @@ Node parseToken(Token t)
                 default:
                     return new Binding(null, t.value);
             }
+        case TokenType.DoubleQuote:
+            return new StringLiteral(t.value);
         default:
             throw new Exception(format("Unrecognized token type: %s", t.type));
     }

@@ -490,6 +490,22 @@ class BoolLiteral : Literal
     }
 }
 
+class StringLiteral : Literal
+{
+    string value;
+
+    this(string value)
+    {
+        super(Primitive.U64);
+        this.value = value;
+    }
+
+    override string toString()
+    {
+        return format("\"%s\"", this.value);
+    }
+}
+
 class SizeOf : Node
 {
     Type argument;

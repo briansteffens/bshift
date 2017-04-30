@@ -1,0 +1,30 @@
+u64 main()
+{
+    u8* str = "hi";
+
+    u8* ptr = str + {{ index }};
+
+    return *ptr;
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "first character",
+            "index": "0",
+            "expect_status": "104"
+        },
+        {
+            "name": "second character",
+            "index": "1",
+            "expect_status": "105"
+        },
+        {
+            "name": "null termination character",
+            "index": "2",
+            "expect_status": "0"
+        }
+    ]
+}

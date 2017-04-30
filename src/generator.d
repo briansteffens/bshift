@@ -222,6 +222,11 @@ bool isCallerPreserved(Register r)
            r == Register.R11;
 }
 
+string renderStringLiteralName(ulong index)
+{
+    return format("string_literal_%d", index);
+}
+
 class GeneratorState
 {
     Module mod;
@@ -233,6 +238,7 @@ class GeneratorState
 
     string[] labels;
     string[] externs;
+    string[] stringLiterals;
 
     int nextTempIndex = 0;
 
@@ -249,6 +255,12 @@ class GeneratorState
         }
 
         this.output ~= line;
+    }
+
+    string addStringLiteral(string value)
+    {
+        this.stringLiterals ~= value;
+        return renderStringLiteralName(this.stringLiterals.length - 1);
     }
 
     void addExtern(string name)
@@ -445,7 +457,7 @@ class GeneratorState
     }
 }
 
-void renderGlobal(GeneratorState state, Global global)
+string renderGlobal(GeneratorState state, Global global)
 {
     string type = null;
 
@@ -485,7 +497,13 @@ void renderGlobal(GeneratorState state, Global global)
         value = renderNode(state, global.value);
     }
 
-    state.render(format("    %s: %s %s", global.signature.name, type, value));
+    return format("    %s: %s %s", global.signature.name, type, value);
+}
+
+string renderStringLiteral(GeneratorState state, ulong index)
+{
+    return format("    %s: db \"%s\", 0", renderStringLiteralName(index),
+            state.stringLiterals[index]);
 }
 
 string[] generate(Module mod)
@@ -493,24 +511,11 @@ string[] generate(Module mod)
     auto state = new GeneratorState(mod);
 
     // Render data section
-    auto data = "";
-    if (mod.globals.length > 0)
-    {
-        state.render("section .data");
+    string[] data;
 
-        foreach (global; mod.globals)
-        {
-            renderGlobal(state, global);
-        }
-    }
-    else
+    foreach (global; mod.globals)
     {
-        version (OSX)
-        {
-            // Mac requires dummy data section with dummy value for some reason
-            state.render("section .data");
-            state.render("_dummy: db 0");
-        }
+        data ~= renderGlobal(state, global);
     }
 
     // Render text section
@@ -542,6 +547,26 @@ string[] generate(Module mod)
         state.render("    syscall");
     }
 
+    // Render string literals
+    for (ulong i = 0; i < state.stringLiterals.length; i++)
+    {
+        data ~= renderStringLiteral(state, i);
+    }
+
+    if (data.length > 0)
+    {
+        data = "section .data" ~ data;
+    }
+    else
+    {
+        version (OSX)
+        {
+            // Mac requires dummy data section with dummy value for some reason
+            data ~= "section .data";
+            data ~= "_dummy: db 0";
+        }
+    }
+
     // Render externs
     string[] externs;
     foreach (ext; state.externs)
@@ -549,7 +574,7 @@ string[] generate(Module mod)
         externs ~= format("extern %s", ext);
     }
 
-    state.output = externs ~ state.output;
+    state.output = data ~ externs ~ state.output;
 
     return state.output;
 }
@@ -1840,6 +1865,18 @@ string renderNode(GeneratorState state, Node node)
     if (boolLiteral !is null)
     {
         return boolLiteral.value ? "1" : "0";
+    }
+
+    auto stringLiteral = cast(StringLiteral)node;
+    if (stringLiteral !is null)
+    {
+        auto literalName = state.addStringLiteral(stringLiteral.value);
+
+        // TODO: free temp
+        auto temp = state.addTemp(new PrimitiveType(Primitive.U64));
+        state.render(format("    mov %s, %s", temp.register, literalName));
+
+        return to!string(temp.register);
     }
 
     auto operator = cast(Operator)node;
