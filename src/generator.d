@@ -641,7 +641,7 @@ void generateFunction(GeneratorState state, Function func)
 
         placeParameter(local, callRegisters, i);
 
-        stackOffset += typeSize(func.signature.parameters[i].type);
+        stackOffset -= typeSize(func.signature.parameters[i].type);
         local.stackOffset = stackOffset;
 
         state.locals ~= local;
@@ -676,7 +676,7 @@ void generateFunction(GeneratorState state, Function func)
             size = 8;
         }
 
-        stackOffset += size;
+        stackOffset -= size;
         local.stackOffset = stackOffset;
 
         state.locals ~= local;
@@ -688,9 +688,9 @@ void generateFunction(GeneratorState state, Function func)
     state.render(format("    push rbp"));
     state.render(format("    mov rbp, rsp"));
 
-    if (stackOffset > 0)
+    if (stackOffset < 0)
     {
-        state.render(format("    sub rsp, %s", stackOffset));
+        state.render(format("    sub rsp, %s", stackOffset * -1));
     }
 
     // Copy locals into the stack
@@ -698,8 +698,8 @@ void generateFunction(GeneratorState state, Function func)
     {
         if (local.location == Location.Register)
         {
-            state.render(format("    mov [rbp - %d], %s",
-                    local.stackOffset, local.register));
+            state.render(format("    mov %s, %s",
+                    renderStackLocation(local.stackOffset), local.register));
 
             local.location = Location.Stack;
         }
@@ -709,6 +709,18 @@ void generateFunction(GeneratorState state, Function func)
 
     state.locals.length = 0;
     state.temps.length = 0;
+}
+
+string renderStackLocation(int offset)
+{
+    if (offset < 0)
+    {
+        return format("[rbp - %d]", offset * -1);
+    }
+    else
+    {
+        return format("[rbp + %d]", offset);
+    }
 }
 
 void generateStatement(GeneratorState state, Statement st)
@@ -1838,7 +1850,7 @@ string renderLocal(Local local)
 
             return format("%s", local.register);
         case Location.Stack:
-            return format("[rbp-%d]", local.stackOffset);
+            return renderStackLocation(local.stackOffset);
         case Location.DataSection:
             return format("[%s]", local.name);
         default:
