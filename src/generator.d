@@ -502,8 +502,14 @@ string renderGlobal(GeneratorState state, Global global)
 
 string renderStringLiteral(GeneratorState state, ulong index)
 {
-    return format("    %s: db \"%s\", 0", renderStringLiteralName(index),
-            state.stringLiterals[index]);
+    auto value = "0";
+
+    if (state.stringLiterals[index] != "")
+    {
+        value = format("\"%s\", ", state.stringLiterals[index]);
+    }
+
+    return format("    %s: db %s", renderStringLiteralName(index), value);
 }
 
 string[] generate(Module mod)
