@@ -656,6 +656,12 @@ void generateFunction(GeneratorState state, Function func)
         state.locals ~= local;
     }
 
+    // Shift locals down after all registers if it's a variadic function
+    if (func.signature.variadic)
+    {
+        stackOffset = cast(int)callRegisters.length * -8;
+    }
+
     // Register locals
     auto declarations = func.block.declarations();
     foreach (decl; declarations)
@@ -711,6 +717,17 @@ void generateFunction(GeneratorState state, Function func)
                     renderStackLocation(local.stackOffset), local.register));
 
             local.location = Location.Stack;
+        }
+    }
+
+    // Copy variadic parameters passed through registers into the stack
+    if (func.signature.variadic)
+    {
+        for (int i = cast(int)func.signature.parameters.length;
+             i < callRegisters.length; i++)
+        {
+            state.render(format("    mov %s, %s",
+                    renderStackLocation(i * -8 - 8), callRegisters[i]));
         }
     }
 
@@ -1811,6 +1828,11 @@ Local generateCall(GeneratorState state, Call call)
         return generateSysCall(state, call);
     }
 
+    if (call.functionName == "variadic")
+    {
+        return generateVariadic(state, call);
+    }
+
     auto callerPreserved = prepareCallParams(state, call.parameters,
             callRegisters);
 
@@ -1845,6 +1867,54 @@ Local generateSysCall(GeneratorState state, Call call)
 
     return cleanupCall(state, new PrimitiveType(Primitive.U64),
             callerPreserved);
+}
+
+Local generateVariadic(GeneratorState state, Call call)
+{
+    auto func = call.containingFunction();
+
+    if (func is null)
+    {
+        throw new Exception("variadic() called outside of a function");
+    }
+
+    if (!func.variadic)
+    {
+        throw new Exception("variadic() called from a non-variadic function");
+    }
+
+    auto indexNode = generateNode(state, call.parameters[0]);
+    auto index = requireLocalInRegister(state, indexNode);
+
+    auto ret = state.addTemp(new PrimitiveType(Primitive.U64));
+
+    auto inStack = state.addLabel("variadic_stack_");
+    auto end = state.addLabel("variadic_end_");
+
+    // Skip non-variadic parameters
+    state.render(format("    add %s, %d", index.register,
+                                          func.parameters.length));
+
+    // Different logic for stack- vs register-passed arguments
+    state.render(format("    cmp %s, 5", index.register));
+    state.render(format("    jg %s", inStack));
+
+    // Parameter was passed through a register
+    state.render(format("    neg %s", index.register));
+    state.render(format("    jmp %s", end));
+
+    // Parameter was passed on the stack
+    state.render(format("%s:", inStack));
+    state.render(format("    sub %s, 3", index.register));
+
+    // End if
+    state.render(format("%s:", end));
+    state.render(format("    mov %s, [rbp + 8 * %s - 8]", ret.register,
+                        index.register));
+
+    state.freeTemp(index);
+
+    return ret;
 }
 
 string renderLocal(Local local)

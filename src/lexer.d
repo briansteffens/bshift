@@ -50,7 +50,9 @@ immutable string[] symbols =
     "[", "]",
     "{", "}",
 
-    "==", "!=", "&&", "::", ">=", "<="
+    "==", "!=", "&&", "::", ">=", "<=",
+
+    "...",
 ];
 
 pure bool isSymbol(string s)
@@ -130,9 +132,14 @@ class Reader
         return this.input[this.index];
     }
 
+    pure dchar peek(int distance)
+    {
+        return this.input[this.index + distance];
+    }
+
     pure dchar next()
     {
-        return this.input[this.index + 1];
+        return this.peek(1);
     }
 
     pure Reader clone()
@@ -303,25 +310,37 @@ Token readNumeric(Reader r)
 
 Token readSymbol(Reader r)
 {
-    string first = to!string(r.current());
+    string[] possibilities;
+
+    if (r.input.length - r.index >= 3)
+    {
+        possibilities ~= (to!string(r.current()) ~
+                          to!string(r.next()) ~
+                          to!string(r.peek(2)));
+    }
 
     if (!r.isLast())
     {
-        string both = first ~ to!string(r.next());
+        possibilities ~= (to!string(r.current()) ~
+                          to!string(r.next()));
+    }
 
-        if (isSymbol(both))
+    possibilities ~= to!string(r.current());
+
+    foreach (possibility; possibilities)
+    {
+        if (isSymbol(possibility))
         {
-            r.advance();
-            return new Token(TokenType.Symbol, both);
+            for (int i = 0; i < possibility.length - 1; i++)
+            {
+                r.advance();
+            }
+
+            return new Token(TokenType.Symbol, possibility);
         }
     }
 
-    if (!isSymbol(first))
-    {
-        return null;
-    }
-
-    return new Token(TokenType.Symbol, first);
+    return null;
 }
 
 Token readWord(Reader r)

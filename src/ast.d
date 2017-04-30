@@ -291,11 +291,16 @@ class Line
     }
 }
 
-abstract class Node
+interface InsideFunction
 {
-    Line   line;
-    Type   type;
-    Object parent;
+    FunctionSignature containingFunction();
+}
+
+abstract class Node : InsideFunction
+{
+    Line           line;
+    Type           type;
+    InsideFunction parent;
 
     Node[] childNodes()
     {
@@ -311,6 +316,16 @@ abstract class Node
         {
             parentNode.retype();
         }
+    }
+
+    FunctionSignature containingFunction()
+    {
+        if (this.parent is null)
+        {
+            return null;
+        }
+
+        return this.parent.containingFunction();
     }
 }
 
@@ -836,10 +851,10 @@ class Struct
     }
 }
 
-abstract class Statement
+abstract class Statement : InsideFunction
 {
-    Line   line;
-    Object parent;
+    Line           line;
+    InsideFunction parent;
 
     this(Line line)
     {
@@ -859,6 +874,16 @@ abstract class Statement
     Node[] childNodes()
     {
         return [];
+    }
+
+    FunctionSignature containingFunction()
+    {
+        if (parent is null)
+        {
+            return null;
+        }
+
+        return parent.containingFunction();
     }
 }
 
@@ -1189,12 +1214,15 @@ class FunctionSignature
     Type returnType;
     string name;
     TypeSignature[] parameters;
+    bool variadic;
 
-    this(Type returnType, string name, TypeSignature[] parameters)
+    this(Type returnType, string name, TypeSignature[] parameters,
+         bool variadic)
     {
         this.returnType = returnType;
         this.name = name;
         this.parameters = parameters;
+        this.variadic = variadic;
     }
 
     string fullName()
@@ -1216,6 +1244,16 @@ class FunctionSignature
             params ~= param.toString();
         }
 
+        if (this.variadic)
+        {
+            if (params != "")
+            {
+                params ~= ", ";
+            }
+
+            params ~= "...";
+        }
+
         return format("%s %s(%s)", this.returnType, this.fullName(), params);
     }
 }
@@ -1225,9 +1263,9 @@ class MethodSignature : FunctionSignature
     Type containerType;
 
     this(Type returnType, Type containerType, string methodName,
-         TypeSignature[] parameters)
+         TypeSignature[] parameters, bool variadic)
     {
-        super(returnType, methodName, parameters);
+        super(returnType, methodName, parameters, variadic);
         this.containerType = containerType;
     }
 
@@ -1243,7 +1281,7 @@ class MethodSignature : FunctionSignature
     }
 }
 
-class Function
+class Function : InsideFunction
 {
     FunctionSignature signature;
     Module mod;
@@ -1260,6 +1298,11 @@ class Function
     override string toString()
     {
         return format("%s\n%s", this.signature, this.block);
+    }
+
+    FunctionSignature containingFunction()
+    {
+        return this.signature;
     }
 }
 
@@ -1491,7 +1534,17 @@ class Module
         if (call.functionName == "syscall")
         {
             return new FunctionSignature(new PrimitiveType(Primitive.U64),
-                    "syscall", []);
+                    "syscall", [], false);
+        }
+
+        if (call.functionName == "variadic")
+        {
+            return new FunctionSignature(
+                    new PrimitiveType(Primitive.U64),
+                    "variadic",
+                    [new TypeSignature(new PrimitiveType(Primitive.U64),
+                                       "index")],
+                    false);
         }
 
         // Search the current module

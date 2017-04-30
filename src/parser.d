@@ -353,12 +353,13 @@ FunctionSignature parseFunctionSignature(TokenFeed tokens)
     auto name = tokens.current().value;
 
     TypeSignature[] params;
-    if (!parseParameterList(tokens, &params))
+    bool variadic;
+    if (!parseParameterList(tokens, &params, &variadic))
     {
         return null;
     }
 
-    return new FunctionSignature(type, name, params);
+    return new FunctionSignature(type, name, params, variadic);
 }
 
 MethodSignature parseMethodSignature(TokenFeed tokens)
@@ -396,16 +397,18 @@ MethodSignature parseMethodSignature(TokenFeed tokens)
     auto functionName = tokens.current().value;
 
     TypeSignature[] params;
-    if (!parseParameterList(tokens, &params))
+    bool variadic;
+    if (!parseParameterList(tokens, &params, &variadic))
     {
         return null;
     }
 
     return new MethodSignature(returnType, containerType, functionName,
-                               params);
+                               params, variadic);
 }
 
-bool parseParameterList(TokenFeed tokens, TypeSignature[]* params)
+bool parseParameterList(TokenFeed tokens, TypeSignature[]* params,
+                        bool* variadic)
 {
     // Open parenthesis
     if (!tokens.next() || !tokens.current().match(TokenType.Symbol, "("))
@@ -413,12 +416,29 @@ bool parseParameterList(TokenFeed tokens, TypeSignature[]* params)
         return false;
     }
 
+    *variadic = false;
+
     while (tokens.next())
     {
         auto token = tokens.current();
 
+        // Variadic
+        if (token.match(TokenType.Symbol, "..."))
+        {
+            if (!tokens.next() ||
+                !tokens.current().match(TokenType.Symbol, ")"))
+            {
+                throw new Exception(
+                        "Variadic ... symbol must be the last entry in a " ~
+                        "parameter list");
+            }
+
+            *variadic = true;
+            break;
+        }
+
         // End of parameter list
-        if (token.type == TokenType.Symbol && token.value == ")")
+        if (token.match(TokenType.Symbol, ")"))
         {
             break;
         }
