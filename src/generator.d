@@ -607,15 +607,21 @@ Register[] syscallRegisters = [
 // index within the parameter list
 void placeParameter(Local local, Register[] registerList, int index)
 {
-    local.location = Location.Register;
-
-    if (index < 0 || index >= registerList.length)
+    if (index < 0)
     {
-        throw new Exception(format(
-                "Not enough registers for parameter %d", index));
+        throw new Exception(format("Invalid parameter index %d", index));
     }
 
-    local.register = registerList[index];
+    if (index < registerList.length)
+    {
+        local.location = Location.Register;
+        local.register = registerList[index];
+
+        return;
+    }
+
+    local.location = Location.Stack;
+    local.stackOffset = (index - cast(int)registerList.length) * 8 + 16;
 }
 
 string renderName(FunctionSignature sig)
@@ -641,8 +647,11 @@ void generateFunction(GeneratorState state, Function func)
 
         placeParameter(local, callRegisters, i);
 
-        stackOffset -= typeSize(func.signature.parameters[i].type);
-        local.stackOffset = stackOffset;
+        if (i < callRegisters.length)
+        {
+            stackOffset -= typeSize(func.signature.parameters[i].type);
+            local.stackOffset = stackOffset;
+        }
 
         state.locals ~= local;
     }
@@ -1727,18 +1736,18 @@ Register[] prepareCallParams(GeneratorState state, Node[] params,
         state.generatePush(callerPreserved[i]);
     }
 
+    // Push stack arguments in reverse order
+    for (int i = cast(int)params.length - 1; i >= registerList.length; i--)
+    {
+        state.render(format("    push %s", renderNode(state, params[i])));
+    }
+
     // Build list of parameters in registers and where they have to move for
     // the call to work.
     RegisterMove[] registerMoves;
     NonRegisterArg[] nonRegisterArgs;
-    for (int i = 0; i < params.length; i++)
+    for (int i = 0; i < params.length && i < registerList.length; i++)
     {
-        if (i >= registerList.length)
-        {
-            throw new Exception(format(
-                    "Not enough registers for parameter %d", i));
-        }
-
         auto targetRegister = registerList[i];
 
         auto binding = cast(Binding)params[i];
@@ -1870,6 +1879,12 @@ string renderNode(GeneratorState state, Node node)
     if (binding !is null)
     {
         auto local = state.findLocal(binding.name);
+
+        if (local is null)
+        {
+            throw new Exception(format("Can't find local %s", binding.name));
+        }
+
         return renderLocal(local);
     }
 
