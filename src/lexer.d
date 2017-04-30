@@ -1,5 +1,7 @@
 import std.format;
 import std.stdio;
+import std.conv;
+import std.ascii;
 
 enum TokenType
 {
@@ -7,59 +9,6 @@ enum TokenType
     Word,
     Symbol,
     DoubleQuote,
-    SingleQuote,
-}
-
-bool isDigit(dchar c)
-{
-    return c == '0' || c == '1' || c == '2' || c == '3' || c == '4' ||
-           c == '5' || c == '6' || c == '7' || c == '8' || c == '9';
-}
-
-bool isWhiteSpace(dchar c)
-{
-    return c == ' ' || c == '\t' || c == '\n' || c == '"' || c == '\'';
-}
-
-bool isSymbol(dchar c)
-{
-    return c == '+' || c == '=' || c == '(' || c == ')' || c == ';' ||
-           c == '{' || c == '}' || c == ',' || c == '!' || c == '&' ||
-           c == '*' || c == ':' || c == '[' || c == ']' || c == '-' ||
-           c == '/' || c == '<' || c == '>' || c == '.';
-}
-
-bool isDelimiter(dchar c)
-{
-    return isWhiteSpace(c) || isSymbol(c);
-}
-
-TokenType identifyTokenType(string value, dchar quote)
-{
-    if (quote == '\'')
-    {
-        return TokenType.SingleQuote;
-    }
-
-    if (quote == '"')
-    {
-        return TokenType.DoubleQuote;
-    }
-
-    if (value.length == 1 && isSymbol(value[0]))
-    {
-        return TokenType.Symbol;
-    }
-
-    for (int i = 0; i < value.length; i++)
-    {
-        if (!isDigit(value[i]))
-        {
-            return TokenType.Word;
-        }
-    }
-
-    return TokenType.Integer;
 }
 
 class Token
@@ -67,145 +16,344 @@ class Token
     TokenType type;
     string value;
 
-    this(TokenType type, string value)
+    pure this(TokenType type, string value)
     {
         this.type = type;
         this.value = value;
     }
 
-    override string toString()
+    pure override string toString()
     {
         return format("%s\t%s", this.type, this.value);
     }
 
-    bool match(TokenType type, string value)
+    pure bool match(TokenType type, string value)
     {
         return this.type == type && this.value == value;
     }
 
-    bool match(Token other)
+    pure bool match(Token other)
     {
         return this.match(other.type, other.value);
     }
 }
 
-Token parseDoubleSymbol(dchar first, dchar second)
-{
-    auto both = format("%c%c", first, second);
+immutable string[] symbols =
+[
+    "=",
+    "+", "-", "*", "/",
+    "!", "&",
+    ";", ",",
+    ".",
+    "(", ")",
+    "<", ">",
+    "[", "]",
+    "{", "}",
 
-    if (both == "==" ||
-        both == "!=" ||
-        both == "&&" ||
-        both == "::" ||
-        both == ">=" ||
-        both == "<=")
+    "==", "!=", "&&", "::", ">=", "<="
+];
+
+pure bool isSymbol(string s)
+{
+    foreach (sym; symbols)
     {
-        return new Token(TokenType.Symbol, both);
+        if (s == sym)
+        {
+            return true;
+        }
     }
 
-    return null;
+    return false;
+}
+
+pure bool isSymbol(dchar c)
+{
+    return isSymbol(to!string(c));
+}
+
+pure bool isWhiteSpace(dchar c)
+{
+    return c == ' ' || c == '\t' || c == '\n';
+}
+
+pure bool isDelimiter(dchar c)
+{
+    return isWhiteSpace(c) || isSymbol(c) || c == ':';
+}
+
+pure string resolveEscapeSequence(dchar second)
+{
+    switch (second)
+    {
+        case '\\':
+            return "\\";
+        case 'n':
+            return "\n";
+        case 't':
+            return "\t";
+        case '"':
+            return "\"";
+        default:
+            throw new Exception(format(
+                    "Unrecognized escape sequence: \\%s", second));
+    }
+}
+
+// Represents one character in an input string at a time.
+class Reader
+{
+    string input;
+    int index = -1;
+
+    pure this(string input)
+    {
+        this.input = input;
+    }
+
+    pure bool isFirst()
+    {
+        return this.index == 0;
+    }
+
+    pure bool isLast()
+    {
+        return this.index == this.input.length - 1;
+    }
+
+    pure void advance()
+    {
+        this.index++;
+    }
+
+    pure dchar current()
+    {
+        return this.input[this.index];
+    }
+
+    pure dchar next()
+    {
+        return this.input[this.index + 1];
+    }
+
+    pure Reader clone()
+    {
+        auto ret = new Reader(this.input);
+        ret.index = this.index;
+        return ret;
+    }
 }
 
 Token[] lex(string src)
 {
-    if (src.length < 2)
-    {
-        throw new Exception("src must be at least 2 characters");
-    }
-
+    auto reader = new Reader(src);
     Token[] tokens;
 
-    dchar prev;
-    dchar current;
-    dchar next = src[0];
-
-    dchar quote = false;
-    int quoteStart = 0;
-
-    bool nextEscaped = false;
-    bool currentEscaped = false;
-
-    string building = "";
-    dchar buildingQuote = false;
-
-    for (int i = 0; i < src.length; i++)
+    while (true)
     {
-        bool isFirst = i == 0;
-        bool isLast  = i == src.length - 1;
+        auto token = read(reader);
 
-        prev = current;
-        current = next;
-        currentEscaped = nextEscaped;
-
-        if (!isLast)
+        if (token is null)
         {
-            next = src[i + 1];
+            break;
         }
 
-        bool nextSlashEscaped = !isLast && current == '\\';
-        bool nextDoubleEscaped = !isLast && next == quote &&
-                                 current == quote && quoteStart < i;
-
-        nextEscaped = !isLast && !currentEscaped &&
-                      (nextSlashEscaped || nextDoubleEscaped);
-
-        bool isCurrentQuote = !currentEscaped && !nextDoubleEscaped &&
-                              (current == '\'' || current == '"');
-
-        bool quoteToggledThisLoop = false;
-
-        // Start of quote
-        if (isCurrentQuote && quote == false)
-        {
-            quote = current;
-            buildingQuote = current;
-            quoteToggledThisLoop = true;
-            quoteStart = i;
-        }
-
-        // End of quote
-        if (isCurrentQuote && quote && !quoteToggledThisLoop &&
-            quote == current)
-        {
-            quote = false;
-        }
-
-        bool unquotedDelimiter = !quote &&
-                                 isDelimiter(current);
-
-        bool buildingSingleDelimiter = !quote &&
-                                       building.length == 1 &&
-                                       isDelimiter(building[0]);
-
-        bool flush = building.length > 0 &&
-                     (isLast || unquotedDelimiter || buildingSingleDelimiter);
-
-        // Detect special double-symbol perators
-        if (buildingSingleDelimiter && !isLast)
-        {
-            auto token = parseDoubleSymbol(building[0], current);
-            if (token !is null)
-            {
-                tokens ~= token;
-                building = "";
-                continue;
-            }
-        }
-
-        if (flush)
-        {
-            auto type = identifyTokenType(building, buildingQuote);
-            tokens ~= new Token(type, building);
-            building = "";
-            buildingQuote = false;
-        }
-
-        if (!quoteToggledThisLoop &&
-            (quote && !nextEscaped || !quote && !isWhiteSpace(current)))
-        {
-            building ~= current;
-        }
+        tokens ~= token;
     }
 
     return tokens;
+}
+
+// Read the next token from the reader.
+Token read(Reader r)
+{
+    if (r.isLast())
+    {
+        return null;
+    }
+
+    r.advance();
+
+    skipWhiteSpace(r);
+
+    if (r.isLast() && isWhiteSpace(r.current()))
+    {
+        return null;
+    }
+
+    Token ret;
+
+    // Try to read a numeric token
+    ret = tryRead(r, &readNumeric);
+    if (ret !is null)
+    {
+        return ret;
+    }
+
+    // Try to read a symbol tokoen
+    ret = tryRead(r, &readSymbol);
+    if (ret !is null)
+    {
+        return ret;
+    }
+
+    // Try to read a double quote
+    ret = tryRead(r, &readQuote);
+    if (ret !is null)
+    {
+        return ret;
+    }
+
+    // Try to read a word token
+    ret = tryRead(r, &readWord);
+    if (ret !is null)
+    {
+        return ret;
+    }
+
+    throw new Exception(format(
+            "Can't parse token starting with %c", r.current()));
+}
+
+// Run the function f and advance the reader only if f successfully read a
+// token from the reader.
+Token tryRead(Reader r, Token function(Reader) f)
+{
+    // Pass f a clone of the reader so if it fails to read a token it won't
+    // mess up the reader in the process.
+    auto clone = r.clone();
+    auto ret = f(clone);
+
+    if (ret is null)
+    {
+        return null;
+    }
+
+    // Token read: advance the reader to where the clone stopped reading.
+    r.index = clone.index;
+    return ret;
+}
+
+// Advance the reader until the next non-whitespace character.
+void skipWhiteSpace(Reader r)
+{
+    while (!r.isLast() && isWhiteSpace(r.current()))
+    {
+        r.advance();
+    }
+}
+
+Token readQuote(Reader r)
+{
+    if (r.current() != '"')
+    {
+        return null;
+    }
+
+    auto value = "";
+
+    while (true)
+    {
+        r.advance();
+
+        // Detect and deal with escape sequences
+        if (r.current() == '\\')
+        {
+            r.advance();
+
+            value ~= resolveEscapeSequence(r.current());
+
+            continue;
+        }
+
+        // Detect and deal with double-escape quotes ("a""b")
+        if (r.current() == '"' && !r.isLast() && r.next() == '"')
+        {
+            r.advance();
+
+            value ~= "\"";
+
+            continue;
+        }
+
+        // Detect end of quote
+        if (r.current() == '"')
+        {
+            break;
+        }
+
+        value ~= r.current();
+    }
+
+    return new Token(TokenType.DoubleQuote, value);
+}
+
+Token readNumeric(Reader r)
+{
+    if (!isDigit(r.current()))
+    {
+        return null;
+    }
+
+    auto value = "";
+
+    while (true)
+    {
+        value ~= r.current();
+
+        if (r.isLast() || !isDigit(r.next()))
+        {
+            break;
+        }
+
+        r.advance();
+    }
+
+    return new Token(TokenType.Integer, value);
+}
+
+Token readSymbol(Reader r)
+{
+    string first = to!string(r.current());
+
+    if (!r.isLast())
+    {
+        string both = first ~ to!string(r.next());
+
+        if (isSymbol(both))
+        {
+            r.advance();
+            return new Token(TokenType.Symbol, both);
+        }
+    }
+
+    if (!isSymbol(first))
+    {
+        return null;
+    }
+
+    return new Token(TokenType.Symbol, first);
+}
+
+Token readWord(Reader r)
+{
+    if (isDelimiter(r.current()))
+    {
+        return null;
+    }
+
+    auto value = "";
+
+    while (true)
+    {
+        value ~= r.current();
+
+        if (r.isLast() || isDelimiter(r.next()))
+        {
+            break;
+        }
+
+        r.advance();
+    }
+
+    return new Token(TokenType.Word, value);
 }
