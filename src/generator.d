@@ -1585,7 +1585,45 @@ Local generateMathOperator(GeneratorState state, Operator operator)
     auto left = renderNode(state, leftNode);
     auto right = renderNode(state, rightNode);
 
+    auto raxTaken = state.registerTaken(Register.RAX);
+    auto rdxTaken = state.registerTaken(Register.RDX);
+
     auto temp = state.addTemp(operator.type);
+
+    if (operator.operatorType == OperatorType.Divide)
+    {
+        if (raxTaken)
+        {
+            state.render(format("    push rax"));
+        }
+
+        if (rdxTaken)
+        {
+            state.render(format("    push rdx"));
+        }
+
+        auto rightNodeRegister = requireLocalInRegister(state, rightNode);
+
+        state.render(format("    mov rax, %s", left));
+        state.render(format("    xor rdx, rdx"));
+        state.render(format("    idiv %s", rightNodeRegister.register));
+        state.render(format("    mov %s, rax", temp.register));
+
+        state.freeTemp(rightNodeRegister);
+
+        if (rdxTaken)
+        {
+            state.render(format("    pop rdx"));
+        }
+
+        if (raxTaken)
+        {
+            state.render(format("    pop rax"));
+        }
+
+        return temp;
+    }
+
     state.render(format("    mov %s, %s", temp.register, left));
 
     switch (operator.operatorType)

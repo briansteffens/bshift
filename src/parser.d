@@ -18,6 +18,8 @@ OperatorType parseOperatorType(string input)
             return OperatorType.Minus;
         case "*":
             return OperatorType.Asterisk;
+        case "/":
+            return OperatorType.Divide;
         case "==":
             return OperatorType.Equality;
         case "!=":
@@ -47,6 +49,7 @@ int operatorPrecedence(OperatorType t)
         case OperatorType.DotAccessor:
             return 19;
         case OperatorType.Asterisk:
+        case OperatorType.Divide:
             return 14;
         case OperatorType.Plus:
         case OperatorType.Minus:
