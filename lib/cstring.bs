@@ -44,3 +44,34 @@ u8* find(u8* haystack, u8* needle)
 
     return 0;
 }
+
+bool compare(u8* source, u8* destination)
+{
+    while (*source != 0 && *destination != 0)
+    {
+        if (*source != *destination)
+        {
+            return false;
+        }
+    }
+
+    return *source == 0 && *destination == 0;
+}
+
+u64 copy(u8* source, u8* destination)
+{
+    while (*source != 0)
+    {
+        *destination = *source;
+
+        source = source + 1;
+        destination = destination + 1;
+    }
+
+    return 0;
+}
+
+bool split(u8* source, u64 point, u8* left, u8* right)
+{
+    return true;
+}
