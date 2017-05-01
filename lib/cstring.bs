@@ -74,7 +74,23 @@ u64 copy(u8* source, u8* destination)
     return 0;
 }
 
-bool split(u8* source, u64 point, u8* left, u8* right)
+u64 copy_limit(u8* source, u8* destination, u64 count)
+{
+    u64 copied = 0;
+
+    while (*source != 0 && copied < count)
+    {
+        *destination = *source;
+
+        source = source + 1;
+        destination = destination + 1;
+        copied = copied + 1;
+    }
+
+    return copied;
+}
+
+bool divide(u8* source, u64 point, u8* left, u8* right)
 {
     return true;
 }
