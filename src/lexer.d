@@ -190,7 +190,9 @@ Token read(Reader r)
     r.advance();
 
     // Skip non-tokens
-    while (skipWhiteSpace(r) || skipMultiLineComment(r))
+    while (skipWhiteSpace(r) ||
+           skipMultiLineComment(r) ||
+           skipSingleLineComment(r))
     {
     }
 
@@ -263,6 +265,27 @@ bool skipMultiLineComment(Reader r)
     }
 
     r.advance();
+    r.advance();
+
+    return true;
+}
+
+// If we're currently looking at a single-line comment, advance the reader
+// passed it.
+bool skipSingleLineComment(Reader r)
+{
+    if (r.isLast() || r.current() != '/' || r.next() != '/')
+    {
+        return false;
+    }
+
+    r.advance();
+
+    while (r.current() != '\n')
+    {
+        r.advance();
+    }
+
     r.advance();
 
     return true;

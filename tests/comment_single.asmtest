@@ -1,0 +1,21 @@
+// start of file
+
+u64 main() // end of line
+{
+    // here
+    return 7;//nospace
+    // after
+}
+
+// end of file
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "single-line comments",
+            "expect_status": "7"
+        }
+    ]
+}
