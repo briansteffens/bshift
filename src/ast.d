@@ -335,6 +335,7 @@ enum OperatorType
     Minus,
     Divide,
     Asterisk,
+    Modulo,
     Equality,
     Inequality,
     GreaterThan,
@@ -360,6 +361,7 @@ OperatorClass operatorTypeToClass(OperatorType t)
         case OperatorType.Minus:
         case OperatorType.Asterisk:
         case OperatorType.Divide:
+        case OperatorType.Modulo:
             return OperatorClass.Math;
         case OperatorType.Equality:
         case OperatorType.Inequality:

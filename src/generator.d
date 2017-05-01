@@ -1590,7 +1590,8 @@ Local generateMathOperator(GeneratorState state, Operator operator)
 
     auto temp = state.addTemp(operator.type);
 
-    if (operator.operatorType == OperatorType.Divide)
+    if (operator.operatorType == OperatorType.Divide ||
+        operator.operatorType == OperatorType.Modulo)
     {
         if (raxTaken)
         {
@@ -1607,7 +1608,16 @@ Local generateMathOperator(GeneratorState state, Operator operator)
         state.render(format("    mov rax, %s", left));
         state.render(format("    xor rdx, rdx"));
         state.render(format("    idiv %s", rightNodeRegister.register));
-        state.render(format("    mov %s, rax", temp.register));
+
+        if (operator.operatorType == OperatorType.Divide)
+        {
+            state.render(format("    mov %s, rax", temp.register));
+        }
+
+        if (operator.operatorType == OperatorType.Modulo)
+        {
+            state.render(format("    mov %s, rdx", temp.register));
+        }
 
         state.freeTemp(rightNodeRegister);
 
