@@ -236,6 +236,8 @@ class GeneratorState
     Local[] locals;
     Local[] temps;
 
+    Register[] reserved;
+
     string[] labels;
     string[] externs;
     string[] stringLiterals;
@@ -245,6 +247,27 @@ class GeneratorState
     this(Module mod)
     {
         this.mod = mod;
+    }
+
+    // Prevent register from being used for temps/locals until unreserved.
+    void reserve(Register r)
+    {
+        this.reserved ~= r;
+    }
+
+    void unreserve(Register r)
+    {
+        Register[] newReserved;
+
+        foreach (res; this.reserved)
+        {
+            if (res != r)
+            {
+                newReserved ~= res;
+            }
+        }
+
+        this.reserved = newReserved;
     }
 
     void render(string line)
@@ -342,19 +365,27 @@ class GeneratorState
 
     bool registerTaken(Register register)
     {
-        for (int i = 0; i < this.locals.length; i++)
+        foreach (local; this.locals)
         {
-            if (this.locals[i].location == Location.Register &&
-                this.locals[i].register == register)
+            if (local.location == Location.Register &&
+                local.register == register)
             {
                 return true;
             }
         }
 
-        for (int i = 0; i < this.temps.length; i++)
+        foreach (temp; this.temps)
         {
-            if (this.temps[i].location == Location.Register &&
-                this.temps[i].register == register)
+            if (temp.location == Location.Register &&
+                temp.register == register)
+            {
+                return true;
+            }
+        }
+
+        foreach (res; this.reserved)
+        {
+            if (res == register)
             {
                 return true;
             }
@@ -1053,17 +1084,17 @@ void generateAssignmentShared(GeneratorState state, Node target,
 
             targetType = targetLocal.type.clone();
             targetType.pointer = false;
-
-            sizeHint = typeToOpSize(targetType);
         }
 
         state.render(format("; %s =", targetBinding.name));
+        sizeHint = typeToOpSize(targetType);
     }
 
     auto value = generateNode(state, expression);
     auto valueRendered = renderNode(state, value);
 
     auto binding = cast(Binding)value;
+    auto localValue = cast(Local)value;
     if (binding !is null)
     {
         tempTarget2 = state.addTemp(binding.type);
@@ -1078,7 +1109,18 @@ void generateAssignmentShared(GeneratorState state, Node target,
         valueRendered = to!string(tempTarget2Register);
         state.render(format("; %s = %s", target, binding.name));
     }
+    else if (localValue !is null && localValue.location == Location.Register)
+    {
+        auto valueRegister = localValue.register;
+        if (sizeHint != OpSize.Qword)
+        {
+            valueRegister = convertRegisterSize(valueRegister, sizeHint);
+        }
+        valueRendered = to!string(valueRegister);
+        state.render("; is local");
+    }
 
+    state.render("; yup");
     state.render(format("    mov %s%s, %s", sizeHint, targetRendered,
                         valueRendered));
 
@@ -1614,11 +1656,17 @@ Local generateMathOperator(GeneratorState state, Operator operator)
             state.render(format("    push rdx"));
         }
 
+        state.reserve(Register.RAX);
+        state.reserve(Register.RDX);
+
         auto rightNodeRegister = requireLocalInRegister(state, rightNode);
 
         state.render(format("    mov rax, %s", left));
         state.render(format("    xor rdx, rdx"));
         state.render(format("    idiv %s", rightNodeRegister.register));
+
+        state.unreserve(Register.RDX);
+        state.unreserve(Register.RAX);
 
         if (operator.operatorType == OperatorType.Divide)
         {

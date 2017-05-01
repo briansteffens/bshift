@@ -109,3 +109,32 @@ u64 reverse(u8* str)
 
     return 0;
 }
+
+u64 from_u64(u64 source, u8* destination)
+{
+    if (source == 0)
+    {
+        *destination = 48;
+        destination = destination + 1;
+        *destination = 0;
+
+        return 0;
+    }
+
+    u8* output = destination;
+
+    while (source > 0)
+    {
+        u8 digit = source % 10 + 48;
+        source = source / 10;
+
+        *output = digit;
+        output = output + 1;
+    }
+
+    *output = 0;
+
+    auto t0 = reverse(destination);
+
+    return 0;
+}
