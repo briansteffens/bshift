@@ -1,0 +1,40 @@
+import cstring;
+
+u64 main()
+{
+    u8* a = "{{ a }}";
+    u8* b = "{{ b }}";
+
+    return cstring::compare(a, b);
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "'hi' == 'hi'",
+            "a": "hi",
+            "b": "hi",
+            "expect_status": "1"
+        },
+        {
+            "name": "'' == ''",
+            "a": "",
+            "b": "",
+            "expect_status": "1"
+        },
+        {
+            "name": "'hi' != 'hey'",
+            "a": "hi",
+            "b": "hey",
+            "expect_status": "0"
+        },
+        {
+            "name": "'hi' != 'hii'",
+            "a": "hi",
+            "b": "hii",
+            "expect_status": "0"
+        }
+    ]
+}

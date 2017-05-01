@@ -53,6 +53,9 @@ bool compare(u8* source, u8* destination)
         {
             return false;
         }
+
+        source = source + 1;
+        destination = destination + 1;
     }
 
     return *source == 0 && *destination == 0;
