@@ -10,3 +10,37 @@ u64 length(u8* str)
 
     return ret;
 }
+
+u8* find(u8* haystack, u8* needle)
+{
+    while (*haystack != 0)
+    {
+        u8* h = haystack;
+        u8* n = needle;
+
+        bool match = true;
+        bool first = true;
+
+        while (*h != 0 && *n != 0)
+        {
+            first = false;
+
+            if (*h != *n)
+            {
+                match = false;
+            }
+
+            h = h + 1;
+            n = n + 1;
+        }
+
+        if (match == true && first == false)
+        {
+            return haystack;
+        }
+
+        haystack = haystack + 1;
+    }
+
+    return 0;
+}

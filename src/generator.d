@@ -506,7 +506,7 @@ string renderStringLiteral(GeneratorState state, ulong index)
 
     if (state.stringLiterals[index] != "")
     {
-        value = format("\"%s\", ", state.stringLiterals[index]);
+        value = format("\"%s\", 0", state.stringLiterals[index]);
     }
 
     return format("    %s: db %s", renderStringLiteralName(index), value);
