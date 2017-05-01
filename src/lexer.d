@@ -189,7 +189,10 @@ Token read(Reader r)
 
     r.advance();
 
-    skipWhiteSpace(r);
+    // Skip non-tokens
+    while (skipWhiteSpace(r) || skipMultiLineComment(r))
+    {
+    }
 
     if (r.isLast() && isWhiteSpace(r.current()))
     {
@@ -231,12 +234,38 @@ Token tryRead(Reader r, readFunction f)
 }
 
 // Advance the reader until the next non-whitespace character.
-void skipWhiteSpace(Reader r)
+bool skipWhiteSpace(Reader r)
 {
+    auto start = r.index;
+
     while (!r.isLast() && isWhiteSpace(r.current()))
     {
         r.advance();
     }
+
+    return start != r.index;
+}
+
+// If we're currently looking at a multi-line comment, advance the reader
+// passed it.
+bool skipMultiLineComment(Reader r)
+{
+    if (r.isLast() || r.current() != '/' || r.next() != '*')
+    {
+        return false;
+    }
+
+    r.advance();
+
+    while (r.current() != '*' || r.next() != '/')
+    {
+        r.advance();
+    }
+
+    r.advance();
+    r.advance();
+
+    return true;
 }
 
 Token readQuote(Reader r)
