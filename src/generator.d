@@ -1008,6 +1008,8 @@ void generateAssignmentShared(GeneratorState state, Node target,
 
     auto dot = cast(DotAccessor)target;
 
+    auto sizeHint = typeToOpSize(expression.type);
+
     // Assigning to an indexer
     if (indexer !is null)
     {
@@ -1048,6 +1050,11 @@ void generateAssignmentShared(GeneratorState state, Node target,
             state.render(format("    mov %s, %s", tempTarget.register,
                                 targetRendered));
             targetRendered = format("[%s]", tempTarget.register);
+
+            targetType = targetLocal.type.clone();
+            targetType.pointer = false;
+
+            sizeHint = typeToOpSize(targetType);
         }
 
         state.render(format("; %s =", targetBinding.name));
@@ -1056,15 +1063,19 @@ void generateAssignmentShared(GeneratorState state, Node target,
     auto value = generateNode(state, expression);
     auto valueRendered = renderNode(state, value);
 
-    auto sizeHint = to!string(typeToOpSize(expression.type));
-
     auto binding = cast(Binding)value;
     if (binding !is null)
     {
         tempTarget2 = state.addTemp(binding.type);
-        state.render(format("    mov %s, %s", tempTarget2.register,
+        auto tempTarget2Register = tempTarget2.register;
+        if (sizeHint != OpSize.Qword)
+        {
+            tempTarget2Register = convertRegisterSize(tempTarget2.register,
+                    sizeHint);
+        }
+        state.render(format("    mov %s, %s", tempTarget2Register,
                             valueRendered));
-        valueRendered = format("%s", tempTarget2.register);
+        valueRendered = to!string(tempTarget2Register);
         state.render(format("; %s = %s", target, binding.name));
     }
 

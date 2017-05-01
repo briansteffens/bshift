@@ -90,7 +90,22 @@ u64 copy_limit(u8* source, u8* destination, u64 count)
     return copied;
 }
 
-bool divide(u8* source, u64 point, u8* left, u8* right)
+u64 reverse(u8* str)
 {
-    return true;
+    u64 len = length(str);
+    u64 midpoint = str + len / 2;
+
+    u8* end = str + len - 1;
+
+    while (str != midpoint)
+    {
+        u8 temp = *str;
+        *str = *end;
+        *end = temp;
+
+        str = str + 1;
+        end = end - 1;
+    }
+
+    return 0;
 }
