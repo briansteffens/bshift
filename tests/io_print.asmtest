@@ -1,33 +1,33 @@
 import io;
 
-u64 test_empty_string(u64 t0)
+u64 test_empty_string()
 {
     return io::print("");
 }
 
-u64 test_plain_string(u64 t0)
+u64 test_plain_string()
 {
     return io::print("greetings");
 }
 
-u64 test_u64(u64 t0)
+u64 test_u64()
 {
     return io::print("hi %u hey", 13);
 }
 
-u64 test_two_u64s(u64 t0)
+u64 test_two_u64s()
 {
     return io::print("first %u second %u", 3, 7);
 }
 
-u64 test_just_u64(u64 t0)
+u64 test_just_u64()
 {
     return io::print("%u", 137);
 }
 
 u64 main()
 {
-    return test_{{ test }}(0);
+    return test_{{ test }}();
 }
 
 -----

@@ -1871,9 +1871,12 @@ Register[] prepareCallParams(GeneratorState state, Node[] params,
     }
 
     // Push stack arguments in reverse order
-    for (int i = cast(int)params.length - 1; i >= registerList.length; i--)
+    if (params.length > 0)
     {
-        state.render(format("    push %s", renderNode(state, params[i])));
+        for (int i = cast(int)params.length - 1; i >= registerList.length; i--)
+        {
+            state.render(format("    push %s", renderNode(state, params[i])));
+        }
     }
 
     // Build list of parameters in registers and where they have to move for
