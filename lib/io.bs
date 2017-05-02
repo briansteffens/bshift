@@ -1,8 +1,33 @@
 import cstring;
 
-u64 print(u8* str)
+u64 print(u8* fmt, ...)
 {
-    u64 len = cstring::length(str);
+    u8[256] buffer;
+    u8* out = &buffer;
+    u64 total_chars = 0;
+    u64 param_index = 0;
 
-    return syscall(1, 1, str, len);
+    while (*fmt != 0)
+    {
+        u8* next = fmt + 1;
+
+        // Check for "%u"
+        if (*fmt == 37 && *next == 117)
+        {
+            fmt = fmt + 2;
+            u64 written = cstring::from_u64(variadic(param_index), out);
+            out = out + written;
+            total_chars = total_chars + written;
+            param_index = param_index + 1;
+        }
+        else
+        {
+            *out = *fmt;
+            out = out + 1;
+            fmt = fmt + 1;
+            total_chars = total_chars + 1;
+        }
+    }
+
+    return syscall(1, 1, &buffer, total_chars);
 }

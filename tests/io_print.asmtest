@@ -1,9 +1,38 @@
 import io;
 
+u64 test_empty_string(u64 t0)
+{
+    u8* str = "";
+    return io::print(str);
+}
+
+u64 test_plain_string(u64 t0)
+{
+    u8* str = "greetings";
+    return io::print(str);
+}
+
+u64 test_u64(u64 t0)
+{
+    u8* str = "hi %u hey";
+    return io::print(str, 13);
+}
+
+u64 test_two_u64s(u64 t0)
+{
+    u8* str = "first %u second %u";
+    return io::print(str, 3, 7);
+}
+
+u64 test_just_u64(u64 t0)
+{
+    u8* str = "%u";
+    return io::print(str, 137);
+}
+
 u64 main()
 {
-    u8* str = "{{ str }}";
-    return io::print(str);
+    return test_{{ test }}(0);
 }
 
 -----
@@ -11,14 +40,34 @@ u64 main()
 {
     "cases": [
         {
-            "name": "'hello'",
-            "str": "hello",
-            "expect_stdout": "hello"
+            "name": "empty string ''",
+            "test": "empty_string",
+            "expect_stdout": "",
+            "expect_status": "0"
         },
         {
-            "name": "''",
-            "str": "",
-            "expect_stdout": ""
+            "name": "plain string 'greetings'",
+            "test": "plain_string",
+            "expect_stdout": "greetings",
+            "expect_status": "9"
+        },
+        {
+            "name": "u64 'hi %u hey'",
+            "test": "u64",
+            "expect_stdout": "hi 13 hey",
+            "expect_status": "9"
+        },
+        {
+            "name": "two u64s 'first %u second %u'",
+            "test": "two_u64s",
+            "expect_stdout": "first 3 second 7",
+            "expect_status": "16"
+        },
+        {
+            "name": "just u64 '%u'",
+            "test": "just_u64",
+            "expect_stdout": "137",
+            "expect_status": "3"
         }
     ]
 }
