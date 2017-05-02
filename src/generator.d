@@ -780,8 +780,15 @@ string renderStackLocation(int offset)
     }
 }
 
-void generateStatement(GeneratorState state, Statement st)
+void generateStatementBase(GeneratorState state, StatementBase st)
 {
+    auto ignoreReturn = cast(Statement)st;
+    if (ignoreReturn !is null)
+    {
+        generateStatement(state, ignoreReturn);
+        return;
+    }
+
     auto localDeclaration = cast(LocalDeclaration)st;
     if (localDeclaration !is null)
     {
@@ -832,7 +839,7 @@ void generateStatement(GeneratorState state, Statement st)
 class GeneratorIfBlock
 {
     Node conditional;
-    Statement block;
+    StatementBase block;
     string label;
 
     this(ConditionalBlock block, string label)
@@ -842,7 +849,7 @@ class GeneratorIfBlock
         this.label = label;
     }
 
-    this(Statement block, string label)
+    this(StatementBase block, string label)
     {
         this.block = block;
         this.label = label;
@@ -866,7 +873,7 @@ void generateWhile(GeneratorState state, While _while)
     }
 
     // Loop body
-    generateStatement(state, _while.block);
+    generateStatementBase(state, _while.block);
 
     state.render(format("    jmp %s", startWhileLabel));
     state.render(format("%s:", endWhileLabel));
@@ -917,7 +924,7 @@ void generateIf(GeneratorState state, If _if)
         }
 
         // Block: run if the conditional was true
-        generateStatement(state, block.block);
+        generateStatementBase(state, block.block);
 
         // Jump out of the if structure, unless we're already at the end
         if (i < blocks.length)
@@ -933,7 +940,7 @@ void generateBlock(GeneratorState state, Block block)
 {
     foreach (statement; block.statements)
     {
-        generateStatement(state, statement);
+        generateStatementBase(state, statement);
     }
 
     cleanupBlock(state, block, null);
@@ -942,7 +949,7 @@ void generateBlock(GeneratorState state, Block block)
 // When exiting a block (closing curly brace, continue, break) any arrays
 // dynamically allocated before the given termination statement (or null if
 // it's the end of the block) need to be freed.
-void cleanupBlock(GeneratorState state, Block block, Statement st)
+void cleanupBlock(GeneratorState state, Block block, StatementBase st)
 {
     LocalDeclaration firstDynamicArray = null;
 
@@ -1010,6 +1017,11 @@ void generateLocalDeclaration(GeneratorState state, LocalDeclaration st)
 
     generateAssignmentShared(state,
             new Binding(st.signature, st.signature.name), st.value);
+}
+
+void generateStatement(GeneratorState state, Statement s)
+{
+    auto result = generateNode(state, s.expression);
 }
 
 void generateAssignment(GeneratorState state, Assignment a)

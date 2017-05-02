@@ -2,32 +2,27 @@ import io;
 
 u64 test_empty_string(u64 t0)
 {
-    u8* str = "";
-    return io::print(str);
+    return io::print("");
 }
 
 u64 test_plain_string(u64 t0)
 {
-    u8* str = "greetings";
-    return io::print(str);
+    return io::print("greetings");
 }
 
 u64 test_u64(u64 t0)
 {
-    u8* str = "hi %u hey";
-    return io::print(str, 13);
+    return io::print("hi %u hey", 13);
 }
 
 u64 test_two_u64s(u64 t0)
 {
-    u8* str = "first %u second %u";
-    return io::print(str, 3, 7);
+    return io::print("first %u second %u", 3, 7);
 }
 
 u64 test_just_u64(u64 t0)
 {
-    u8* str = "%u";
-    return io::print(str, 137);
+    return io::print("%u", 137);
 }
 
 u64 main()

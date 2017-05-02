@@ -512,7 +512,7 @@ Block parseBlock(TokenFeed tokens)
         throw new Exception("Expected a function body");
     }
 
-    Statement[] statements;
+    StatementBase[] statements;
 
     while (tokens.next())
     {
@@ -524,13 +524,13 @@ Block parseBlock(TokenFeed tokens)
             break;
         }
 
-        statements ~= parseStatement(tokens);
+        statements ~= parseStatementBase(tokens);
     }
 
     return new Block(statements);
 }
 
-Statement parseStatement(TokenFeed tokens)
+StatementBase parseStatementBase(TokenFeed tokens)
 {
     auto current = tokens.current();
 
@@ -564,7 +564,20 @@ Statement parseStatement(TokenFeed tokens)
         }
     }
 
-    return parseAssignment(tokens);
+    auto assignment = parseAssignment(tokens);
+    if (assignment !is null)
+    {
+        return assignment;
+    }
+
+    auto statement = parseStatement(tokens);
+    if (statement !is null)
+    {
+        return statement;
+    }
+
+    throw new Exception(format(
+            "Unable to parse starting at %s", tokens.current()));
 }
 
 // Try to parse a local declaration (like "u64 x = 3;") and return null if it
@@ -648,6 +661,8 @@ TypeSignature parseTypeSignature(TokenFeed tokens)
 
 Assignment parseAssignment(TokenFeed tokens)
 {
+    auto rewindTarget = tokens.index;
+
     // parseExpression always starts by calling .next()
     tokens.rewind(1);
     auto lvalue = new ExpressionParser(tokens).run();
@@ -656,13 +671,32 @@ Assignment parseAssignment(TokenFeed tokens)
 
     if (current.type != TokenType.Symbol && current.value != "=")
     {
-        throw new Exception("Expected assignment operator (=)");
+        tokens.index = rewindTarget;
+        return null;
     }
 
     // Expression (rvalue)
-    auto expression = new ExpressionParser(tokens).run();
+    Node expression = null;
+    try
+    {
+        expression = new ExpressionParser(tokens).run();
+    }
+    catch (Throwable ex)
+    {
+        tokens.index = rewindTarget;
+        return null;
+    }
 
     return new Assignment(null, lvalue, expression);
+}
+
+Statement parseStatement(TokenFeed tokens)
+{
+    // parseExpression always starts by calling .next()
+    tokens.rewind(1);
+    auto expression = new ExpressionParser(tokens).run();
+
+    return new Statement(null, expression);
 }
 
 Return parseReturn(TokenFeed tokens)
@@ -681,7 +715,7 @@ If parseIf(TokenFeed tokens)
 {
     auto ifBlock = parseConditionalBlock(tokens);
     ConditionalBlock[] elseIfBlocks;
-    Statement elseBlock = null;
+    StatementBase elseBlock = null;
 
     while (true)
     {
@@ -707,7 +741,7 @@ If parseIf(TokenFeed tokens)
 
         // "else" block
         tokens.next();
-        elseBlock = parseStatement(tokens);
+        elseBlock = parseStatementBase(tokens);
         break;
     }
 
@@ -726,7 +760,7 @@ ConditionalBlock parseConditionalBlock(TokenFeed tokens)
     }
 
     auto conditional = parseExpressionParenthesis(tokens);
-    auto block = parseStatement(tokens);
+    auto block = parseStatementBase(tokens);
 
     return new ConditionalBlock(conditional, block);
 }
@@ -1507,7 +1541,7 @@ void validate(Module mod)
     }
 }
 
-void validateStatement(Module mod, Statement st)
+void validateStatement(Module mod, StatementBase st)
 {
     foreach (childNode; st.childNodes)
     {
@@ -1650,7 +1684,7 @@ TypeSignature findLocal(Module mod, Node node, string name)
             continue;
         }
 
-        auto statement = cast(Statement)node.parent;
+        auto statement = cast(StatementBase)node.parent;
         if (statement !is null)
         {
             return findLocal(mod, statement, name);
@@ -1660,11 +1694,11 @@ TypeSignature findLocal(Module mod, Node node, string name)
     throw new Exception(format("Found an orphaned node: %s", node));
 }
 
-Statement nextWithBlockParent(Statement st)
+StatementBase nextWithBlockParent(StatementBase st)
 {
     while (cast(Block)st.parent is null)
     {
-        auto parentStatement = cast(Statement)st.parent;
+        auto parentStatement = cast(StatementBase)st.parent;
         if (parentStatement !is null)
         {
             st = parentStatement;
@@ -1677,7 +1711,7 @@ Statement nextWithBlockParent(Statement st)
     return st;
 }
 
-TypeSignature findLocal(Module mod, Statement statement, string name)
+TypeSignature findLocal(Module mod, StatementBase statement, string name)
 {
     // Find the nearest Block ancestor
     statement = nextWithBlockParent(statement);
@@ -1708,7 +1742,7 @@ TypeSignature findLocal(Module mod, Statement statement, string name)
     }
 
     // Local not found in this block: continue walking up the tree
-    auto parentStatement = cast(Statement)parent.parent;
+    auto parentStatement = cast(StatementBase)parent.parent;
     if (parentStatement !is null)
     {
         return findLocal(mod, parentStatement, name);

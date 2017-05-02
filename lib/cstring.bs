@@ -136,7 +136,7 @@ u64 from_u64(u64 source, u8* destination)
 
     *output = 0;
 
-    auto t0 = reverse(destination);
+    reverse(destination);
 
     return digits;
 }

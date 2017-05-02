@@ -855,7 +855,7 @@ class Struct
     }
 }
 
-abstract class Statement : InsideFunction
+abstract class StatementBase : InsideFunction
 {
     Line           line;
     InsideFunction parent;
@@ -870,7 +870,7 @@ abstract class Statement : InsideFunction
         return [];
     }
 
-    Statement[] childStatements()
+    StatementBase[] childStatements()
     {
         return [];
     }
@@ -932,7 +932,41 @@ class Indexer : Node
     }
 }
 
-class LocalDeclaration : Statement
+class Statement : StatementBase
+{
+    Node expression;
+
+    this(Line line, Node expression)
+    {
+        super(line);
+
+        this.expression = expression;
+
+        if (this.expression !is null)
+        {
+            this.expression.parent = this;
+        }
+    }
+
+    override string toString()
+    {
+        return format("Statement %s", this.expression);
+    }
+
+    override Node[] childNodes()
+    {
+        if (this.expression is null)
+        {
+            return [];
+        }
+        else
+        {
+            return [this.expression];
+        }
+    }
+}
+
+class LocalDeclaration : StatementBase
 {
     TypeSignature signature;
     Node value;
@@ -980,7 +1014,7 @@ class LocalDeclaration : Statement
     }
 }
 
-class Assignment : Statement
+class Assignment : StatementBase
 {
     Node lvalue;
     Node value;
@@ -1007,12 +1041,12 @@ class Assignment : Statement
     }
 }
 
-class ConditionalBlock : Statement
+class ConditionalBlock : StatementBase
 {
     Node conditional;
-    Statement block;
+    StatementBase block;
 
-    this(Node conditional, Statement block)
+    this(Node conditional, StatementBase block)
     {
         super(null);
 
@@ -1033,7 +1067,7 @@ class ConditionalBlock : Statement
         return block.declarations();
     }
 
-    override Statement[] childStatements()
+    override StatementBase[] childStatements()
     {
         return [this.block];
     }
@@ -1046,7 +1080,7 @@ class ConditionalBlock : Statement
 
 class While : ConditionalBlock
 {
-    this(Node conditional, Statement block)
+    this(Node conditional, StatementBase block)
     {
         super(conditional, block);
     }
@@ -1057,14 +1091,14 @@ class While : ConditionalBlock
     }
 }
 
-class If : Statement
+class If : StatementBase
 {
     ConditionalBlock ifBlock;
     ConditionalBlock[] elseIfBlocks;
-    Statement elseBlock;
+    StatementBase elseBlock;
 
     this(ConditionalBlock ifBlock, ConditionalBlock[] elseIfBlocks,
-         Statement elseBlock)
+         StatementBase elseBlock)
     {
         super(null);
 
@@ -1121,9 +1155,9 @@ class If : Statement
         return ret;
     }
 
-    override Statement[] childStatements()
+    override StatementBase[] childStatements()
     {
-        Statement[] ret = [this.ifBlock];
+        StatementBase[] ret = [this.ifBlock];
 
         ret ~= this.elseIfBlocks;
 
@@ -1136,7 +1170,7 @@ class If : Statement
     }
 }
 
-class Return : Statement
+class Return : StatementBase
 {
     Node expression;
 
@@ -1167,11 +1201,11 @@ class Return : Statement
     }
 }
 
-class Block : Statement
+class Block : StatementBase
 {
-    Statement[] statements;
+    StatementBase[] statements;
 
-    this(Statement[] statements)
+    this(StatementBase[] statements)
     {
         super(null);
 
@@ -1207,7 +1241,7 @@ class Block : Statement
         return ret;
     }
 
-    override Statement[] childStatements()
+    override StatementBase[] childStatements()
     {
         return this.statements;
     }
