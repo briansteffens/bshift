@@ -1,0 +1,24 @@
+import io;
+
+u64 main()
+{
+    u8* str = "{{ str }}";
+    return io::print(str);
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "'hello'",
+            "str": "hello",
+            "expect_stdout": "hello"
+        },
+        {
+            "name": "''",
+            "str": "",
+            "expect_stdout": ""
+        }
+    ]
+}

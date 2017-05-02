@@ -1,0 +1,8 @@
+import cstring;
+
+u64 print(u8* str)
+{
+    u64 len = cstring::length(str);
+
+    return syscall(1, 1, str, len);
+}
