@@ -920,7 +920,7 @@ void generateIf(GeneratorState state, If _if)
         generateStatement(state, block.block);
 
         // Jump out of the if structure, unless we're already at the end
-        if (i == blocks.length - 1)
+        if (i < blocks.length)
         {
             state.render(format("    jmp %s", endIfLabel));
         }
@@ -1117,10 +1117,8 @@ void generateAssignmentShared(GeneratorState state, Node target,
             valueRegister = convertRegisterSize(valueRegister, sizeHint);
         }
         valueRendered = to!string(valueRegister);
-        state.render("; is local");
     }
 
-    state.render("; yup");
     state.render(format("    mov %s%s, %s", sizeHint, targetRendered,
                         valueRendered));
 

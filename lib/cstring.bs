@@ -118,10 +118,11 @@ u64 from_u64(u64 source, u8* destination)
         destination = destination + 1;
         *destination = 0;
 
-        return 0;
+        return 1;
     }
 
     u8* output = destination;
+    u64 digits = 0;
 
     while (source > 0)
     {
@@ -130,11 +131,45 @@ u64 from_u64(u64 source, u8* destination)
 
         *output = digit;
         output = output + 1;
+        digits = digits + 1;
     }
 
     *output = 0;
 
     auto t0 = reverse(destination);
 
-    return 0;
+    return digits;
+}
+
+u64 format(u8* output, u8* fmt, ...)
+{
+    u64 total_chars = 0;
+    u8* out = output;
+    u64 param_index = 0;
+
+    while (*fmt != 0)
+    {
+        u8* next = fmt + 1;
+
+        // Check for "%u"
+        if (*fmt == 37 && *next == 117)
+        {
+            fmt = fmt + 2;
+            u64 written = from_u64(variadic(param_index), out);
+            out = out + written;
+            total_chars = total_chars + written;
+            param_index = param_index + 1;
+        }
+        else
+        {
+            *out = *fmt;
+            out = out + 1;
+            fmt = fmt + 1;
+            total_chars = total_chars + 1;
+        }
+    }
+
+    *out = 0;
+
+    return total_chars;
 }

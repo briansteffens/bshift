@@ -1,0 +1,98 @@
+import cstring;
+
+u64 test_only_u64(u64 t0)
+{
+    u8* fmt = "%u";
+    u8[256] out;
+
+    u64 len = cstring::format(&out, fmt, 7);
+
+    return out[0] == 55 && out[1] == 0 && len == 1;
+}
+
+u64 test_two_u64s(u64 t0)
+{
+    u8* fmt = "%u %u";
+    u8[256] out;
+
+    u64 len = cstring::format(&out, fmt, 3, 7);
+
+    if (out[0] != 51)
+    {
+        return 0;
+    }
+
+    if (out[1] != 32)
+    {
+        return 0;
+    }
+
+    if (out[2] != 55)
+    {
+        return 0;
+    }
+
+    if (out[3] != 0)
+    {
+        return 0;
+    }
+
+    return len == 3;
+}
+
+u64 test_two_digits(u64 t0)
+{
+    u8* fmt = "a%u";
+    u8[256] out;
+
+    u64 len = cstring::format(&out, fmt, 13);
+
+    if (out[0] != 97)
+    {
+        return 0;
+    }
+
+    if (out[1] != 49)
+    {
+        return 0;
+    }
+
+    if (out[2] != 51)
+    {
+        return 0;
+    }
+
+    if (out[3] != 0)
+    {
+        return 0;
+    }
+
+    return len == 3;
+}
+
+u64 main()
+{
+    return test_{{ test }}(0);
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "'%u' = '7'",
+            "test": "only_u64",
+            "expect_status": "1"
+        },
+        {
+            "name": "'%u %u' = '3 7'",
+            "test": "two_u64s",
+            "expect_status": "1"
+        },
+        {
+            "name": "'a%u' = 'a13'",
+            "test": "two_digits",
+            "expect_status": "1"
+        }
+    ]
+}

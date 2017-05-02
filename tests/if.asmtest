@@ -1,25 +1,26 @@
 u64 main()
 {
     u64 x = {{ value }};
+    u64 res = 0;
 
     if (x == 2)
     {
-        return 2;
+        res = res + 3;
     }
     else if (x == 3)
     {
-        return 3;
+        res = res + 5;
     }
     else if (x == 4)
     {
-        return 4;
+        res = res + 7;
     }
     else
     {
-        return 5;
+        res = res + 11;
     }
 
-    return 6;
+    return res;
 }
 
 -----
@@ -29,22 +30,22 @@ u64 main()
         {
             "name": "if block",
             "value": "2",
-            "expect_status": "2"
+            "expect_status": "3"
         },
         {
             "name": "first else if block",
             "value": "3",
-            "expect_status": "3"
+            "expect_status": "5"
         },
         {
             "name": "second else if block",
             "value": "4",
-            "expect_status": "4"
+            "expect_status": "7"
         },
         {
             "name": "else block",
             "value": "5",
-            "expect_status": "5"
+            "expect_status": "11"
         }
     ]
 }

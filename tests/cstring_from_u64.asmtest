@@ -3,23 +3,23 @@ import cstring;
 u64 test_0(u64 t0)
 {
     u8[16] str;
-    u64 t1 = cstring::from_u64(0, &str);
+    u64 len = cstring::from_u64(0, &str);
 
-    return str[0] == 48 && str[1] == 0;
+    return str[0] == 48 && str[1] == 0 && len == 1;
 }
 
 u64 test_7(u64 t0)
 {
     u8[16] str;
-    u64 t1 = cstring::from_u64(7, &str);
+    u64 len = cstring::from_u64(7, &str);
 
-    return str[0] == 55 && str[1] == 0;
+    return str[0] == 55 && str[1] == 0 && len == 1;
 }
 
 u64 test_137(u64 t0)
 {
     u8[16] str;
-    u64 t1 = cstring::from_u64(137, &str);
+    u64 len = cstring::from_u64(137, &str);
 
     if (str[0] != 49)
     {
@@ -36,7 +36,12 @@ u64 test_137(u64 t0)
         return 0;
     }
 
-    return str[3] == 0;
+    if (str[3] != 0)
+    {
+        return 0;
+    }
+
+    return len == 3;
 }
 
 u64 main()
