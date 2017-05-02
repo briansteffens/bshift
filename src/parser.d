@@ -1548,10 +1548,32 @@ void validate(Module mod)
         completeFunction(mod, func.signature);
     }
 
-    // Complete function bodies
+    // Complete functions
     foreach (func; mod.functions)
     {
-        validateStatement(mod, func.block);
+        validateFunction(mod, func);
+    }
+}
+
+void validateFunction(Module mod, Function func)
+{
+    // Complete function body
+    validateStatement(mod, func.block);
+
+    // Add default return statement if missing in void function
+    if (!func.signature.returnType.compare(new VoidType()))
+    {
+        return;
+    }
+
+    if (func.block.statements.length == 0)
+    {
+        return;
+    }
+
+    if (cast(Return)func.block.statements[$-1] is null)
+    {
+        func.block.statements ~= new Return(null, null);
     }
 }
 
