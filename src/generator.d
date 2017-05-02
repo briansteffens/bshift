@@ -1185,7 +1185,7 @@ void generateReturn(GeneratorState state, Return r)
     {
         state.render(format("    mov rax, %s", renderImmediate(literal)));
     }
-    else
+    else if (value !is null)
     {
         auto local = cast(Local)value;
 

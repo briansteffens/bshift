@@ -172,6 +172,39 @@ class StructType : Type
     }
 }
 
+class VoidType : Type
+{
+    this()
+    {
+        super(pointer=false, elements=null);
+    }
+
+    override string baseTypeToString()
+    {
+        return "void";
+    }
+
+    override Type clone()
+    {
+        return new VoidType();
+    }
+
+    override bool compare(Type other)
+    {
+        return cast(VoidType)other !is null;
+    }
+
+    override bool compatibleWith(Type other)
+    {
+        return this.compare(other);
+    }
+
+    override int baseTypeSize()
+    {
+        throw new Exception("void has no size");
+    }
+}
+
 class PrimitiveType : Type
 {
     Primitive primitive;
@@ -1180,7 +1213,10 @@ class Return : StatementBase
 
         this.expression = expression;
 
-        this.expression.parent = this;
+        if (this.expression !is null)
+        {
+            this.expression.parent = this;
+        }
     }
 
     override string toString()

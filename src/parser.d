@@ -508,7 +508,6 @@ Block parseBlock(TokenFeed tokens)
 
     if (token.type != TokenType.Symbol || token.value != "{")
     {
-        writeln(token);
         throw new Exception("Expected a function body");
     }
 
@@ -665,11 +664,20 @@ Assignment parseAssignment(TokenFeed tokens)
 
     // parseExpression always starts by calling .next()
     tokens.rewind(1);
-    auto lvalue = new ExpressionParser(tokens).run();
+    Node lvalue;
+    try
+    {
+        lvalue = new ExpressionParser(tokens).run();
+    }
+    catch (Throwable ex)
+    {
+        tokens.index = rewindTarget;
+        return null;
+    }
 
     auto current = tokens.current();
 
-    if (current.type != TokenType.Symbol && current.value != "=")
+    if (!current.match(TokenType.Symbol, "="))
     {
         tokens.index = rewindTarget;
         return null;
@@ -701,6 +709,12 @@ Statement parseStatement(TokenFeed tokens)
 
 Return parseReturn(TokenFeed tokens)
 {
+    if (tokens.peek(1).match(TokenType.Symbol, ";"))
+    {
+        tokens.next();
+        return new Return(null, null);
+    }
+
     return new Return(null, new ExpressionParser(tokens).run());
 }
 
@@ -1587,6 +1601,12 @@ Type completeType(Module mod, Type type)
 
     // Complete the type
     Type ret = null;
+
+    // Try void
+    if (incomplete.name == "void")
+    {
+        return new VoidType();
+    }
 
     // Try primitives
     if (ret is null)
