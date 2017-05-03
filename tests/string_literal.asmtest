@@ -34,6 +34,12 @@ u64 main()
             "string": "",
             "index": "0",
             "expect_status": "0"
+        },
+        {
+            "name": "newline character",
+            "string": "\n",
+            "index": "0",
+            "expect_status": "10"
         }
     ]
 }
