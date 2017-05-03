@@ -1,0 +1,76 @@
+import heap;
+
+u64 test_allocate()
+{
+    u64* a = heap::allocate(8);
+
+    *a = 137;
+
+    return *a;
+}
+
+u64 test_separate_allocations()
+{
+    u64* a = heap::allocate(8);
+    u64* b = heap::allocate(8);
+
+    return a != b;
+}
+
+u64 test_allocate_large()
+{
+    u8* a = heap::allocate(8192);
+
+    *a = 3;
+
+    a = a + 8184;
+
+    *a = 7;
+
+    return *a;
+}
+
+u64 test_free_same_size()
+{
+    u64* a = heap::allocate(8);
+
+    *a = 13;
+
+    heap::free(a);
+
+    u64* b = heap::allocate(8);
+
+    return *b;
+}
+
+u64 main()
+{
+    return test_{{ test }}();
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "allocate memory, write to it, and read from it",
+            "test": "allocate",
+            "expect_status": "137"
+        },
+        {
+            "name": "get different addresses for separate allocations",
+            "test": "separate_allocations",
+            "expect_status": "1"
+        },
+        {
+            "name": "get the same address for same size allocation after free",
+            "test": "free_same_size",
+            "expect_status": "13"
+        },
+        {
+            "name": "allocate more than the standard region size",
+            "test": "allocate_large",
+            "expect_status": "7"
+        }
+    ]
+}

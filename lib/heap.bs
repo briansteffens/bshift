@@ -1,23 +1,31 @@
+import io;
+
 u8* super_region = 0;
 u64* region_count = 0;
 
 u64 allocation_header_size = 9;
 u64 region_min_size = 4096;
 
-struct region_descriptor
+struct region
 {
     u8* address;
     u64 size;
 }
 
-region_descriptor* get_region_descriptor(u64 index)
+struct allocation
+{
+    bool free;
+    u64 size;
+}
+
+region* get_region(u64 index)
 {
     u8* address = super_region;
     address = address + 8;
 
     while (index > 0)
     {
-        address = address + sizeof(region_descriptor);
+        address = address + sizeof(region);
         index = index - 1;
     }
 
@@ -29,23 +37,27 @@ u8* map(u64 len)
     return syscall(9, 0, len, 3, 33, 0, 0);
 }
 
-u64 init()
+void init()
 {
-    allocation_header_size = 9;
-    region_min_size = 4096;
-
     super_region = map(4096);
     region_count = super_region;
 
     *region_count = 0;
-
-    return *region_count;
 }
 
-struct allocation
+allocation* next_allocation(region* reg, allocation* current)
 {
-    bool free;
-    u64 size;
+    u64 end_of_region = reg.address + reg.size;
+
+    u64* alloc_ptr = current;
+    alloc_ptr = alloc_ptr + allocation_header_size + current.size;
+
+    if (alloc_ptr >= end_of_region)
+    {
+        return 0;
+    }
+
+    return alloc_ptr;
 }
 
 allocation* find_free(u64 bytes)
@@ -53,23 +65,18 @@ allocation* find_free(u64 bytes)
     u64 region_index = 0;
     while (region_index < *region_count)
     {
-        region_descriptor* region = get_region_descriptor(region_index);
-        u8* region_ptr = region;
+        auto reg = get_region(region_index);
+        allocation* alloc = reg.address;
 
-        u8* end_of_region = region_ptr + region.size;
-        u64* alloc_ptr = region.address;
-
-        while (alloc_ptr < end_of_region)
+        while (alloc != 0)
         {
-            allocation* alloc = alloc_ptr;
-
             auto alloc_size = alloc.size;
             if (alloc.free == 1 && alloc_size >= bytes)
             {
                 return alloc;
             }
 
-            alloc_ptr = alloc_ptr + allocation_header_size + alloc.size;
+            alloc = next_allocation(reg, alloc);
         }
 
         region_index = region_index + 1;
@@ -78,7 +85,7 @@ allocation* find_free(u64 bytes)
     return 0;
 }
 
-region_descriptor* allocate_region(u64 min_bytes)
+region* allocate_region(u64 min_bytes)
 {
     auto min_size = allocation_header_size + min_bytes;
     if (min_size < region_min_size)
@@ -86,7 +93,7 @@ region_descriptor* allocate_region(u64 min_bytes)
         min_size = region_min_size;
     }
 
-    region_descriptor* new_region = get_region_descriptor(*region_count);
+    auto new_region = get_region(*region_count);
     *region_count = *region_count + 1;
 
     new_region.address = map(min_size);
@@ -101,16 +108,21 @@ region_descriptor* allocate_region(u64 min_bytes)
 
 u8* allocate(u64 bytes)
 {
+    if (super_region == 0)
+    {
+        init();
+    }
+
     auto alloc = find_free(bytes);
 
     if (alloc == 0)
     {
-        auto region = allocate_region(bytes);
-        if (region == 0)
+        auto reg = allocate_region(bytes);
+        if (reg == 0)
         {
             return 0;
         }
-        alloc = region.address;
+        alloc = reg.address;
     }
 
     u8* alloc_ptr = alloc;
@@ -130,10 +142,40 @@ u8* allocate(u64 bytes)
     return alloc_ptr + allocation_header_size;
 }
 
-u8* free(u8* ptr)
+void free(u8* ptr)
 {
     allocation* alloc = ptr - allocation_header_size;
     alloc.free = true;
+}
 
-    return 0;
+// Prints debugging info listing all regions and allocations
+void debug_info()
+{
+    u64 region_index = 0;
+    while (region_index < *region_count)
+    {
+        auto reg = get_region(region_index);
+
+        io::print("region %u\n", region_index);
+
+        allocation* alloc = reg.address;
+
+        while (alloc != 0)
+        {
+            if (alloc.free)
+            {
+                io::print("    free ");
+            }
+            else
+            {
+                io::print("    used ");
+            }
+
+            io::print("%u bytes\n", alloc.size);
+
+            alloc = next_allocation(reg, alloc);
+        }
+
+        region_index = region_index + 1;
+    }
 }
