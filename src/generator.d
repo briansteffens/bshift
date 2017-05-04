@@ -948,6 +948,7 @@ void generateBlock(GeneratorState state, Block block)
     foreach (statement; block.statements)
     {
         generateStatementBase(state, statement);
+        state.temps = [];
     }
 
     cleanupBlock(state, block, null);
