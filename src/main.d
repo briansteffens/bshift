@@ -188,7 +188,7 @@ CompileResult compile(string sourceFilename)
     }
 
     // Parser
-    auto moduleName = replace(sourceFilename, ".bs", "");
+    auto moduleName = replace(sourceFilename, ".bs", "").split("/")[$-1];
     auto mod = parse(moduleName, tokens);
 
     if (verbose)

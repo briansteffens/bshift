@@ -657,13 +657,20 @@ void placeParameter(Local local, Register[] registerList, int index)
 
 string renderName(FunctionSignature sig)
 {
+    if (sig.name == "main")
+    {
+        return sig.name;
+    }
+
+    auto ret = sig.name;
+
     auto method = cast(MethodSignature)sig;
     if (method !is null)
     {
-        return format("%s_%s", method.containerType, method.name);
+        ret = format("%s_%s", method.containerType, ret);
     }
 
-    return sig.name;
+    return format("%s_%s", sig.mod.name, ret);
 }
 
 void generateFunction(GeneratorState state, Function func)
@@ -1962,12 +1969,14 @@ Local generateCall(GeneratorState state, Call call)
 
     // Make sure the function gets listed as an extern
     auto bshiftFunc = cast(Function)func;
-    auto funcLocal = bshiftFunc !is null && bshiftFunc.mod == state.mod;
+    auto funcLocal = bshiftFunc !is null &&
+                     bshiftFunc.signature.mod == state.mod;
     auto bshiftMethod = cast(Method)func;
-    auto methodLocal = bshiftMethod !is null && bshiftMethod.mod == state.mod;
+    auto methodLocal = bshiftMethod !is null &&
+                       bshiftMethod.signature.mod == state.mod;
     if (!funcLocal && !methodLocal)
     {
-        state.addExtern(func.name);
+        state.addExtern(renderName(func));
     }
 
     return cleanupCall(state, func.returnType, callerPreserved);

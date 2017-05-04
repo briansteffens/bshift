@@ -1285,6 +1285,7 @@ class Block : StatementBase
 
 class FunctionSignature
 {
+    Module mod;
     Type returnType;
     string name;
     TypeSignature[] parameters;
@@ -1358,7 +1359,6 @@ class MethodSignature : FunctionSignature
 class Function : InsideFunction
 {
     FunctionSignature signature;
-    Module mod;
     Block block;
 
     this(FunctionSignature signature, Block block)

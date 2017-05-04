@@ -242,7 +242,7 @@ Module parse(string name, Token[] tokenArray)
 
     foreach (func; functions)
     {
-        func.mod = ret;
+        func.signature.mod = ret;
     }
 
     validate(ret);
