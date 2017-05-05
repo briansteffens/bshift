@@ -22,6 +22,13 @@ u8* super_region = 0;
 // The number of regions.
 u64* region_count = 0;
 
+// Where to start a search for a free allocation.
+allocation* next_free = 0;
+
+// The number of tries to find a free allocation before giving up and mapping
+// in a new region.
+u64 give_up_after = 2;
+
 u64 region_min_size = 4096;
 
 u64 get_region_index(region* r)
@@ -60,7 +67,7 @@ void init()
     *region_count = 0;
 }
 
-allocation* next_allocation(allocation* current)
+allocation* next_allocation_in_region(allocation* current)
 {
     region* reg = current.parent;
     u64 end_of_region = reg.address + reg.size;
@@ -76,26 +83,65 @@ allocation* next_allocation(allocation* current)
     return alloc_ptr;
 }
 
+allocation* next_allocation(allocation* current)
+{
+    allocation* next = next_allocation_in_region(current);
+
+    if (next != 0)
+    {
+        return next;
+    }
+
+    u64 index = get_region_index(current.parent);
+    index = index + 1;
+    if (index > *region_count)
+    {
+        index = 0;
+    }
+    region* reg = get_region(index);
+    return reg.address;
+}
+
 allocation* find_free(u64 bytes)
 {
-    u64 region_index = 0;
-    while (region_index < *region_count)
+    if (*region_count == 0)
     {
-        auto reg = get_region(region_index);
-        allocation* alloc = reg.address;
+        return 0;
+    }
 
-        while (alloc != 0)
+    allocation* alloc = next_free;
+
+    // No cached starting point: start from the beginning.
+    if (alloc == 0)
+    {
+        auto reg = get_region(0);
+        alloc = reg.address;
+    }
+
+    allocation* search_start = alloc;
+    bool first_run = true;
+    u64 tries = give_up_after;
+
+    while (tries > 0)
+    {
+        io::print("check\n");
+
+        if (first_run == false && alloc == search_start)
         {
-            auto alloc_size = alloc.size;
-            if (alloc.free == 1 && alloc_size >= bytes)
-            {
-                return alloc;
-            }
-
-            alloc = next_allocation(alloc);
+            return 0;
         }
 
-        region_index = region_index + 1;
+        first_run = false;
+
+        auto alloc_size = alloc.size;
+        if (alloc.free == 1 && alloc_size >= bytes)
+        {
+            return alloc;
+        }
+
+        alloc = next_allocation(alloc);
+
+        tries = tries - 1;
     }
 
     return 0;
@@ -157,6 +203,8 @@ u8* allocate(u64 bytes)
         next_alloc.size = remaining - sizeof(allocation);
     }
 
+    next_free = next_allocation(alloc);
+
     alloc.free = false;
 
     return alloc_ptr + sizeof(allocation);
@@ -168,22 +216,16 @@ void free(u8* ptr)
 
     alloc.free = true;
 
-    allocation* next = next_allocation(alloc);
-    if (next != 0)
+    allocation* next = next_allocation_in_region(alloc);
+    if (next != 0 && next.free == true)
     {
-        if (next.free == true)
-        {
-            alloc.size = alloc.size + sizeof(allocation) + next.size;
-        }
+        alloc.size = alloc.size + sizeof(allocation) + next.size;
     }
 
     allocation* prev = alloc.previous;
-    if (prev != 0)
+    if (prev != 0 && prev.free == true)
     {
-        if (prev.free == true)
-        {
-            prev.size = prev.size + sizeof(allocation) + alloc.size;
-        }
+        prev.size = prev.size + sizeof(allocation) + alloc.size;
     }
 
     // Release the region if there are no more in-use allocations
@@ -210,6 +252,17 @@ void free(u8* ptr)
         memory::copy(addr, addr - sizeof(region), count);
 
         *region_count = *region_count - 1;
+
+        return;
+    }
+
+    if (prev == 0)
+    {
+        next_free = alloc;
+    }
+    else
+    {
+        next_free = prev;
     }
 }
 
@@ -245,7 +298,7 @@ void __debug_info()
 
             io::print("%u bytes\n", alloc.size);
 
-            alloc = next_allocation(alloc);
+            alloc = next_allocation_in_region(alloc);
         }
 
         region_index = region_index + 1;
