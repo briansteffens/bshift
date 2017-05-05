@@ -19,6 +19,9 @@ struct allocation
 // stored.
 u8* super_region = 0;
 
+// The size of the super region. Grows as needed.
+u64 super_region_size = 4096;
+
 // The number of regions.
 u64* region_count = 0;
 
@@ -59,9 +62,25 @@ u8* map(u64 len)
     return ret;
 }
 
+// Get the minimum required space to store the given number of regions in a
+// super region.
+u64 super_region_min_size(u64 regions)
+{
+    u64 ret = 8;
+
+    // TODO: multiply
+    while (regions > 0)
+    {
+        ret = ret + sizeof(region);
+        regions = regions - 1;
+    }
+
+    return ret;
+}
+
 void init()
 {
-    super_region = map(4096);
+    super_region = map(super_region_size);
     region_count = super_region;
 
     *region_count = 0;
@@ -155,8 +174,26 @@ region* allocate_region(u64 min_bytes)
         min_size = region_min_size;
     }
 
-    auto new_region = get_region(*region_count);
-    *region_count = *region_count + 1;
+    auto new_region_index = *region_count;
+    auto new_region_count = *region_count + 1;
+
+    // Grow the super region if necessary
+    if (super_region_size < super_region_min_size(new_region_count))
+    {
+        super_region_size = super_region_size + super_region_size;
+
+        u8* new_super_region = map(super_region_size);
+
+        memory::copy(super_region, new_super_region,
+                     super_region_min_size(*region_count));
+
+        super_region = new_super_region;
+        region_count = super_region;
+    }
+
+    *region_count = new_region_count;
+
+    auto new_region = get_region(new_region_index);
 
     new_region.address = map(min_size);
     new_region.size = min_size;
@@ -271,6 +308,11 @@ void free(u8* ptr)
 u64 __debug_region_count()
 {
     return *region_count;
+}
+
+u64 __debug_super_region_size()
+{
+    return super_region_size;
 }
 
 // Prints debugging info listing all regions and allocations

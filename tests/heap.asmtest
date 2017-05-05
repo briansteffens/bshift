@@ -93,6 +93,26 @@ u64 test_free_unmap()
     return heap::__debug_region_count() == 1;
 }
 
+u64 test_grow_super_region()
+{
+    u64 original_super_region_size = heap::__debug_super_region_size();
+    u64 max = 300;
+
+    while (max > 0)
+    {
+        heap::allocate(2048);
+
+        if (heap::__debug_super_region_size() > original_super_region_size)
+        {
+            return 1;
+        }
+
+        max = max - 1;
+    }
+
+    return 0;
+}
+
 u64 main()
 {
     return test_{{ test }}();
@@ -140,6 +160,11 @@ u64 main()
         {
             "name": "free unmaps regions that aren't needed anymore",
             "test": "free_unmap",
+            "expect_status": "1"
+        },
+        {
+            "name": "super region grows if enough regions are mapped",
+            "test": "grow_super_region",
             "expect_status": "1"
         }
     ]
