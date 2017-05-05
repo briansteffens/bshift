@@ -1,0 +1,12 @@
+void copy(u8* source, u8* destination, u64 bytes)
+{
+    while (bytes > 0)
+    {
+        *destination = *source;
+
+        source = source + 1;
+        destination = destination + 1;
+
+        bytes = bytes - 1;
+    }
+}

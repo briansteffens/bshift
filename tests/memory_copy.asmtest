@@ -1,0 +1,43 @@
+import memory;
+
+u64 test_u64()
+{
+    u64 a = 137;
+    u64 b = 0;
+
+    memory::copy(&a, &b, sizeof(u64));
+
+    return b;
+}
+
+u64 test_cstring()
+{
+    u8* a = "hi";
+    u8[3] b;
+
+    memory::copy(a, &b, 3);
+
+    return b[0] == 104 && b[1] == 105 && b[2] == 0;
+}
+
+u64 main()
+{
+    return test_{{ test }}();
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "copy u64",
+            "test": "u64",
+            "expect_status": "137"
+        },
+        {
+            "name": "copy a cstring",
+            "test": "cstring",
+            "expect_status": "1"
+        }
+    ]
+}
