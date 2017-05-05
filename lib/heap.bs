@@ -1,10 +1,5 @@
 import io;
-
-u8* super_region = 0;
-u64* region_count = 0;
-
-u64 allocation_header_size = 9;
-u64 region_min_size = 4096;
+import memory;
 
 struct region
 {
@@ -14,15 +9,33 @@ struct region
 
 struct allocation
 {
+    region* parent;
+    u8* previous;
     bool free;
     u64 size;
+}
+
+// Pointer to the start of the super region, where the list of regions are
+// stored.
+u8* super_region = 0;
+
+// The number of regions.
+u64* region_count = 0;
+
+u64 region_min_size = 4096;
+
+u64 get_region_index(region* r)
+{
+    u8* r_ptr = r;
+    return r_ptr - super_region - sizeof(u64) / sizeof(region);
 }
 
 region* get_region(u64 index)
 {
     u8* address = super_region;
-    address = address + 8;
+    address = address + sizeof(u64);
 
+    // TODO: multiply
     while (index > 0)
     {
         address = address + sizeof(region);
@@ -34,7 +47,9 @@ region* get_region(u64 index)
 
 u8* map(u64 len)
 {
-    return syscall(9, 0, len, 3, 33, 0, 0);
+    u8* ret = syscall(9, 0, len, 3, 33, 0, 0);
+
+    return ret;
 }
 
 void init()
@@ -45,12 +60,13 @@ void init()
     *region_count = 0;
 }
 
-allocation* next_allocation(region* reg, allocation* current)
+allocation* next_allocation(allocation* current)
 {
+    region* reg = current.parent;
     u64 end_of_region = reg.address + reg.size;
 
     u64* alloc_ptr = current;
-    alloc_ptr = alloc_ptr + allocation_header_size + current.size;
+    alloc_ptr = alloc_ptr + sizeof(allocation) + current.size;
 
     if (alloc_ptr >= end_of_region)
     {
@@ -76,7 +92,7 @@ allocation* find_free(u64 bytes)
                 return alloc;
             }
 
-            alloc = next_allocation(reg, alloc);
+            alloc = next_allocation(alloc);
         }
 
         region_index = region_index + 1;
@@ -87,7 +103,7 @@ allocation* find_free(u64 bytes)
 
 region* allocate_region(u64 min_bytes)
 {
-    auto min_size = allocation_header_size + min_bytes;
+    auto min_size = sizeof(allocation) + min_bytes;
     if (min_size < region_min_size)
     {
         min_size = region_min_size;
@@ -100,8 +116,10 @@ region* allocate_region(u64 min_bytes)
     new_region.size = min_size;
 
     allocation* alloc = new_region.address;
+    alloc.parent = new_region;
+    alloc.previous = 0;
     alloc.free = true;
-    alloc.size = new_region.size - allocation_header_size;
+    alloc.size = new_region.size - sizeof(allocation);
 
     return new_region;
 }
@@ -128,28 +146,82 @@ u8* allocate(u64 bytes)
     u8* alloc_ptr = alloc;
     auto remaining = alloc.size - bytes;
 
-    if (remaining >= allocation_header_size)
+    if (remaining >= sizeof(allocation))
     {
         alloc.size = bytes;
 
-        allocation* next_alloc = alloc_ptr + allocation_header_size + bytes;
+        allocation* next_alloc = alloc_ptr + sizeof(allocation) + bytes;
+        next_alloc.parent = alloc.parent;
+        next_alloc.previous = alloc_ptr;
         next_alloc.free = true;
-        next_alloc.size = remaining - allocation_header_size;
+        next_alloc.size = remaining - sizeof(allocation);
     }
 
     alloc.free = false;
 
-    return alloc_ptr + allocation_header_size;
+    return alloc_ptr + sizeof(allocation);
 }
 
 void free(u8* ptr)
 {
-    allocation* alloc = ptr - allocation_header_size;
+    allocation* alloc = ptr - sizeof(allocation);
+
     alloc.free = true;
+
+    allocation* next = next_allocation(alloc);
+    if (next != 0)
+    {
+        if (next.free == true)
+        {
+            alloc.size = alloc.size + sizeof(allocation) + next.size;
+        }
+    }
+
+    allocation* prev = alloc.previous;
+    if (prev != 0)
+    {
+        if (prev.free == true)
+        {
+            prev.size = prev.size + sizeof(allocation) + alloc.size;
+        }
+    }
+
+    // Release the region if there are no more in-use allocations
+    region* parent = alloc.parent;
+    allocation* first = parent.address;
+
+    if (first.free == true &&
+        sizeof(allocation) + first.size == parent.size &&
+        *region_count > 1)
+    {
+        syscall(11, parent.address, parent.size);
+
+        u64 i = get_region_index(parent);
+        u8* addr = parent;
+
+        // TODO: multiply
+        u64 regions = *region_count - i;
+        u64 count = 0;
+        while (regions > 0)
+        {
+            count = count + sizeof(region);
+        }
+
+        memory::copy(addr, addr - sizeof(region), count);
+
+        *region_count = *region_count - 1;
+    }
+}
+
+// Debugging stuff ------------------------------------------------------------
+
+u64 __debug_region_count()
+{
+    return *region_count;
 }
 
 // Prints debugging info listing all regions and allocations
-void debug_info()
+void __debug_info()
 {
     u64 region_index = 0;
     while (region_index < *region_count)
@@ -173,7 +245,7 @@ void debug_info()
 
             io::print("%u bytes\n", alloc.size);
 
-            alloc = next_allocation(reg, alloc);
+            alloc = next_allocation(alloc);
         }
 
         region_index = region_index + 1;

@@ -43,6 +43,56 @@ u64 test_free_same_size()
     return *b;
 }
 
+u64 test_free_previous()
+{
+    u64* a = heap::allocate(8);
+    u64* b = heap::allocate(8);
+
+    heap::free(a);
+    heap::free(b);
+
+    u64* c = heap::allocate(16);
+
+    return a == c;
+}
+
+u64 test_free_next()
+{
+    u64* a = heap::allocate(8);
+    u64* b = heap::allocate(8);
+
+    heap::free(b);
+    heap::free(a);
+
+    u64* c = heap::allocate(16);
+
+    return a == c;
+}
+
+u64 test_free_minimum_one_region()
+{
+    u64* a = heap::allocate(8);
+
+    heap::free(a);
+
+    return heap::__debug_region_count() == 1;
+}
+
+u64 test_free_unmap()
+{
+    u64* a = heap::allocate(2048);
+    u64* b = heap::allocate(2048);
+
+    if (heap::__debug_region_count() != 2)
+    {
+        return 10;
+    }
+
+    heap::free(b);
+
+    return heap::__debug_region_count() == 1;
+}
+
 u64 main()
 {
     return test_{{ test }}();
@@ -71,6 +121,26 @@ u64 main()
             "name": "allocate more than the standard region size",
             "test": "allocate_large",
             "expect_status": "7"
+        },
+        {
+            "name": "free absorbs previous adjacent free block",
+            "test": "free_previous",
+            "expect_status": "1"
+        },
+        {
+            "name": "free absorbs next adjacent free block",
+            "test": "free_next",
+            "expect_status": "1"
+        },
+        {
+            "name": "free always keeps at least one region mapped",
+            "test": "free_minimum_one_region",
+            "expect_status": "1"
+        },
+        {
+            "name": "free unmaps regions that aren't needed anymore",
+            "test": "free_unmap",
+            "expect_status": "1"
         }
     ]
 }
