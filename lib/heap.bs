@@ -11,7 +11,7 @@ struct allocation
 {
     region* parent;
     u8* previous;
-    bool free;
+    u64 free;       // This is a bool but padded out for alignment purposes.
     u64 size;
 }
 
@@ -33,6 +33,18 @@ allocation* next_free = 0;
 u64 give_up_after = 2;
 
 u64 region_min_size = 4096;
+
+u64 align(u64 value, u64 alignment)
+{
+    u64 remainder = value % alignment;
+
+    if (remainder == 0)
+    {
+        return value;
+    }
+
+    return value + alignment - remainder;
+}
 
 u64 get_region_index(region* r)
 {
@@ -213,6 +225,8 @@ u8* allocate(u64 bytes)
     {
         init();
     }
+
+    bytes = align(bytes, 16);
 
     auto alloc = find_free(bytes);
 

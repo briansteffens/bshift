@@ -30,6 +30,14 @@ u64 test_allocate_large()
     return *a;
 }
 
+u64 test_allocate_alignment()
+{
+    u8* a = heap::allocate(3);
+    u8* b = heap::allocate(7);
+
+    return b % 16 == 0;
+}
+
 u64 test_free_same_size()
 {
     u64* a = heap::allocate(8);
@@ -141,6 +149,11 @@ u64 main()
             "name": "allocate more than the standard region size",
             "test": "allocate_large",
             "expect_status": "7"
+        },
+        {
+            "name": "allocations are aligned to 16-byte boundaries",
+            "test": "allocate_alignment",
+            "expect_status": "1"
         },
         {
             "name": "free absorbs previous adjacent free block",
