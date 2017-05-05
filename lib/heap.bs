@@ -49,7 +49,7 @@ u64 align(u64 value, u64 alignment)
 u64 get_region_index(region* r)
 {
     u8* r_ptr = r;
-    return r_ptr - super_region - sizeof(u64) / sizeof(region);
+    return (r_ptr - super_region - sizeof(u64)) / sizeof(region);
 }
 
 region* get_region(u64 index)
@@ -125,7 +125,7 @@ allocation* next_allocation(allocation* current)
 
     u64 index = get_region_index(current.parent);
     index = index + 1;
-    if (index > *region_count)
+    if (index >= *region_count)
     {
         index = 0;
     }
@@ -155,8 +155,6 @@ allocation* find_free(u64 bytes)
 
     while (tries > 0)
     {
-        io::print("check\n");
-
         if (first_run == false && alloc == search_start)
         {
             return 0;
@@ -261,6 +259,29 @@ u8* allocate(u64 bytes)
     return alloc_ptr + sizeof(allocation);
 }
 
+u8* reallocate(u8* ptr, u64 bytes)
+{
+    bytes = align(bytes, 16);
+
+    allocation* original_alloc = ptr - sizeof(allocation);
+
+    // Don't bother reallocating if it's not needed.
+    // TODO: shrink?
+    auto original_alloc_size = original_alloc.size;
+    if (original_alloc_size >= bytes)
+    {
+        return ptr;
+    }
+
+    allocation* new_alloc = allocate(bytes);
+
+    memory::copy(ptr, new_alloc, original_alloc_size);
+
+    free(ptr);
+
+    return new_alloc;
+}
+
 void free(u8* ptr)
 {
     allocation* alloc = ptr - sizeof(allocation);
@@ -298,9 +319,12 @@ void free(u8* ptr)
         while (regions > 0)
         {
             count = count + sizeof(region);
+            regions = regions - 1;
         }
 
-        memory::copy(addr, addr - sizeof(region), count);
+        // TODO: make regions a linked list or something to avoid linear
+        // copy on region release?
+        memory::copy(addr + sizeof(region), addr, count);
 
         *region_count = *region_count - 1;
 

@@ -38,6 +38,28 @@ u64 test_allocate_alignment()
     return b % 16 == 0;
 }
 
+u64 test_reallocate_larger()
+{
+    u64* a = heap::allocate(8);
+
+    *a = 123;
+
+    a = heap::reallocate(a, 16);
+
+    return *a == 123;
+}
+
+u64 test_reallocate_smaller()
+{
+    u64* a = heap::allocate(16);
+
+    *a = 123;
+
+    u64* b = heap::reallocate(a, 8);
+
+    return a == b;
+}
+
 u64 test_free_same_size()
 {
     u64* a = heap::allocate(8);
@@ -153,6 +175,16 @@ u64 main()
         {
             "name": "allocations are aligned to 16-byte boundaries",
             "test": "allocate_alignment",
+            "expect_status": "1"
+        },
+        {
+            "name": "data is preserved after reallocation to larger size",
+            "test": "reallocate_larger",
+            "expect_status": "1"
+        },
+        {
+            "name": "same pointer returned after reallocation to smaller size",
+            "test": "reallocate_smaller",
             "expect_status": "1"
         },
         {
