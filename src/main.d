@@ -46,7 +46,8 @@ int main(string[] args)
     }
 
     // [.bs] -> [.asm]
-    auto results = recursiveCompile(sourceFilename);
+    Import[] imported;
+    auto results = recursiveCompile(imported, sourceFilename);
 
     // [.asm] -> [.o]
     string[] asmFiles;
@@ -219,7 +220,7 @@ CompileResult compile(string sourceFilename)
 }
 
 // Compile a module and any imported modules
-CompileResult[] recursiveCompile(string sourceFilename)
+CompileResult[] recursiveCompile(ref Import[] imported, string sourceFilename)
 {
     CompileResult[] ret;
 
@@ -228,7 +229,24 @@ CompileResult[] recursiveCompile(string sourceFilename)
 
     foreach (imp; result.mod.imports)
     {
-        ret ~= recursiveCompile(imp.filename);
+        bool found = false;
+        foreach (i; imported)
+        {
+            if (i.filename == imp.filename)
+            {
+                found = true;
+                break;
+            }
+        }
+
+        if (found)
+        {
+            continue;
+        }
+
+        ret ~= recursiveCompile(imported, imp.filename);
+
+        imported ~= imp;
     }
 
     return ret;
