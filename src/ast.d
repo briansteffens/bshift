@@ -1074,6 +1074,30 @@ class Assignment : StatementBase
     }
 }
 
+class Defer : StatementBase
+{
+    StatementBase statement;
+
+    this(Line line, StatementBase statement)
+    {
+        super(line);
+
+        this.statement = statement;
+
+        this.statement.parent = this;
+    }
+
+    override string toString()
+    {
+        return format("defer %s", this.statement);
+    }
+
+    override StatementBase[] childStatements()
+    {
+        return [this.statement];
+    }
+}
+
 class ConditionalBlock : StatementBase
 {
     Node conditional;

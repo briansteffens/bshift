@@ -554,6 +554,8 @@ StatementBase parseStatementBase(TokenFeed tokens)
                 return parseIf(tokens);
             case "while":
                 return parseWhile(tokens);
+            case "defer":
+                return parseDefer(tokens);
             default:
                 auto localDeclaration = parseLocalDeclaration(tokens);
                 if (localDeclaration !is null)
@@ -656,6 +658,12 @@ TypeSignature parseTypeSignature(TokenFeed tokens)
     }
 
     return new TypeSignature(type, tokens.current().value);
+}
+
+Defer parseDefer(TokenFeed tokens)
+{
+    tokens.next();
+    return new Defer(null, parseStatementBase(tokens));
 }
 
 Assignment parseAssignment(TokenFeed tokens)
@@ -1518,6 +1526,15 @@ void completeFunction(Module mod, FunctionSignature func)
     }
 }
 
+class ValidationResult
+{
+    // Inject these statements before the statement being validated
+    StatementBase[] injectBefore;
+
+    // Remove the thing being validated
+    bool remove;
+}
+
 void validate(Module mod)
 {
     // Complete struct definitions
@@ -1573,12 +1590,17 @@ void validateFunction(Module mod, Function func)
 
     if (cast(Return)func.block.statements[$-1] is null)
     {
-        func.block.statements ~= new Return(null, null);
+        auto ret = new Return(null, null);
+        ret.parent = func.block;
+        validateStatement(mod, ret);
+        func.block.statements ~= ret;
     }
 }
 
-void validateStatement(Module mod, StatementBase st)
+ValidationResult validateStatement(Module mod, StatementBase st)
 {
+    auto ret = new ValidationResult();
+
     foreach (childNode; st.childNodes)
     {
         validateNode(mod, childNode);
@@ -1601,10 +1623,80 @@ void validateStatement(Module mod, StatementBase st)
         }
     }
 
-    foreach (childStatement; st.childStatements)
+    auto retSt = cast(Return)st;
+    if (retSt !is null)
     {
-        validateStatement(mod, childStatement);
+        foreach (previous; previousStatementsAll(mod, st))
+        {
+            auto defer = cast(Defer)previous;
+            if (defer is null)
+            {
+                continue;
+            }
+
+            // TODO: handle result of this?
+            validateStatement(mod, defer.statement);
+            defer.statement.parent = st.parent;
+            ret.injectBefore ~= defer.statement;
+        }
     }
+
+    auto block = cast(Block)st;
+    if (block is null)
+    {
+        foreach (childStatement; st.childStatements)
+        {
+            // TODO: handle result?
+            validateStatement(mod, childStatement);
+        }
+    }
+    else
+    {
+        StatementBase[] newChildren;
+
+        foreach (childStatement; block.statements)
+        {
+            auto res = validateStatement(mod, childStatement);
+
+            newChildren ~= res.injectBefore;
+
+            if (!res.remove)
+            {
+                newChildren ~= childStatement;
+            }
+        }
+
+        block.statements = newChildren;
+
+        if (block.statements.length > 0)
+        {
+            auto lastStatement = block.statements[$-1];
+            auto blockReturn = cast(Return)lastStatement;
+            if (blockReturn is null)
+            {
+                StatementBase[] before = previousStatements(
+                        mod, lastStatement);
+
+                before = lastStatement ~ before;
+
+                foreach (previous; before)
+                {
+                    auto defer = cast(Defer)previous;
+                    if (defer is null)
+                    {
+                        continue;
+                    }
+
+                    // TODO: handle result of this?
+                    validateStatement(mod, defer.statement);
+                    defer.statement.parent = st.parent;
+                    block.statements ~= defer.statement;
+                }
+            }
+        }
+    }
+
+    return ret;
 }
 
 Type completeType(Module mod, Type type)
@@ -1714,9 +1806,10 @@ void validateNode(Module mod, Node node)
     node.retype();
 }
 
-TypeSignature findLocal(Module mod, Node node, string name)
+// Find the statement is part of.
+StatementBase parentStatement(Module mod, Node node)
 {
-    // Walk up the tree until the first statement
+    // Walk up the tree until the first statement is found
     while (node.parent !is null)
     {
         auto parentNode = cast(Node)node.parent;
@@ -1729,7 +1822,7 @@ TypeSignature findLocal(Module mod, Node node, string name)
         auto statement = cast(StatementBase)node.parent;
         if (statement !is null)
         {
-            return findLocal(mod, statement, name);
+            return statement;
         }
     }
 
@@ -1753,7 +1846,37 @@ StatementBase nextWithBlockParent(StatementBase st)
     return st;
 }
 
-TypeSignature findLocal(Module mod, StatementBase statement, string name)
+// Find all statements that came before the given statement in its block.
+StatementBase[] previousStatements(Module mod, StatementBase statement)
+{
+    StatementBase[] ret;
+
+    // Find the nearest Block ancestor
+    statement = nextWithBlockParent(statement);
+    if (statement is null)
+    {
+        throw new Exception("No more parents");
+    }
+
+    auto parent = cast(Block)statement.parent;
+
+    // Add sibling statements that come before this statement in the block
+    foreach (st; parent.statements)
+    {
+        if (st == statement)
+        {
+            break;
+        }
+
+        ret = st ~ ret;
+    }
+
+    return ret;
+}
+
+// Find all statements that came before the given statement, walking up the
+// tree to show containing blocks as well.
+StatementBase[] previousStatementsAll(Module mod, StatementBase statement)
 {
     // Find the nearest Block ancestor
     statement = nextWithBlockParent(statement);
@@ -1764,15 +1887,27 @@ TypeSignature findLocal(Module mod, StatementBase statement, string name)
 
     auto parent = cast(Block)statement.parent;
 
-    // Check sibling statements that come before this statement in the block
-    // for locals
-    foreach (st; parent.statements)
-    {
-        if (st == statement)
-        {
-            continue;
-        }
+    auto ret = previousStatements(mod, statement);
 
+    // Continue walking up the tree
+    auto parentStatement = cast(StatementBase)parent.parent;
+    if (parentStatement !is null)
+    {
+        ret ~= previousStatementsAll(mod, parentStatement);
+    }
+
+    return ret;
+}
+
+TypeSignature findLocal(Module mod, Node node, string name)
+{
+    return findLocal(mod, parentStatement(mod, node), name);
+}
+
+TypeSignature findLocal(Module mod, StatementBase statement, string name)
+{
+    foreach (st; previousStatementsAll(mod, statement))
+    {
         auto local = cast(LocalDeclaration)st;
         if (local !is null)
         {
@@ -1783,24 +1918,14 @@ TypeSignature findLocal(Module mod, StatementBase statement, string name)
         }
     }
 
-    // Local not found in this block: continue walking up the tree
-    auto parentStatement = cast(StatementBase)parent.parent;
-    if (parentStatement !is null)
-    {
-        return findLocal(mod, parentStatement, name);
-    }
-
     // Local not found in this function: check the function/method parameters
-    auto func = cast(Function)parent.parent;
-    if (func !is null)
+    auto func = statement.containingFunction();
+    auto parameters = func.parameters;
+    foreach (param; parameters)
     {
-        auto parameters = func.signature.parameters;
-        foreach (param; parameters)
+        if (param.name == name)
         {
-            if (param.name == name)
-            {
-                return param;
-            }
+            return param;
         }
     }
 

@@ -838,6 +838,13 @@ void generateStatementBase(GeneratorState state, StatementBase st)
         return;
     }
 
+    auto defer = cast(Defer)st;
+    if (defer !is null)
+    {
+        // Skip defer
+        return;
+    }
+
     throw new Exception(format("Unrecognized statement type: %s", st));
 }
 
