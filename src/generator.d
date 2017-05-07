@@ -1,6 +1,7 @@
 import std.stdio;
 import std.format;
 import std.conv;
+import std.array;
 
 import globals;
 import ast;
@@ -537,7 +538,13 @@ string renderStringLiteral(GeneratorState state, ulong index)
 
     if (state.stringLiterals[index] != "")
     {
-        value = format("\"%s\", 0", state.stringLiterals[index]);
+        value = state.stringLiterals[index];
+
+        value = value.replace("\n", "\\n")
+                     .replace("\t", "\\t")
+                     .replace("\\", "\\\\");
+
+        value = format("\"%s\", 0", value);
     }
 
     return format("    %s: db %s", renderStringLiteralName(index), value);
