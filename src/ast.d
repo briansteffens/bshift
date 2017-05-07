@@ -868,6 +868,7 @@ class Struct
 {
     string name;
     TypeSignature[] members;
+    MethodSignature[] methods;
 
     this(string name, TypeSignature[] members)
     {

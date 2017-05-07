@@ -1557,6 +1557,16 @@ void validate(Module mod)
     {
         method.methodSignature.containerType = completeType(mod,
                 method.methodSignature.containerType);
+
+        auto container = cast(StructType)method.methodSignature.containerType;
+
+        if (container is null)
+        {
+            throw new Exception(format(
+                    "Method's container is not a struct: %s", method));
+        }
+
+        container.struct_.methods ~= method.methodSignature;
     }
 
     // Complete function signatures
@@ -1597,6 +1607,82 @@ void validateFunction(Module mod, Function func)
     }
 }
 
+StatementBase[] validateCleanup(Module mod, StatementBase parent,
+                                StatementBase[] previous)
+{
+    StatementBase[] ret;
+
+    foreach (prev; previous)
+    {
+        auto defer = cast(Defer)prev;
+        if (defer !is null)
+        {
+            // TODO: handle result of this?
+            validateStatement(mod, defer.statement);
+            defer.statement.parent = parent;
+            ret ~= defer.statement;
+
+            continue;
+        }
+
+        auto localDecl = cast(LocalDeclaration)prev;
+        if (localDecl !is null)
+        {
+            auto structType = cast(StructType)localDecl.signature.type;
+
+            if (structType is null)
+            {
+                continue;
+            }
+
+            // Find a destruct method if one exists
+            MethodSignature destructMethod = null;
+
+            foreach (met; structType.struct_.methods)
+            {
+                auto voidRet = cast(VoidType)met.returnType;
+                if (voidRet is null)
+                {
+                    continue;
+                }
+
+                if (met.name != "destruct")
+                {
+                    continue;
+                }
+
+                if (met.parameters.length != 1 || met.variadic)
+                {
+                    continue;
+                }
+
+                destructMethod = met;
+                break;
+            }
+
+            if (destructMethod is null)
+            {
+                continue;
+            }
+
+            auto sig = new TypeSignature(structType,
+                    localDecl.signature.name);
+            auto binding = new Binding(sig, sig.name);
+            auto call = new MethodCall(binding, "destruct", []);
+            auto sta = new Statement(null, call);
+
+            sta.parent = parent;
+            validateStatement(mod, sta);
+            sta.parent = parent;
+            ret ~= sta;
+
+            continue;
+        }
+    }
+
+    return ret;
+}
+
 ValidationResult validateStatement(Module mod, StatementBase st)
 {
     auto ret = new ValidationResult();
@@ -1626,19 +1712,8 @@ ValidationResult validateStatement(Module mod, StatementBase st)
     auto retSt = cast(Return)st;
     if (retSt !is null)
     {
-        foreach (previous; previousStatementsAll(mod, st))
-        {
-            auto defer = cast(Defer)previous;
-            if (defer is null)
-            {
-                continue;
-            }
-
-            // TODO: handle result of this?
-            validateStatement(mod, defer.statement);
-            defer.statement.parent = st.parent;
-            ret.injectBefore ~= defer.statement;
-        }
+        ret.injectBefore ~= validateCleanup(mod, st,
+                previousStatementsAll(mod, st));
     }
 
     auto block = cast(Block)st;
@@ -1679,19 +1754,7 @@ ValidationResult validateStatement(Module mod, StatementBase st)
 
                 before = lastStatement ~ before;
 
-                foreach (previous; before)
-                {
-                    auto defer = cast(Defer)previous;
-                    if (defer is null)
-                    {
-                        continue;
-                    }
-
-                    // TODO: handle result of this?
-                    validateStatement(mod, defer.statement);
-                    defer.statement.parent = st.parent;
-                    block.statements ~= defer.statement;
-                }
+                block.statements ~= validateCleanup(mod, block, before);
             }
         }
     }
