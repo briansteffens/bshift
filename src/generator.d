@@ -125,6 +125,11 @@ string lowByte(Register full)
 
 Register convertRegisterSize(Register r, OpSize size)
 {
+    if (registerSize(r) == size)
+    {
+        return r;
+    }
+
     if (size == OpSize.Byte)
     {
         return lowByteRegister(r);
@@ -150,7 +155,7 @@ OpSize primitiveToOpSize(Primitive t)
 
 OpSize typeToOpSize(Type t)
 {
-    if (t.pointer)
+    if (t.isStruct() || t.pointer)
     {
         return OpSize.Qword;
     }
@@ -540,9 +545,9 @@ string renderStringLiteral(GeneratorState state, ulong index)
     {
         value = state.stringLiterals[index];
 
-        value = value.replace("\n", "\\n")
-                     .replace("\t", "\\t")
-                     .replace("\\", "\\\\");
+        value = value.replace("\\", "\\\\")
+                     .replace("\n", "\\n")
+                     .replace("\t", "\\t");
 
         value = format("\"%s\", 0", value);
     }
@@ -877,6 +882,18 @@ class GeneratorIfBlock
     }
 }
 
+void generateConditional(GeneratorState state, Node conditional, string label)
+{
+    auto conditionalNode = generateNode(state, conditional);
+    auto conditionalRegister = requireLocalInRegister(state, conditionalNode);
+
+    state.render(format("    test %s, %s", conditionalRegister.register,
+                                           conditionalRegister.register));
+    state.render(format("    je %s", label));
+
+    state.freeTemp(conditionalRegister);
+}
+
 void generateWhile(GeneratorState state, While _while)
 {
     auto startWhileLabel = state.addLabel("while_start_");
@@ -937,11 +954,7 @@ void generateIf(GeneratorState state, If _if)
                 nextBlockLabel = blocks[i + 1].label;
             }
 
-            auto conditional = renderNode(state,
-                    generateNode(state, block.conditional));
-
-            state.render(format("    test %s, %s", conditional, conditional));
-            state.render(format("    je %s", nextBlockLabel));
+            generateConditional(state, block.conditional, nextBlockLabel);
         }
 
         // Block: run if the conditional was true
@@ -1376,6 +1389,7 @@ Local requireLocalInRegister(GeneratorState state, Node node)
 
     // Not in a register: make a new temp and copy it there
     auto ret = state.addTemp(node.type);
+    ret.register = convertRegisterSize(ret.register, typeToOpSize(ret.type));
 
     // Special handling for arrays and non-pointer structs
     if (node.type.elements !is null ||
@@ -1386,7 +1400,8 @@ Local requireLocalInRegister(GeneratorState state, Node node)
     }
     else
     {
-        state.render(format("    mov %s, %s", ret.register,
+        auto opSize = typeToOpSize(ret.type);
+        state.render(format("    mov %s %s, %s", opSize, ret.register,
                             renderNode(state, node)));
     }
 
@@ -1845,14 +1860,10 @@ Local generateLogicalAndOperator(GeneratorState state, Operator operator)
     auto endComparison = state.addLabel("end_comparison_");
 
     // Left operand
-    auto left = renderNode(state, generateNode(state, operator.left));
-    state.render(format("    test %s, %s", left, left));
-    state.render(format("    je %s", endComparison));
+    generateConditional(state, operator.left, endComparison);
 
     // Right operand
-    auto right = renderNode(state, generateNode(state, operator.right));
-    state.render(format("    test %s, %s", right, right));
-    state.render(format("    je %s", endComparison));
+    generateConditional(state, operator.right, endComparison);
 
     // Both were true
     state.render(format("    mov %s, 1", temp.register));

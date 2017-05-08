@@ -1,0 +1,33 @@
+u64 main()
+{
+    bool a = {{ a }};
+    bool b = {{ b }};
+
+    if ({{ conditional }})
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "if (a)",
+            "a": "true",
+            "b": "true",
+            "conditional": "a",
+            "expect_status": "1"
+        },
+        {
+            "name": "if (a && b)",
+            "a": "true",
+            "b": "true",
+            "conditional": "a && b",
+            "expect_status": "1"
+        }
+    ]
+}
