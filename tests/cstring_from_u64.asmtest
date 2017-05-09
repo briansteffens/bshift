@@ -5,7 +5,7 @@ u64 test_0(u64 t0)
     u8[16] str;
     u64 len = cstring::from_u64(0, &str);
 
-    return str[0] == 48 && str[1] == 0 && len == 1;
+    return str[0] == '0' && str[1] == 0 && len == 1;
 }
 
 u64 test_7(u64 t0)
@@ -13,7 +13,7 @@ u64 test_7(u64 t0)
     u8[16] str;
     u64 len = cstring::from_u64(7, &str);
 
-    return str[0] == 55 && str[1] == 0 && len == 1;
+    return str[0] == '7' && str[1] == 0 && len == 1;
 }
 
 u64 test_137(u64 t0)
@@ -21,17 +21,17 @@ u64 test_137(u64 t0)
     u8[16] str;
     u64 len = cstring::from_u64(137, &str);
 
-    if (str[0] != 49)
+    if (str[0] != '1')
     {
         return 0;
     }
 
-    if (str[1] != 51)
+    if (str[1] != '3')
     {
         return 0;
     }
 
-    if (str[2] != 55)
+    if (str[2] != '7')
     {
         return 0;
     }

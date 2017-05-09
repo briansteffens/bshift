@@ -904,6 +904,13 @@ Node parseToken(Token t)
             }
         case TokenType.DoubleQuote:
             return new StringLiteral(t.value);
+        case TokenType.SingleQuote:
+            if (t.value.length != 1)
+            {
+                throw new Exception(format("Invalid character literal: %s",
+                                           t.value));
+            }
+            return new U8Literal(t.value[0]);
         default:
             throw new Exception(format("Unrecognized token type: %s", t.type));
     }

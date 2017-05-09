@@ -8,6 +8,7 @@ enum TokenType
     Integer,
     Word,
     Symbol,
+    SingleQuote,
     DoubleQuote,
 }
 
@@ -95,6 +96,8 @@ pure string resolveEscapeSequence(dchar second)
             return "\t";
         case '"':
             return "\"";
+        case '\'':
+            return "'";
         default:
             throw new Exception(format(
                     "Unrecognized escape sequence: \\%s", second));
@@ -175,7 +178,8 @@ alias readFunction = Token function(Reader);
 immutable readFunction[] readFunctions = [
     &readNumeric,
     &readSymbol,
-    &readQuote,
+    &readDoubleQuote,
+    &readSingleQuote,
     &readWord,
 ];
 
@@ -291,9 +295,19 @@ bool skipSingleLineComment(Reader r)
     return true;
 }
 
-Token readQuote(Reader r)
+Token readDoubleQuote(Reader r)
 {
-    if (r.current() != '"')
+    return readQuote(r, '"', TokenType.DoubleQuote);
+}
+
+Token readSingleQuote(Reader r)
+{
+    return readQuote(r, '\'', TokenType.SingleQuote);
+}
+
+Token readQuote(Reader r, char quote, TokenType type)
+{
+    if (r.current() != quote)
     {
         return null;
     }
@@ -315,17 +329,17 @@ Token readQuote(Reader r)
         }
 
         // Detect and deal with double-escape quotes ("a""b")
-        if (r.current() == '"' && !r.isLast() && r.next() == '"')
+        if (r.current() == quote && !r.isLast() && r.next() == quote)
         {
             r.advance();
 
-            value ~= "\"";
+            value ~= quote;
 
             continue;
         }
 
         // Detect end of quote
-        if (r.current() == '"')
+        if (r.current() == quote)
         {
             break;
         }
@@ -333,7 +347,7 @@ Token readQuote(Reader r)
         value ~= r.current();
     }
 
-    return new Token(TokenType.DoubleQuote, value);
+    return new Token(type, value);
 }
 
 Token readNumeric(Reader r)

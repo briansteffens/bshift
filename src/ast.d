@@ -526,6 +526,22 @@ class U64Literal : Literal
     }
 }
 
+class U8Literal : Literal
+{
+    ubyte value;
+
+    this(ubyte value)
+    {
+        super(Primitive.U8);
+        this.value = value;
+    }
+
+    override string toString()
+    {
+        return to!string(this.value);
+    }
+}
+
 class BoolLiteral : Literal
 {
     bool value;

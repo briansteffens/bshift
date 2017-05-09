@@ -17,7 +17,7 @@ u64 test_cstring()
 
     memory::copy(a, &b, 3);
 
-    return b[0] == 104 && b[1] == 105 && b[2] == 0;
+    return b[0] == 'h' && b[1] == 'i' && b[2] == 0;
 }
 
 u64 main()

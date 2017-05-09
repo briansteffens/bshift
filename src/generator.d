@@ -2119,6 +2119,12 @@ string renderNode(GeneratorState state, Node node)
         return format("%d", u64Literal.value);
     }
 
+    auto u8Literal = cast(U8Literal)node;
+    if (u8Literal !is null)
+    {
+        return format("%d", u8Literal.value);
+    }
+
     auto boolLiteral = cast(BoolLiteral)node;
     if (boolLiteral !is null)
     {

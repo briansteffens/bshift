@@ -8,12 +8,12 @@ u64 test_hello2(u64 t0)
 
     auto copied = cstring::copy_limit(source, &destination, 2);
 
-    if (destination[0] != 104)
+    if (destination[0] != 'h')
     {
         return 100;
     }
 
-    if (destination[1] != 101)
+    if (destination[1] != 'e')
     {
         return 101;
     }
@@ -34,12 +34,12 @@ u64 test_hi4(u64 t0)
 
     auto copied = cstring::copy_limit(source, &destination, 4);
 
-    if (destination[0] != 104)
+    if (destination[0] != 'h')
     {
         return 100;
     }
 
-    if (destination[1] != 105)
+    if (destination[1] != 'i')
     {
         return 101;
     }

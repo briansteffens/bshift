@@ -13,7 +13,7 @@ u64 test_one_char(u64 t0)
     u8* str = "a";
     u64 t1 = cstring::reverse(str);
 
-    if (*str != 97)
+    if (*str != 'a')
     {
         return 0;
     }
@@ -28,14 +28,14 @@ u64 test_even(u64 t0)
     u8* str = "ab";
     u64 t1 = cstring::reverse(str);
 
-    if (*str != 98)
+    if (*str != 'b')
     {
         return 0;
     }
 
     str = str + 1;
 
-    if (*str != 97)
+    if (*str != 'a')
     {
         return 0;
     }
@@ -50,21 +50,21 @@ u64 test_odd(u64 t0)
     u8* str = "abc";
     u64 t1 = cstring::reverse(str);
 
-    if (*str != 99)
+    if (*str != 'c')
     {
         return 0;
     }
 
     str = str + 1;
 
-    if (*str != 98)
+    if (*str != 'b')
     {
         return 0;
     }
 
     str = str + 1;
 
-    if (*str != 97)
+    if (*str != 'a')
     {
         return 0;
     }
