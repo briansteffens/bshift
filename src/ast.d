@@ -2,6 +2,8 @@ import std.stdio;
 import std.format;
 import std.conv;
 
+int nextId = 0;
+
 enum Primitive
 {
     U64,
@@ -909,10 +911,12 @@ abstract class StatementBase : InsideFunction
 {
     Line           line;
     InsideFunction parent;
+    int            id;
 
     this(Line line)
     {
         this.line = line;
+        this.id = nextId++;
     }
 
     LocalDeclaration[] declarations()
@@ -938,6 +942,23 @@ abstract class StatementBase : InsideFunction
         }
 
         return parent.containingFunction();
+    }
+
+    While containingWhile()
+    {
+        auto parentWhile = cast(While)parent;
+        if (parentWhile !is null)
+        {
+            return parentWhile;
+        }
+
+        auto parentStatementBase = cast(StatementBase)parent;
+        if (parentStatementBase !is null)
+        {
+            return parentStatementBase.containingWhile();
+        }
+
+        return null;
     }
 }
 
@@ -1091,6 +1112,19 @@ class Assignment : StatementBase
     }
 }
 
+class Break : StatementBase
+{
+    this(Line line)
+    {
+        super(line);
+    }
+
+    override string toString()
+    {
+        return "break";
+    }
+}
+
 class Defer : StatementBase
 {
     StatementBase statement;
@@ -1162,6 +1196,16 @@ class While : ConditionalBlock
     override string toString()
     {
         return format("while\n%s", super.toString());
+    }
+
+    string startLabel()
+    {
+        return format("while_start_%d", this.id);
+    }
+
+    string endLabel()
+    {
+        return format("while_end_%d", this.id);
     }
 }
 

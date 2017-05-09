@@ -857,6 +857,13 @@ void generateStatementBase(GeneratorState state, StatementBase st)
         return;
     }
 
+    auto _break = cast(Break)st;
+    if (_break !is null)
+    {
+        generateBreak(state, _break);
+        return;
+    }
+
     throw new Exception(format("Unrecognized statement type: %s", st));
 }
 
@@ -896,10 +903,7 @@ void generateConditional(GeneratorState state, Node conditional, string label)
 
 void generateWhile(GeneratorState state, While _while)
 {
-    auto startWhileLabel = state.addLabel("while_start_");
-    auto endWhileLabel = state.addLabel("while_end_");
-
-    state.render(format("%s:", startWhileLabel));
+    state.render(format("%s:", _while.startLabel()));
 
     if (_while.conditional !is null)
     {
@@ -907,14 +911,26 @@ void generateWhile(GeneratorState state, While _while)
                 generateNode(state, _while.conditional));
 
         state.render(format("    test %s, %s", conditional, conditional));
-        state.render(format("    je %s", endWhileLabel));
+        state.render(format("    je %s", _while.endLabel()));
     }
 
     // Loop body
     generateStatementBase(state, _while.block);
 
-    state.render(format("    jmp %s", startWhileLabel));
-    state.render(format("%s:", endWhileLabel));
+    state.render(format("    jmp %s", _while.startLabel()));
+    state.render(format("%s:", _while.endLabel()));
+}
+
+void generateBreak(GeneratorState state, Break _break)
+{
+    auto _while = _break.containingWhile();
+
+    if (_while is null)
+    {
+        throw new Exception("break found outside any while block");
+    }
+
+    state.render(format("    jmp %s", _while.endLabel()));
 }
 
 void generateIf(GeneratorState state, If _if)

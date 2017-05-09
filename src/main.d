@@ -32,7 +32,7 @@ int main(string[] args)
 
         if (arg == "--nasm")
         {
-
+            assembler = Assembler.NASM;
             continue;
         }
 

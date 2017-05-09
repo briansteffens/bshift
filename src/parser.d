@@ -556,6 +556,8 @@ StatementBase parseStatementBase(TokenFeed tokens)
                 return parseWhile(tokens);
             case "defer":
                 return parseDefer(tokens);
+            case "break":
+                return parseBreak(tokens);
             default:
                 auto localDeclaration = parseLocalDeclaration(tokens);
                 if (localDeclaration !is null)
@@ -658,6 +660,12 @@ TypeSignature parseTypeSignature(TokenFeed tokens)
     }
 
     return new TypeSignature(type, tokens.current().value);
+}
+
+Break parseBreak(TokenFeed tokens)
+{
+    tokens.next();
+    return new Break(null);
 }
 
 Defer parseDefer(TokenFeed tokens)
