@@ -558,6 +558,8 @@ StatementBase parseStatementBase(TokenFeed tokens)
                 return parseDefer(tokens);
             case "break":
                 return parseBreak(tokens);
+            case "continue":
+                return parseContinue(tokens);
             default:
                 auto localDeclaration = parseLocalDeclaration(tokens);
                 if (localDeclaration !is null)
@@ -666,6 +668,12 @@ Break parseBreak(TokenFeed tokens)
 {
     tokens.next();
     return new Break(null);
+}
+
+Continue parseContinue(TokenFeed tokens)
+{
+    tokens.next();
+    return new Continue(null);
 }
 
 Defer parseDefer(TokenFeed tokens)

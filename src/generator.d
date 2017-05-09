@@ -864,6 +864,13 @@ void generateStatementBase(GeneratorState state, StatementBase st)
         return;
     }
 
+    auto _continue = cast(Continue)st;
+    if (_continue !is null)
+    {
+        generateContinue(state, _continue);
+        return;
+    }
+
     throw new Exception(format("Unrecognized statement type: %s", st));
 }
 
@@ -931,6 +938,18 @@ void generateBreak(GeneratorState state, Break _break)
     }
 
     state.render(format("    jmp %s", _while.endLabel()));
+}
+
+void generateContinue(GeneratorState state, Continue _continue)
+{
+    auto _while = _continue.containingWhile();
+
+    if (_while is null)
+    {
+        throw new Exception("continue found outside any while block");
+    }
+
+    state.render(format("    jmp %s", _while.startLabel()));
 }
 
 void generateIf(GeneratorState state, If _if)

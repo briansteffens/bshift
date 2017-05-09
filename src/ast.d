@@ -1125,6 +1125,19 @@ class Break : StatementBase
     }
 }
 
+class Continue : StatementBase
+{
+    this(Line line)
+    {
+        super(line);
+    }
+
+    override string toString()
+    {
+        return "continue";
+    }
+}
+
 class Defer : StatementBase
 {
     StatementBase statement;
