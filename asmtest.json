@@ -5,7 +5,7 @@
     "test_path": "tests",
     "rendered_file": "test.bs",
     "before_each": [
-        "bin/bshift .asmtest/test.bs",
-        "cp a.out .asmtest/test.a"
-    ]
+        "bin/bshift .asmtest/test.bs"
+    ],
+    "run": "./a.out"
 }
