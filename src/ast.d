@@ -2,6 +2,8 @@ import std.stdio;
 import std.format;
 import std.conv;
 
+import lexer;
+
 int nextId = 0;
 
 enum Primitive
@@ -311,18 +313,6 @@ Primitive parsePrimitive(string s)
             return Primitive.Auto;
         default:
             throw new Exception(format("Unrecognized type: %s", s));
-    }
-}
-
-class Line
-{
-    int number;
-    string source;
-
-    this(int number, string source)
-    {
-        this.number = number;
-        this.source = source;
     }
 }
 
@@ -1167,9 +1157,9 @@ class ConditionalBlock : StatementBase
     Node conditional;
     StatementBase block;
 
-    this(Node conditional, StatementBase block)
+    this(Line line, Node conditional, StatementBase block)
     {
-        super(null);
+        super(line);
 
         this.conditional = conditional;
         this.block = block;
@@ -1201,9 +1191,9 @@ class ConditionalBlock : StatementBase
 
 class While : ConditionalBlock
 {
-    this(Node conditional, StatementBase block)
+    this(Line line, Node conditional, StatementBase block)
     {
-        super(conditional, block);
+        super(line, conditional, block);
     }
 
     override string toString()

@@ -801,6 +801,11 @@ string renderStackLocation(int offset)
 
 void generateStatementBase(GeneratorState state, StatementBase st)
 {
+    if (st.line !is null)
+    {
+        state.render(format("; %s", st.line.source));
+    }
+
     auto ignoreReturn = cast(Statement)st;
     if (ignoreReturn !is null)
     {
@@ -1168,7 +1173,6 @@ void generateAssignmentShared(GeneratorState state, Node target,
             targetType.pointer = false;
         }
 
-        state.render(format("; %s =", targetBinding.name));
         sizeHint = typeToOpSize(targetType);
     }
 
@@ -1189,7 +1193,6 @@ void generateAssignmentShared(GeneratorState state, Node target,
         state.render(format("    mov %s, %s", tempTarget2Register,
                             valueRendered));
         valueRendered = to!string(tempTarget2Register);
-        state.render(format("; %s = %s", target, binding.name));
     }
     else if (localValue !is null && localValue.location == Location.Register)
     {

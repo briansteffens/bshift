@@ -589,6 +589,7 @@ StatementBase parseStatementBase(TokenFeed tokens)
 // can't be done.
 LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
 {
+    auto line = tokens.current().line;
     auto rewindTarget = tokens.index;
 
     // Try to parse the lvalue
@@ -618,7 +619,7 @@ LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
         throw new Exception("Expected assignment operator (=) or semi-colon");
     }
 
-    return new LocalDeclaration(null, typeSignature, expression);
+    return new LocalDeclaration(line, typeSignature, expression);
 }
 
 Type parseType(TokenFeed tokens)
@@ -640,7 +641,7 @@ Type parseType(TokenFeed tokens)
         tokens.next();
 
         auto parser = new ExpressionParser(tokens);
-        parser.until ~= new Token(TokenType.Symbol, "]");
+        parser.until ~= new Token(null, TokenType.Symbol, "]");
         elements = parser.run();
 
         pointer = true;
@@ -666,24 +667,28 @@ TypeSignature parseTypeSignature(TokenFeed tokens)
 
 Break parseBreak(TokenFeed tokens)
 {
+    auto line = tokens.current().line;
     tokens.next();
-    return new Break(null);
+    return new Break(line);
 }
 
 Continue parseContinue(TokenFeed tokens)
 {
+    auto line = tokens.current().line;
     tokens.next();
-    return new Continue(null);
+    return new Continue(line);
 }
 
 Defer parseDefer(TokenFeed tokens)
 {
+    auto line = tokens.current().line;
     tokens.next();
-    return new Defer(null, parseStatementBase(tokens));
+    return new Defer(line, parseStatementBase(tokens));
 }
 
 Assignment parseAssignment(TokenFeed tokens)
 {
+    auto line = tokens.current().line;
     auto rewindTarget = tokens.index;
 
     // parseExpression always starts by calling .next()
@@ -719,34 +724,40 @@ Assignment parseAssignment(TokenFeed tokens)
         return null;
     }
 
-    return new Assignment(null, lvalue, expression);
+    return new Assignment(line, lvalue, expression);
 }
 
 Statement parseStatement(TokenFeed tokens)
 {
+    auto line = tokens.current().line;
+
     // parseExpression always starts by calling .next()
     tokens.rewind(1);
     auto expression = new ExpressionParser(tokens).run();
 
-    return new Statement(null, expression);
+    return new Statement(line, expression);
 }
 
 Return parseReturn(TokenFeed tokens)
 {
+    auto line = tokens.current().line;
+
     if (tokens.peek(1).match(TokenType.Symbol, ";"))
     {
         tokens.next();
         return new Return(null, null);
     }
 
-    return new Return(null, new ExpressionParser(tokens).run());
+    return new Return(line, new ExpressionParser(tokens).run());
 }
 
 While parseWhile(TokenFeed tokens)
 {
+    auto line = tokens.current().line;
+
     auto block = parseConditionalBlock(tokens);
 
-    return new While(block.conditional, block.block);
+    return new While(line, block.conditional, block.block);
 }
 
 If parseIf(TokenFeed tokens)
@@ -789,6 +800,8 @@ If parseIf(TokenFeed tokens)
 // Parse a conditional expression followed by a statement or block
 ConditionalBlock parseConditionalBlock(TokenFeed tokens)
 {
+    auto line = tokens.current().line;
+
     // Make sure there's an open parenthesis
     auto next = tokens.peek(1);
 
@@ -800,7 +813,7 @@ ConditionalBlock parseConditionalBlock(TokenFeed tokens)
     auto conditional = parseExpressionParenthesis(tokens);
     auto block = parseStatementBase(tokens);
 
-    return new ConditionalBlock(conditional, block);
+    return new ConditionalBlock(line, conditional, block);
 }
 
 // This represents either an unparsed lexer Token or a parsed AST Node
@@ -962,8 +975,8 @@ class ExpressionParser
         this.output = new ParserItemStack();
         this.operators = new ParserItemStack();
 
-        this.until ~= new Token(TokenType.Symbol, ";");
-        this.until ~= new Token(TokenType.Symbol, "=");
+        this.until ~= new Token(null, TokenType.Symbol, ";");
+        this.until ~= new Token(null, TokenType.Symbol, "=");
     }
 
     void printState()

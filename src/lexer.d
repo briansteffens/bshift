@@ -14,11 +14,13 @@ enum TokenType
 
 class Token
 {
+    Line line;
     TokenType type;
     string value;
 
-    pure this(TokenType type, string value)
+    pure this(Line line, TokenType type, string value)
     {
+        this.line = line;
         this.type = type;
         this.value = value;
     }
@@ -104,13 +106,59 @@ pure string resolveEscapeSequence(dchar second)
     }
 }
 
+class Line
+{
+    int number;
+    string source;
+
+    this(int number, string source)
+    {
+        this.number = number;
+        this.source = source;
+    }
+}
+
+class Char
+{
+    dchar value;
+    Line line;
+
+    this(dchar value, Line line)
+    {
+        this.value = value;
+        this.line = line;
+    }
+}
+
+Char[] breakLines(string input)
+{
+    Char[] ret;
+    Line line = new Line(0, "");
+
+    foreach (c; input)
+    {
+        if (c == '\n')
+        {
+            line = new Line(line.number + 1, "");
+        }
+        else
+        {
+            line.source ~= c;
+        }
+
+        ret ~= new Char(c, line);
+    }
+
+    return ret;
+}
+
 // Represents one character in an input string at a time.
 class Reader
 {
-    string input;
+    Char[] input;
     int index = -1;
 
-    pure this(string input)
+    pure this(Char[] input)
     {
         this.input = input;
     }
@@ -132,12 +180,17 @@ class Reader
 
     pure dchar current()
     {
-        return this.input[this.index];
+        return this.input[this.index].value;
+    }
+
+    pure Line currentLine()
+    {
+        return this.input[this.index].line;
     }
 
     pure dchar peek(int distance)
     {
-        return this.input[this.index + distance];
+        return this.input[this.index + distance].value;
     }
 
     pure dchar next()
@@ -148,14 +201,16 @@ class Reader
     pure Reader clone()
     {
         auto ret = new Reader(this.input);
+
         ret.index = this.index;
+
         return ret;
     }
 }
 
 Token[] lex(string src)
 {
-    auto reader = new Reader(src);
+    auto reader = new Reader(breakLines(src));
     Token[] tokens;
 
     while (true)
@@ -312,6 +367,7 @@ Token readQuote(Reader r, char quote, TokenType type)
         return null;
     }
 
+    auto line = r.currentLine();
     auto value = "";
 
     while (true)
@@ -347,7 +403,7 @@ Token readQuote(Reader r, char quote, TokenType type)
         value ~= r.current();
     }
 
-    return new Token(type, value);
+    return new Token(line, type, value);
 }
 
 Token readNumeric(Reader r)
@@ -357,6 +413,7 @@ Token readNumeric(Reader r)
         return null;
     }
 
+    auto line = r.currentLine();
     auto value = "";
 
     while (true)
@@ -371,11 +428,12 @@ Token readNumeric(Reader r)
         r.advance();
     }
 
-    return new Token(TokenType.Integer, value);
+    return new Token(line, TokenType.Integer, value);
 }
 
 Token readSymbol(Reader r)
 {
+    auto line = r.currentLine();
     string[] possibilities;
 
     if (r.input.length - r.index >= 3)
@@ -402,7 +460,7 @@ Token readSymbol(Reader r)
                 r.advance();
             }
 
-            return new Token(TokenType.Symbol, possibility);
+            return new Token(line, TokenType.Symbol, possibility);
         }
     }
 
@@ -416,6 +474,7 @@ Token readWord(Reader r)
         return null;
     }
 
+    auto line = r.currentLine();
     auto value = "";
 
     while (true)
@@ -430,5 +489,5 @@ Token readWord(Reader r)
         r.advance();
     }
 
-    return new Token(TokenType.Word, value);
+    return new Token(line, TokenType.Word, value);
 }
