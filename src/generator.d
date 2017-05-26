@@ -803,7 +803,7 @@ void generateStatementBase(GeneratorState state, StatementBase st)
 {
     if (st.line !is null)
     {
-        state.render(format("; %s", st.line.source));
+        //state.render(format("; %s", st.line.source));
     }
 
     auto ignoreReturn = cast(Statement)st;
@@ -1471,8 +1471,8 @@ IndexerResolveData resolveIndexer(GeneratorState state, Indexer indexer)
 
     auto scale = data.sourceRegister.type.baseTypeSize();
 
-    data.address = format("[%s * %d + %s]", data.indexerRegister.register,
-                          scale, data.sourceRegister.register);
+    data.address = format("[%s + %d * %s]", data.sourceRegister.register,
+                          scale, data.indexerRegister.register);
 
     return data;
 }
