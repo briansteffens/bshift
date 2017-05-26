@@ -703,8 +703,11 @@ class Cast : Node
 
     this(Type newType, Node target)
     {
-        this.target = target;
-        this.target.parent = this;
+        if (target !is null)
+        {
+            this.target = target;
+            this.target.parent = this;
+        }
 
         this.type = newType;
     }

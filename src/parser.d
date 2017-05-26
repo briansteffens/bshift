@@ -1258,6 +1258,7 @@ class ExpressionParser
              newItem.token.type == TokenType.Word))
         {
             castNode.target = parseToken(newItem.token);
+            castNode.target.parent = castNode;
             return true;
         }
 
