@@ -142,6 +142,7 @@ string[] possibleImportPaths(string moduleName)
 
     ret ~= format("%s.bs", moduleName);
     ret ~= format("lib/%s.bs", moduleName);
+    ret ~= format("/usr/local/lib/bshift/%s.bs", moduleName);
 
     return ret;
 }
