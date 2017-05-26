@@ -1702,6 +1702,7 @@ Local generateCastU8ToU64(GeneratorState state, Cast typeCast)
     auto source = renderNode(state, generateNode(state, typeCast.target));
     auto target = state.addTemp(typeCast.type.clone());
 
+    state.render(format("    xor %s, %s", target.register, target.register));
     state.render(format("    mov %s, %s", lowByteRegister(target.register),
             source));
 
