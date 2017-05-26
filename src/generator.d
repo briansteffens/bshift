@@ -1269,6 +1269,12 @@ string renderImmediate(Literal literal)
         return to!string(u64Literal.value);
     }
 
+    auto u8Literal = cast(U8Literal)literal;
+    if (u8Literal !is null)
+    {
+        return to!string(u8Literal.value);
+    }
+
     auto boolLiteral = cast(BoolLiteral)literal;
     if (boolLiteral !is null)
     {
