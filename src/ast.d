@@ -963,7 +963,7 @@ class Indexer : Node
         this.index = index;
 
         this.source.parent = this;
-        this.source.parent = this;
+        this.index.parent = this;
 
         this.retype();
     }
