@@ -1,0 +1,31 @@
+u64 main()
+{
+    return {{ expr }};
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "8 << 1 = 16",
+            "expr": "8 << 1",
+            "expect_status": "16"
+        },
+        {
+            "name": "8 << 2 = 32",
+            "expr": "8 << 2",
+            "expect_status": "32"
+        },
+        {
+            "name": "8 >> 1 = 4",
+            "expr": "8 >> 1",
+            "expect_status": "4"
+        },
+        {
+            "name": "4 >> 1 = 2",
+            "expr": "4 >> 1",
+            "expect_status": "2"
+        }
+    ]
+}

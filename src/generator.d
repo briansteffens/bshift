@@ -1846,9 +1846,15 @@ Local generateMathOperator(GeneratorState state, Operator operator)
         case OperatorType.Asterisk:
             state.render(format("    imul %s, %s", temp.register, right));
             break;
+        case OperatorType.LeftShift:
+            state.render(format("    shl %s, %s", temp.register, right));
+            break;
+        case OperatorType.RightShift:
+            state.render(format("    shr %s, %s", temp.register, right));
+            break;
         default:
             throw new Exception(format("Unrecognized math operator type: %s",
-                                       operator.type));
+                                       operator.operatorType));
     }
 
     return temp;

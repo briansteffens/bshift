@@ -369,6 +369,8 @@ enum OperatorType
     LessThanOrEqual,
     LogicalAnd,
     DotAccessor,
+    LeftShift,
+    RightShift
 }
 
 enum OperatorClass
@@ -387,6 +389,8 @@ OperatorClass operatorTypeToClass(OperatorType t)
         case OperatorType.Asterisk:
         case OperatorType.Divide:
         case OperatorType.Modulo:
+        case OperatorType.LeftShift:
+        case OperatorType.RightShift:
             return OperatorClass.Math;
         case OperatorType.Equality:
         case OperatorType.Inequality:

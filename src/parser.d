@@ -38,6 +38,10 @@ OperatorType parseOperatorType(string input)
             return OperatorType.LogicalAnd;
         case ".":
             return OperatorType.DotAccessor;
+        case "<<":
+            return OperatorType.LeftShift;
+        case ">>":
+            return OperatorType.RightShift;
         default:
             throw new Exception(
                     format("Unrecognized OperatorType: %s", input));
@@ -57,6 +61,9 @@ int operatorPrecedence(OperatorType t)
         case OperatorType.Plus:
         case OperatorType.Minus:
             return 13;
+        case OperatorType.LeftShift:
+        case OperatorType.RightShift:
+            return 12;
         case OperatorType.Equality:
         case OperatorType.Inequality:
             return 10;
