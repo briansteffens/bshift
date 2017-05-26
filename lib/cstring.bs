@@ -140,3 +140,55 @@ u64 from_u64(u64 source, u8* destination)
 
     return digits;
 }
+
+// TODO: add multiplication operator
+u64 multiply(u64 a, u64 b)
+{
+    u64 ret = a;
+
+    while (b > 1)
+    {
+        ret = ret + a;
+        b = b - 1;
+    }
+
+    return ret;
+}
+
+bool to_u64(u8* source, u64* destination)
+{
+    u64 ret = 0;
+
+    if (*source == 0)
+    {
+        return false;
+    }
+
+    while (*source != 0)
+    {
+        if (ret != 0)
+        {
+            ret = multiply(ret, 10);
+        }
+
+        u8 character = *source;
+        character = character - '0';
+
+        if (character < 0)
+        {
+            return false;
+        }
+
+        if (character > 9)
+        {
+            return false;
+        }
+
+        ret = ret + (u64)character;
+
+        source = source + 1;
+    }
+
+    *destination = ret;
+    return true;
+}
