@@ -42,6 +42,8 @@ OperatorType parseOperatorType(string input)
             return OperatorType.LeftShift;
         case ">>":
             return OperatorType.RightShift;
+        case "&":
+            return OperatorType.BitwiseAnd;
         default:
             throw new Exception(
                     format("Unrecognized OperatorType: %s", input));
@@ -67,6 +69,8 @@ int operatorPrecedence(OperatorType t)
         case OperatorType.Equality:
         case OperatorType.Inequality:
             return 10;
+        case OperatorType.BitwiseAnd:
+            return 9;
         case OperatorType.LogicalAnd:
             return 6;
         default:

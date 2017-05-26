@@ -1852,6 +1852,9 @@ Local generateMathOperator(GeneratorState state, Operator operator)
         case OperatorType.RightShift:
             state.render(format("    shr %s, %s", temp.register, right));
             break;
+        case OperatorType.BitwiseAnd:
+            state.render(format("    and %s, %s", temp.register, right));
+            break;
         default:
             throw new Exception(format("Unrecognized math operator type: %s",
                                        operator.operatorType));

@@ -370,7 +370,8 @@ enum OperatorType
     LogicalAnd,
     DotAccessor,
     LeftShift,
-    RightShift
+    RightShift,
+    BitwiseAnd
 }
 
 enum OperatorClass
@@ -391,6 +392,7 @@ OperatorClass operatorTypeToClass(OperatorType t)
         case OperatorType.Modulo:
         case OperatorType.LeftShift:
         case OperatorType.RightShift:
+        case OperatorType.BitwiseAnd:
             return OperatorClass.Math;
         case OperatorType.Equality:
         case OperatorType.Inequality:
