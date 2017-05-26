@@ -1,0 +1,22 @@
+import io;
+
+u64 main(u64 argc, u64* argv)
+{
+    io::print(&argv[1]);
+    io::print(&argv[2]);
+
+    return argc;
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "pass args from command line",
+            "args": "hi hey",
+            "expect_status": "3",
+            "expect_stdout": "hihey"
+        }
+    ]
+}

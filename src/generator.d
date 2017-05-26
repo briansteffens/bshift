@@ -689,21 +689,52 @@ void generateFunction(GeneratorState state, Function func)
 {
     int stackOffset = 0;
 
-    // Function parameters need to be added to locals
-    for (int i = 0; i < func.signature.parameters.length; i++)
+    // Detect main function with argc and argv
+    bool mainWithArgs = false;
+    if (func.signature.name == "main" &&
+        func.signature.parameters.length == 2 &&
+        func.signature.parameters[0].type.compare(
+            new PrimitiveType(Primitive.U64)) &&
+        func.signature.parameters[1].type.compare(
+            new PrimitiveType(Primitive.U64, true)))
     {
-        auto local = new Local(func.signature.parameters[i].type,
-                               func.signature.parameters[i].name);
+        mainWithArgs = true;
 
-        placeParameter(local, callRegisters, i);
+        auto argc = new Local(func.signature.parameters[0].type,
+                              func.signature.parameters[0].name);
 
-        if (i < callRegisters.length)
+        argc.location = Location.Stack;
+        argc.stackOffset = 16;
+
+        state.locals ~= argc;
+
+        auto argv = new Local(func.signature.parameters[1].type,
+                              func.signature.parameters[1].name);
+
+        argv.location = Location.Stack;
+        argv.stackOffset = 24;
+
+        state.locals ~= argv;
+    }
+
+    // Function parameters need to be added to locals
+    if (!mainWithArgs)
+    {
+        for (int i = 0; i < func.signature.parameters.length; i++)
         {
-            stackOffset -= typeSize(func.signature.parameters[i].type);
-            local.stackOffset = stackOffset;
-        }
+            auto local = new Local(func.signature.parameters[i].type,
+                                   func.signature.parameters[i].name);
 
-        state.locals ~= local;
+            placeParameter(local, callRegisters, i);
+
+            if (i < callRegisters.length)
+            {
+                stackOffset -= typeSize(func.signature.parameters[i].type);
+                local.stackOffset = stackOffset;
+            }
+
+            state.locals ~= local;
+        }
     }
 
     // Shift locals down after all registers if it's a variadic function
