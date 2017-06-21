@@ -1,0 +1,10 @@
+import io;
+
+u64 main()
+{
+    defer io::print("deferred\n");
+
+    io::print("not deferred\n");
+
+    return 0;
+}

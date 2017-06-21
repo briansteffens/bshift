@@ -1,0 +1,11 @@
+import io;
+import cstring;
+
+u64 main()
+{
+    u8* str = "here is a string";
+
+    io::print("Length: %u\n", cstring::length(str));
+
+    return 0;
+}

@@ -1,0 +1,19 @@
+import io;
+import cstring;
+
+u64 main()
+{
+    u8* str = "123";
+
+    u64 converted = 0;
+
+    if (cstring::to_u64(str, &converted) == false)
+    {
+        io::print("Failed to convert string to u64\n");
+        return 1;
+    }
+
+    io::print("Converted to: %u\n", converted);
+
+    return 0;
+}

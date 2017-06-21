@@ -3,6 +3,7 @@ import io;
 u64 main()
 {
 	io::print("Greetings!\n");
+	io::print("Integer %u\n", 7);
 
 	return 0;
 }

@@ -1,0 +1,20 @@
+import io;
+
+struct val
+{
+    u64 x;
+}
+
+void val::destruct()
+{
+    io::print("destruct called\n");
+}
+
+u64 main()
+{
+    val v;
+
+    io::print("main() body\n");
+
+    return 0;
+}

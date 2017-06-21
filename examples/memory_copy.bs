@@ -1,0 +1,14 @@
+import io;
+import memory;
+
+u64 main()
+{
+    u8* src = "hello\n";
+    u8* dst = "erased";
+
+    memory::copy(src, dst, 6);
+
+    io::print(dst);
+
+    return 0;
+}
