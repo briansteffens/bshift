@@ -1,9 +1,8 @@
+import io;
+
 u64 main()
 {
-    u8 char3 = 10;
-    u8 char2 = 33;
-    u8 char1 = 105;
-    u8 char0 = 72;
+	io::print("Greetings!\n");
 
-    return syscall(1, 1, &char0, 4);
+	return 0;
 }
