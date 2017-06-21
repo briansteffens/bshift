@@ -16,7 +16,6 @@ Some random notes on various peculiarities of the compiler:
 - No 32-bit support
 - bshift programs don't link to libc by default. bshift has its own interface
   to syscalls and its own (extremely naive) memory manager
-- Has a hand-written parser which uses recursive descent and shunting yard
 
 
 
@@ -56,7 +55,7 @@ asmtest
 
 
 
-### The bshift language
+# The bshift language
 
 A hello world example can be written like so:
 
@@ -65,9 +64,9 @@ import io;
 
 u64 main()
 {
-	io::print("Greetings!\n");
+    io::print("Greetings!\n");
 
-	return 0;
+    return 0;
 }
 ```
 
@@ -107,11 +106,11 @@ u64 increment(u64 x)
 
 u64 main()
 {
-	auto y = increment(6);
+    auto y = increment(6);
 
-	io::print("%u\n", y);
+    io::print("%u\n", y);
 
-	return 0;
+    return 0;
 }
 ```
 
@@ -146,18 +145,15 @@ u64 main()
     p2.x = 4;
     p2.y = 9;
 
-	if (p1.equals(&p2))
-	{
-		io::print("p1 equals p2\n");
-	}
-	else
-	{
-		io::print("p1 does not equal p2\n");
-	}
+    if (p1.equals(&p2))
+    {
+        io::print("p1 equals p2\n");
+    }
+    else
+    {
+        io::print("p1 does not equal p2\n");
+    }
 
-	return 0;
+    return 0;
 }
 ```
-
-
-
