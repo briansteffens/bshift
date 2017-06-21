@@ -59,7 +59,7 @@ asmtest
 
 A hello world example can be written like so:
 
-```bshift
+```c
 import io;
 
 u64 main()
@@ -97,7 +97,7 @@ A pointer is always a u64 under the hood.
 
 There is also an *auto* keyword which attempts to do some type inference:
 
-```bshift
+```c
 import io;
 
 u64 increment(u64 x)
@@ -122,7 +122,7 @@ u64 main()
 Structs can be made up of primitives and/or other structs. They can also have
 member methods:
 
-```bshift
+```c
 import io;
 
 struct point
@@ -167,7 +167,7 @@ Structs can have destructors, which are called automatically when they leave
 scope. A destructor is defined by making a member function called *destruct*
 which takes no arguments and returns void:
 
-```bshift
+```c
 import io;
 
 struct val
@@ -206,7 +206,7 @@ destruct called
 Statements can be deferred to the end of the current scope, similar to Go, to
 help with cleaning up heap-allocated memory, open file handles, etc:
 
-```bshift
+```c
 import io;
 
 u64 main()
@@ -253,10 +253,17 @@ import io
 u64 main()
 {
     io::print("Hello\n");
-    io::print("An integer %u\n", 7);
+    io::print("Integer %u\n", 7);
 
     return 0;
 }
+```
+
+Output:
+
+```
+Greetings!
+Integer 7
 ```
 
 
@@ -290,6 +297,45 @@ u64 main()
 }
 ```
 
+Output:
+
+```
+Length: 16
+```
+
+
+
+### bool compare(u8* source, u8* destination)
+
+Compares the contents of two C-style strings, returning true if they are
+identical and false otherwise.
+
+```c
+import io;
+import cstring;
+
+u64 main()
+{
+    if (cstring::compare("these match", "these match"))
+    {
+        io::print("first is a match\n");
+    }
+
+    if (cstring::compare("not these", "though"))
+    {
+        io::print("this won't be written\n");
+    }
+
+    return 0;
+}
+```
+
+Output:
+
+```
+first is a match
+```
+
 
 
 ### bool to_u64(u8* source, u64* destination)
@@ -318,6 +364,49 @@ u64 main()
     return 0;
 }
 ```
+
+Output:
+
+```
+Converted to: 123
+```
+
+
+
+
+
+### u64 from_u64(u64 source, u8* destination)
+
+Converts an integer to an ASCII C-string. *destination* must have enough bytes
+to contain the value in *source*. Returns the number of digits written, not
+including the null termination character.
+
+```c
+import io;
+import cstring;
+
+u64 main()
+{
+    u8[16] str;
+
+    u64 written = cstring::from_u64(123, &str);
+
+    io::print("digits written: %u\n", written);
+    io::print(&str);
+    io::print("\n");
+
+    return 0;
+}
+```
+
+Output:
+
+```
+digits written: 3
+123
+```
+
+
 
 
 
@@ -349,4 +438,75 @@ u64 main()
 }
 ```
 
+Output:
 
+```
+hello
+```
+
+
+
+
+## heap
+
+The *heap* module implements a very basic memory manager.
+
+
+
+### u8* allocate(u64 bytes)
+
+Allocate a new buffer of size *bytes*. Returns the address to the beginning of
+the new buffer, or 0 if the request couldn't be fulfilled.
+
+
+
+
+### u8* reallocate(u8* ptr, u64 bytes)
+
+Resize an existing buffer. Involves a linear time copy operation if the buffer
+has to be moved to accommodate the size change. Returns the address to the
+beginning of the buffer, which may or may not be the same as *ptr*.
+
+
+
+### void free(u8* ptr)
+
+Free a buffer previously allocated with *heap::allocate*, marking that region
+of memory available for reuse by further allocation requests.
+
+
+
+
+```c
+import io;
+import memory;
+import heap;
+
+u64 main()
+{
+    u8* str = heap::allocate(5);
+
+    memory::copy("Greet", str, 5);
+
+    io::print(str);
+    io::print("\n");
+
+    str = heap::reallocate(str, 10);
+
+    memory::copy("ings!", str + 5, 5);
+
+    io::print(str);
+    io::print("\n");
+
+    heap::free(str);
+
+    return 0;
+}
+```
+
+Output:
+
+```
+Greet
+Greetings!
+```

@@ -1,0 +1,15 @@
+import io;
+import cstring;
+
+u64 main()
+{
+    u8[16] str;
+
+    u64 written = cstring::from_u64(123, &str);
+
+    io::print("digits written: %u\n", written);
+    io::print(&str);
+    io::print("\n");
+
+    return 0;
+}
