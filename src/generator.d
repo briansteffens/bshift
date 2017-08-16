@@ -1833,6 +1833,22 @@ Local generateMathOperator(GeneratorState state, Operator operator)
         return temp;
     }
 
+    if (operator.operatorType == OperatorType.Multiply)
+    {
+        auto leftNodeRegister = requireLocalInRegister(state, leftNode);
+        auto rightNodeRegister = requireLocalInRegister(state, rightNode);
+
+        state.render(format("    mov %s, %s", temp.register,
+                leftNodeRegister.register));
+        state.render(format("    imul %s, %s", temp.register,
+                rightNodeRegister.register));
+
+        state.freeTemp(rightNodeRegister);
+        state.freeTemp(leftNodeRegister);
+
+        return temp;
+    }
+
     state.render(format("    mov %s, %s", temp.register, left));
 
     switch (operator.operatorType)
@@ -1842,9 +1858,6 @@ Local generateMathOperator(GeneratorState state, Operator operator)
             break;
         case OperatorType.Minus:
             state.render(format("    sub %s, %s", temp.register, right));
-            break;
-        case OperatorType.Asterisk:
-            state.render(format("    imul %s, %s", temp.register, right));
             break;
         case OperatorType.LeftShift:
             state.render(format("    shl %s, %s", temp.register, right));

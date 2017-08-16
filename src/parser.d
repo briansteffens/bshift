@@ -17,7 +17,7 @@ OperatorType parseOperatorType(string input)
         case "-":
             return OperatorType.Minus;
         case "*":
-            return OperatorType.Asterisk;
+            return OperatorType.Multiply;
         case "/":
             return OperatorType.Divide;
         case "%":
@@ -44,6 +44,8 @@ OperatorType parseOperatorType(string input)
             return OperatorType.RightShift;
         case "&":
             return OperatorType.BitwiseAnd;
+        case "dereference":
+            return OperatorType.Dereference;
         default:
             throw new Exception(
                     format("Unrecognized OperatorType: %s", input));
@@ -56,7 +58,9 @@ int operatorPrecedence(OperatorType t)
     {
         case OperatorType.DotAccessor:
             return 19;
-        case OperatorType.Asterisk:
+        case OperatorType.Dereference:
+            return 18;
+        case OperatorType.Multiply:
         case OperatorType.Divide:
         case OperatorType.Modulo:
             return 14;
@@ -66,6 +70,11 @@ int operatorPrecedence(OperatorType t)
         case OperatorType.LeftShift:
         case OperatorType.RightShift:
             return 12;
+        case OperatorType.LessThan:
+        case OperatorType.LessThanOrEqual:
+        case OperatorType.GreaterThan:
+        case OperatorType.GreaterThanOrEqual:
+            return 11;
         case OperatorType.Equality:
         case OperatorType.Inequality:
             return 10;
@@ -75,6 +84,34 @@ int operatorPrecedence(OperatorType t)
             return 6;
         default:
             throw new Exception(format("Unknown precedence for %s", t));
+    }
+}
+
+int operatorInputCount(OperatorType t)
+{
+    switch (t)
+    {
+        case OperatorType.Dereference:
+            return 1;
+        case OperatorType.Plus:
+        case OperatorType.Minus:
+        case OperatorType.Divide:
+        case OperatorType.Multiply:
+        case OperatorType.Modulo:
+        case OperatorType.Equality:
+        case OperatorType.Inequality:
+        case OperatorType.GreaterThan:
+        case OperatorType.GreaterThanOrEqual:
+        case OperatorType.LessThan:
+        case OperatorType.LessThanOrEqual:
+        case OperatorType.LogicalAnd:
+        case OperatorType.DotAccessor:
+        case OperatorType.LeftShift:
+        case OperatorType.RightShift:
+        case OperatorType.BitwiseAnd:
+            return 2;
+        default:
+            throw new Exception(format("Unknown input count for %s", t));
     }
 }
 
@@ -122,7 +159,7 @@ class TokenFeed
     {
         int target = this.index + distance;
 
-        if (target >= this.tokens.length)
+        if (target < 0 || target >= this.tokens.length)
         {
             return null;
         }
@@ -1048,35 +1085,62 @@ class ExpressionParser
             return;
         }
 
-        if (this.operators.len() < 1 || this.output.len() < 2)
+        auto operator = parseOperatorType(this.operators.peek(0).token.value);
+        auto inputCount = operatorInputCount(operator);
+
+        if (this.output.len() < inputCount)
         {
-            throw new Exception("Not enough on the stack(s) to consume!");
+            throw new Exception("Not enough output on the stack to consume!");
         }
 
-        auto rightItem = this.output.pop();
-        auto operator = parseOperatorType(this.operators.pop().token.value);
-        auto leftItem = this.output.pop();
-
-        auto right = getOrParseNode(rightItem);
-        auto left = getOrParseNode(leftItem);
-
+        this.operators.pop();
         Node op = null;
-        if (operator == OperatorType.DotAccessor)
+
+        if (inputCount == 2)
         {
-            // Check for a member call
-            auto call = cast(Call)rightItem.node;
-            if (call !is null)
+            auto rightItem = this.output.pop();
+            auto leftItem = this.output.pop();
+
+            auto right = getOrParseNode(rightItem);
+            auto left = getOrParseNode(leftItem);
+
+            if (operator == OperatorType.DotAccessor)
             {
-                op = new MethodCall(left, call.functionName, call.parameters);
+                // Check for a member call
+                auto call = cast(Call)rightItem.node;
+                if (call !is null)
+                {
+                    op = new MethodCall(left, call.functionName,
+                            call.parameters);
+                }
+                else
+                {
+                    op = new DotAccessor(left, rightItem.token.value);
+                }
             }
             else
             {
-                op = new DotAccessor(left, rightItem.token.value);
+                op = new Operator(left, operator, right);
+            }
+        }
+        else if (inputCount == 1)
+        {
+            auto rightItem = this.output.pop();
+            auto right = getOrParseNode(rightItem);
+
+            switch (operator)
+            {
+                case OperatorType.Dereference:
+                    op = new Dereference(right);
+                    break;
+                default:
+                    throw new Exception(format("Unrecognized operator %s",
+                            operator));
             }
         }
         else
         {
-            op = new Operator(left, operator, right);
+            throw new Exception("Unrecognized inputCount");
         }
 
         this.outputPush(new ParserItem(op));
@@ -1383,34 +1447,33 @@ class ExpressionParser
             }
         }
 
-        // Detect dereference: word preceded by asterisk preceded by another
-        // symbol or nothing
-        if (current.match(TokenType.Symbol, "*") &&
-            this.input.tokens.length > 0)
+        // Detect dereference: asterisk symbol preceded by either nothing,
+        // a close parenthesis, or an operator.
+        if (current.match(TokenType.Symbol, "*"))
         {
-            bool firstOperator = this.operators.stack.length == 0;
+            auto previousToken = this.input.peek(-1);
 
-            bool precededBySymbol = false;
-            if (this.operators.stack.length > 0)
+            if (this.output.len() == 0 && this.operators.len() == 0 ||
+                previousToken.match(TokenType.Symbol, "(") ||
+                previousToken.match(TokenType.Symbol, "&&") ||
+                previousToken.match(TokenType.Symbol, "||") ||
+                previousToken.match(TokenType.Symbol, "!=") ||
+                previousToken.match(TokenType.Symbol, "==") ||
+                previousToken.match(TokenType.Symbol, "<=") ||
+                previousToken.match(TokenType.Symbol, ">=") ||
+                previousToken.match(TokenType.Symbol, "<") ||
+                previousToken.match(TokenType.Symbol, ">") ||
+                previousToken.match(TokenType.Symbol, "+") ||
+                previousToken.match(TokenType.Symbol, "-") ||
+                previousToken.match(TokenType.Symbol, "*") ||
+                previousToken.match(TokenType.Symbol, "/"))
             {
-                auto topOperator = this.operators.peek(0);
+                // Rewrite as a dereference
+                auto rewritten = current.clone();
+                rewritten.value = "dereference";
+                this.operators.push(new ParserItem(rewritten));
 
-                precededBySymbol = topOperator.isToken() &&
-                                   topOperator.token.type == TokenType.Symbol;
-            }
-
-            if (firstOperator || precededBySymbol)
-            {
-                auto next = this.input.peek(1);
-
-                if (next.type == TokenType.Word)
-                {
-                    this.output.push(new ParserItem(new Dereference(
-                            parseToken(next))));
-
-                    this.input.next();
-                    return true;
-                }
+                return true;
             }
         }
 

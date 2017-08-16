@@ -359,7 +359,7 @@ enum OperatorType
     Plus,
     Minus,
     Divide,
-    Asterisk,
+    Multiply,
     Modulo,
     Equality,
     Inequality,
@@ -371,7 +371,8 @@ enum OperatorType
     DotAccessor,
     LeftShift,
     RightShift,
-    BitwiseAnd
+    BitwiseAnd,
+    Dereference
 }
 
 enum OperatorClass
@@ -387,7 +388,7 @@ OperatorClass operatorTypeToClass(OperatorType t)
     {
         case OperatorType.Plus:
         case OperatorType.Minus:
-        case OperatorType.Asterisk:
+        case OperatorType.Multiply:
         case OperatorType.Divide:
         case OperatorType.Modulo:
         case OperatorType.LeftShift:

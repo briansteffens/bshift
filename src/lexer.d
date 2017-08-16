@@ -39,6 +39,11 @@ class Token
     {
         return this.match(other.type, other.value);
     }
+
+    pure Token clone()
+    {
+        return new Token(this.line, this.type, this.value);
+    }
 }
 
 immutable string[] symbols =

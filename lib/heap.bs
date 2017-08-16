@@ -57,12 +57,7 @@ region* get_region(u64 index)
     u8* address = super_region;
     address = address + sizeof(u64);
 
-    // TODO: multiply
-    while (index > 0)
-    {
-        address = address + sizeof(region);
-        index = index - 1;
-    }
+    address = address + index * sizeof(region);
 
     return address;
 }
@@ -78,16 +73,7 @@ u8* map(u64 len)
 // super region.
 u64 super_region_min_size(u64 regions)
 {
-    u64 ret = 8;
-
-    // TODO: multiply
-    while (regions > 0)
-    {
-        ret = ret + sizeof(region);
-        regions = regions - 1;
-    }
-
-    return ret;
+    return 8 + regions * sizeof(region);
 }
 
 void init()
@@ -313,14 +299,8 @@ void free(u8* ptr)
         u64 i = get_region_index(parent);
         u8* addr = parent;
 
-        // TODO: multiply
         u64 regions = *region_count - i;
-        u64 count = 0;
-        while (regions > 0)
-        {
-            count = count + sizeof(region);
-            regions = regions - 1;
-        }
+        u64 count = regions * sizeof(region);
 
         // TODO: make regions a linked list or something to avoid linear
         // copy on region release?
