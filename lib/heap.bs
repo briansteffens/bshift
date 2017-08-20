@@ -20,7 +20,7 @@ struct allocation
 u8* super_region = 0;
 
 // The size of the super region. Grows as needed.
-u64 super_region_size = 4096;
+u64 super_region_size = 1024;
 
 // The number of regions.
 u64* region_count = 0;
@@ -49,7 +49,12 @@ u64 align(u64 value, u64 alignment)
 u64 get_region_index(region* r)
 {
     u8* r_ptr = r;
-    return (r_ptr - super_region - sizeof(u64)) / sizeof(region);
+    u64 ret = r_ptr - super_region - sizeof(u64);
+    if (ret > 0)
+    {
+        ret = ret / sizeof(region);
+    }
+    return ret;
 }
 
 region* get_region(u64 index)
@@ -185,6 +190,8 @@ region* allocate_region(u64 min_bytes)
 
         super_region = new_super_region;
         region_count = super_region;
+
+        // TODO: free previous super region
     }
 
     *region_count = new_region_count;

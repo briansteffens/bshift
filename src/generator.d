@@ -2,6 +2,7 @@ import std.stdio;
 import std.format;
 import std.conv;
 import std.array;
+import std.algorithm;
 
 import globals;
 import ast;
@@ -78,6 +79,23 @@ OpSize registerSize(Register r)
     }
 
     throw new Exception(format("Unrecognized register: %s", r));
+}
+
+int opSizeBytes(OpSize o)
+{
+    switch (o)
+    {
+        case OpSize.Byte:
+            return 1;
+        case OpSize.Word:
+            return 2;
+        case OpSize.Dword:
+            return 4;
+        case OpSize.Qword:
+            return 8;
+        default:
+            throw new Exception(format("Unrecognized OpSize: %s", o));
+    }
 }
 
 Register lowByteRegister(Register full)
@@ -194,24 +212,134 @@ int typeSize(Type t)
     return t.baseTypeSize();
 }
 
-enum Location
+// Align n to the next multiple of multiplier (alignNext(13, 8) = 16)
+int alignNext(int n, int multiplier)
 {
-    Register,
-    Stack,
-    DataSection,
+    int remainder = n % multiplier;
+
+    if (remainder == 0)
+    {
+        return n;
+    }
+
+    return n + multiplier - remainder;
+}
+
+// A register or region of the stack where some data can be located
+abstract class DataLocation
+{
+    int bytes;
+}
+
+// A literal value
+class LiteralLocation : DataLocation
+{
+    Literal literal;
+
+    this(Literal literal)
+    {
+        this.literal = literal;
+        this.bytes = typeSize(literal.type);
+    }
+}
+
+// A register where all or some of a variable is located
+class RegisterLocation : DataLocation
+{
+    Register register;
+
+    this(Register register)
+    {
+        this.register = register;
+        this.bytes = opSizeBytes(registerSize(register));
+    }
+}
+
+// A stack location where all or some of a variable is located
+class StackLocation : DataLocation
+{
+    int offset;
+
+    this(int offset, int bytes)
+    {
+        this.offset = offset;
+        this.bytes = bytes;
+    }
+}
+
+// Data stored in the global data section of the object file
+class DataSectionLocation : DataLocation
+{
+    string name;
+
+    this(string name)
+    {
+        this.name = name;
+    }
 }
 
 class Local : Node
 {
     string name;
-    Location location;
-    Register register; // For Location.Register
-    int stackOffset;   // For Location.Stack
+
+    // Where this local's data is
+    DataLocation[] data;
 
     this(Type type, string name)
     {
         this.type = type;
         this.name = name;
+    }
+
+    RegisterLocation[] registers()
+    {
+        RegisterLocation[] ret;
+
+        foreach (location; this.data)
+        {
+            auto r = cast(RegisterLocation)location;
+
+            if (r !is null)
+            {
+                ret ~= r;
+            }
+        }
+
+        return ret;
+    }
+
+    bool inRegister()
+    {
+        if (this.data.length != 1)
+        {
+            return false;
+        }
+
+        auto location = cast(RegisterLocation)this.data[0];
+        if (location is null)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    // If this local occupies a single register only, return that register.
+    // Otherwise, fail.
+    Register expectSingleRegister()
+    {
+        if (!this.inRegister())
+        {
+            throw new Exception("Expected local to have a single register");
+        }
+
+        auto location = cast(RegisterLocation)this.data[0];
+        if (location is null)
+        {
+            throw new Exception("Expected local to have a single register");
+        }
+
+        return location.register;
     }
 }
 
@@ -338,23 +466,22 @@ class GeneratorState
     {
         Register[] ret;
 
-        for (int i = 0; i < this.locals.length; i++)
+        void processList(Local[] locals)
         {
-            if (this.locals[i].location == Location.Register &&
-                isCallerPreserved(this.locals[i].register))
+            foreach (local; locals)
             {
-                ret ~= this.locals[i].register;
+                foreach (r; local.registers())
+                {
+                    if (isCallerPreserved(r.register))
+                    {
+                        ret ~= r.register;
+                    }
+                }
             }
         }
 
-        for (int i = 0; i < this.temps.length; i++)
-        {
-            if (this.temps[i].location == Location.Register &&
-                isCallerPreserved(this.temps[i].register))
-            {
-                ret ~= this.temps[i].register;
-            }
-        }
+        processList(this.locals);
+        processList(this.temps);
 
         return ret;
     }
@@ -371,22 +498,25 @@ class GeneratorState
 
     bool registerTaken(Register register)
     {
-        foreach (local; this.locals)
+        bool processList(Local[] locals)
         {
-            if (local.location == Location.Register &&
-                local.register == register)
+            foreach (local; locals)
             {
-                return true;
+                foreach (r; local.registers())
+                {
+                    if (r.register == register)
+                    {
+                        return true;
+                    }
+                }
             }
+
+            return false;
         }
 
-        foreach (temp; this.temps)
+        if (processList(this.locals) || processList(this.temps))
         {
-            if (temp.location == Location.Register &&
-                temp.register == register)
-            {
-                return true;
-            }
+            return true;
         }
 
         foreach (res; this.reserved)
@@ -417,24 +547,17 @@ class GeneratorState
         return ret;
     }
 
-    Local addLocal(Type type, string name)
+    Register reserveNextFreeRegister()
     {
-        auto local = new Local(type, name);
-
-        local.location = Location.Register;
-        local.register = this.findFreeRegister();
-
-        this.locals ~= local;
-
-        return local;
+        auto ret = findFreeRegister();
+        reserve(ret);
+        return ret;
     }
 
     Local addTemp(Type type)
     {
         auto ret = new Local(type, format("temp%d", this.nextTempIndex++));
-
-        ret.location = Location.Register;
-        ret.register = this.findFreeRegister();
+        ret.data = [new RegisterLocation(this.findFreeRegister())];
 
         this.temps ~= ret;
 
@@ -484,7 +607,7 @@ class GeneratorState
                 auto ret = new Local(global.signature.type,
                         global.signature.name);
 
-                ret.location = Location.DataSection;
+                ret.data = [new DataSectionLocation(global.signature.name)];
 
                 return ret;
             }
@@ -646,27 +769,6 @@ Register[] syscallRegisters = [
     Register.R9
 ];
 
-// Place a parameter in the appropriate location (register etc) based on its
-// index within the parameter list
-void placeParameter(Local local, Register[] registerList, int index)
-{
-    if (index < 0)
-    {
-        throw new Exception(format("Invalid parameter index %d", index));
-    }
-
-    if (index < registerList.length)
-    {
-        local.location = Location.Register;
-        local.register = registerList[index];
-
-        return;
-    }
-
-    local.location = Location.Stack;
-    local.stackOffset = (index - cast(int)registerList.length) * 8 + 16;
-}
-
 string renderName(FunctionSignature sig)
 {
     if (sig.name == "main")
@@ -703,16 +805,15 @@ void generateFunction(GeneratorState state, Function func)
         auto argc = new Local(func.signature.parameters[0].type,
                               func.signature.parameters[0].name);
 
-        argc.location = Location.Stack;
-        argc.stackOffset = 16;
+        argc.data = [new StackLocation(16, 8)];
 
         state.locals ~= argc;
 
         auto argv = new Local(func.signature.parameters[1].type,
                               func.signature.parameters[1].name);
 
-        argv.location = Location.Stack;
-        argv.stackOffset = 24;
+        // TODO: better indication of unknown stack data size?
+        argv.data = [new StackLocation(24, -1)];
 
         state.locals ~= argv;
     }
@@ -720,18 +821,51 @@ void generateFunction(GeneratorState state, Function func)
     // Function parameters need to be added to locals
     if (!mainWithArgs)
     {
-        for (int i = 0; i < func.signature.parameters.length; i++)
+        int consumed = 0;
+        const int registerSpace = cast(int)callRegisters.length * 8;
+
+        foreach (param; func.signature.parameters)
         {
-            auto local = new Local(func.signature.parameters[i].type,
-                                   func.signature.parameters[i].name);
+            auto local = new Local(param.type, param.name);
+            auto sizeLeft = alignNext(typeSize(param.type), 8);
 
-            placeParameter(local, callRegisters, i);
+            while (sizeLeft > 0)
+            {
+                // There are still registers to use
+                if (consumed < registerSpace)
+                {
+                    auto index = 0;
 
+                    if (consumed > 0)
+                    {
+                        index = consumed / 8;
+                    }
+
+                    local.data ~= new RegisterLocation(callRegisters[index]);
+
+                    sizeLeft -= 8;
+                    consumed += 8;
+
+                    continue;
+                }
+
+                // Registers are used up: overflow to the stack
+                local.data ~= new StackLocation(consumed - registerSpace + 16,
+                        sizeLeft);
+                consumed += sizeLeft;
+
+                break;
+            }
+
+            // TODO: make room above frame pointer for register-passed args
+            // to be copied to the stack?
+            /*
             if (i < callRegisters.length)
             {
                 stackOffset -= typeSize(func.signature.parameters[i].type);
                 local.stackOffset = stackOffset;
             }
+            */
 
             state.locals ~= local;
         }
@@ -757,8 +891,6 @@ void generateFunction(GeneratorState state, Function func)
 
         auto local = new Local(decl.signature.type, decl.signature.name);
 
-        local.location = Location.Stack;
-
         auto size = 0;
         if (local.type.isConcrete())
         {
@@ -767,13 +899,14 @@ void generateFunction(GeneratorState state, Function func)
         else
         {
             // Dynamic arrays need a single pointer in prologue space, which
-            // will later pointer to their actual data region, allocated higher
+            // will later point to their actual data region, allocated higher
             // in the stack.
             size = 8;
         }
 
         stackOffset -= size;
-        local.stackOffset = stackOffset;
+
+        local.data = [new StackLocation(stackOffset, size)];
 
         state.locals ~= local;
     }
@@ -790,6 +923,8 @@ void generateFunction(GeneratorState state, Function func)
     }
 
     // Copy locals into the stack
+    // TODO
+    /*
     foreach (local; state.locals)
     {
         if (local.location == Location.Register)
@@ -800,6 +935,7 @@ void generateFunction(GeneratorState state, Function func)
             local.location = Location.Stack;
         }
     }
+    */
 
     // Copy variadic parameters passed through registers into the stack
     if (func.signature.variadic)
@@ -934,11 +1070,16 @@ class GeneratorIfBlock
 
 void generateConditional(GeneratorState state, Node conditional, string label)
 {
+    state.render(format("; A <"));
     auto conditionalNode = generateNode(state, conditional);
+    state.render(format("; --"));
+    state.render(format("; B: %s", conditionalNode));
     auto conditionalRegister = requireLocalInRegister(state, conditionalNode);
+    state.render(format("; --"));
+    auto register = conditionalRegister.expectSingleRegister();
+    state.render(format("; > A"));
 
-    state.render(format("    test %s, %s", conditionalRegister.register,
-                                           conditionalRegister.register));
+    state.render(format("    test %s, %s", register, register));
     state.render(format("    je %s", label));
 
     state.freeTemp(conditionalRegister);
@@ -1093,7 +1234,8 @@ void cleanupBlock(GeneratorState state, Block block, StatementBase st)
 void generateDynamicArray(GeneratorState state, LocalDeclaration st)
 {
     auto arraySizeNode = generateNode(state, st.signature.type.elements);
-    auto arraySizeRegister = requireLocalInRegister(state, arraySizeNode);
+    auto arraySizeInRegister = requireLocalInRegister(state, arraySizeNode);
+    auto arraySizeRegister = arraySizeInRegister.expectSingleRegister();
 
     auto arrayPtr = state.findLocal(st.signature.name);
 
@@ -1103,9 +1245,9 @@ void generateDynamicArray(GeneratorState state, LocalDeclaration st)
     state.render(format("    sub qword %s, 8", renderLocal(arrayPtr)));
 
     // Allocate the requested space
-    state.render(format("    sub rsp, %s", arraySizeRegister.register));
+    state.render(format("    sub rsp, %s", arraySizeRegister));
 
-    state.freeTemp(arraySizeRegister);
+    state.freeTemp(arraySizeInRegister);
 }
 
 void generateLocalDeclaration(GeneratorState state, LocalDeclaration st)
@@ -1171,7 +1313,7 @@ void generateAssignmentShared(GeneratorState state, Node target,
     else if (dot !is null)
     {
         tempTarget = resolveDotAccessor(state, dot);
-        targetRendered = format("[%s]", tempTarget.register);
+        targetRendered = format("[%s]", tempTarget.expectSingleRegister());
     }
     // Assigning to a binding
     else
@@ -1196,9 +1338,9 @@ void generateAssignmentShared(GeneratorState state, Node target,
         if (targetDereference)
         {
             tempTarget = state.addTemp(targetLocal.type);
-            state.render(format("    mov %s, %s", tempTarget.register,
-                                targetRendered));
-            targetRendered = format("[%s]", tempTarget.register);
+            state.render(format("    mov %s, %s",
+                    tempTarget.expectSingleRegister(), targetRendered));
+            targetRendered = format("[%s]", tempTarget.expectSingleRegister());
 
             targetType = targetLocal.type.clone();
             targetType.pointer = false;
@@ -1215,19 +1357,19 @@ void generateAssignmentShared(GeneratorState state, Node target,
     if (binding !is null)
     {
         tempTarget2 = state.addTemp(binding.type);
-        auto tempTarget2Register = tempTarget2.register;
+        auto tempTarget2Register = tempTarget2.expectSingleRegister();
         if (sizeHint != OpSize.Qword)
         {
-            tempTarget2Register = convertRegisterSize(tempTarget2.register,
+            tempTarget2Register = convertRegisterSize(tempTarget2Register,
                     sizeHint);
         }
         state.render(format("    mov %s, %s", tempTarget2Register,
                             valueRendered));
         valueRendered = to!string(tempTarget2Register);
     }
-    else if (localValue !is null && localValue.location == Location.Register)
+    else if (localValue !is null && localValue.inRegister())
     {
-        auto valueRegister = localValue.register;
+        auto valueRegister = localValue.expectSingleRegister();
         if (sizeHint != OpSize.Qword)
         {
             valueRegister = convertRegisterSize(valueRegister, sizeHint);
@@ -1235,7 +1377,7 @@ void generateAssignmentShared(GeneratorState state, Node target,
         valueRendered = to!string(valueRegister);
     }
 
-    state.render(format("    mov %s%s, %s", sizeHint, targetRendered,
+    state.render(format("    mov %s %s, %s", sizeHint, targetRendered,
                         valueRendered));
 
     auto valueLocal = cast(Local)value;
@@ -1313,8 +1455,8 @@ void generateReturn(GeneratorState state, Return r)
             throw new Exception(format("Can't return this: %s", value));
         }
 
-        if (local.location != Location.Register ||
-            local.register != Register.RAX)
+        if (!local.inRegister() ||
+            local.expectSingleRegister() != Register.RAX)
         {
             auto localRendered = renderLocal(local);
             auto opSize = typeToOpSize(local.type);
@@ -1403,7 +1545,7 @@ Node generateSizeOf(GeneratorState state, SizeOf sizeof)
 {
     auto ret = state.addTemp(sizeof.type);
 
-    state.render(format("    mov %s, %d", ret.register,
+    state.render(format("    mov %s, %d", ret.expectSingleRegister(),
             sizeof.argument.baseTypeSize()));
 
     return ret;
@@ -1442,45 +1584,68 @@ bool isBindingInteger(GeneratorState state, Node node)
     return isPrimitiveIntegral(local.type);
 }
 
-// If the given node is not in a register, move it into one
-Local requireLocalInRegister(GeneratorState state, Node node)
+// Make a register copy of the given Binding/Local
+Local requireCopyInRegister(GeneratorState state, Node node)
 {
-    // If node is already a local, resolve it
-    auto binding = cast(Binding)node;
-    if (binding !is null)
-    {
-        auto local = state.findLocal(binding.name);
-        if (local is null)
-        {
-            throw new Exception(format("Can't find local %s", binding.name));
-        }
-
-        // If it's already in a register, no work needed
-        if (local.location == Location.Register)
-        {
-            return local;
-        }
-    }
-
-    // Not in a register: make a new temp and copy it there
     auto ret = state.addTemp(node.type);
-    ret.register = convertRegisterSize(ret.register, typeToOpSize(ret.type));
+    auto register = ret.expectSingleRegister();
+    register = convertRegisterSize(register, typeToOpSize(ret.type));
+    ret.data = [new RegisterLocation(register)];
 
     // Special handling for arrays and non-pointer structs
     if (node.type.elements !is null ||
         (node.type.isStruct() && !node.type.pointer))
     {
-        state.render(format("    lea %s, %s", ret.register,
+        state.render(format("    lea %s, %s", register,
                             renderNode(state, node)));
     }
     else
     {
         auto opSize = typeToOpSize(ret.type);
-        state.render(format("    mov %s %s, %s", opSize, ret.register,
+        state.render(format("    mov %s %s, %s", opSize, register,
                             renderNode(state, node)));
     }
 
     return ret;
+}
+
+// If the given node is not in a register, move it into one
+Local requireLocalInRegister(GeneratorState state, Node node)
+{
+    // If node is already a local, resolve it
+    auto local = cast(Local)node;
+    if (local is null)
+    {
+        auto binding = cast(Binding)node;
+        if (binding !is null)
+        {
+            local = state.findLocal(binding.name);
+            if (local is null)
+            {
+                throw new Exception(format("Can't find local %s",
+                        binding.name));
+            }
+        }
+    }
+
+    // If it's already in a register, no work needed
+    if (local !is null && local.inRegister())
+    {
+        return local;
+    }
+
+    // Not in a register: make a new temp and copy it there
+
+    // TODO: ?
+    /*
+    if (typeSize(node.type) > 8)
+    {
+        throw new Exception("Can't make a temp out of a value that can't " ~
+                "fit in a single register");
+    }
+    */
+
+    return requireCopyInRegister(state, node);
 }
 
 struct IndexerResolveData
@@ -1508,8 +1673,9 @@ IndexerResolveData resolveIndexer(GeneratorState state, Indexer indexer)
 
     auto scale = data.sourceRegister.type.baseTypeSize();
 
-    data.address = format("[%s + %d * %s]", data.sourceRegister.register,
-                          scale, data.indexerRegister.register);
+    data.address = format("[%s + %d * %s]",
+            data.sourceRegister.expectSingleRegister(), scale,
+            data.indexerRegister.expectSingleRegister());
 
     return data;
 }
@@ -1523,7 +1689,8 @@ Local generateIndexer(GeneratorState state, Indexer indexer)
 
     auto output = state.addTemp(outputType);
 
-    state.render(format("    mov %s, %s", output.register, data.address));
+    state.render(format("    mov %s, %s", output.expectSingleRegister(),
+            data.address));
 
     state.freeTemp(data.sourceRegister);
     state.freeTemp(data.indexerRegister);
@@ -1540,7 +1707,7 @@ Local resolveDotAccessor(GeneratorState state, DotAccessor dot)
     if (containerDot is null)
     {
         auto containerNode = generateNode(state, dot.container);
-        containerRegister = requireLocalInRegister(state, containerNode);
+        containerRegister = requireCopyInRegister(state, containerNode);
     }
     else
     {
@@ -1567,8 +1734,8 @@ Local resolveDotAccessor(GeneratorState state, DotAccessor dot)
         memberOffset += member.type.baseTypeSize();
     }
 
-    state.render(format("    add %s, %d", containerRegister.register,
-                        memberOffset));
+    state.render(format("    add %s, %d",
+            containerRegister.expectSingleRegister(), memberOffset));
 
     return containerRegister;
 }
@@ -1578,7 +1745,8 @@ Local generateDotAccessor(GeneratorState state, DotAccessor dot)
     auto member = resolveDotAccessor(state, dot);
     auto output = state.addTemp(dot.type);
 
-    state.render(format("    mov %s, [%s]", output.register, member.register));
+    state.render(format("    mov %s, [%s]", output.expectSingleRegister(),
+            member.expectSingleRegister()));
 
     state.freeTemp(member);
 
@@ -1601,36 +1769,31 @@ Local generateDereference(GeneratorState state, Dereference dereference)
         throw new Exception(format("Can't find temp %s", sourceBinding.name));
     }
 
-    if (sourceLocal.location == Location.Register)
-    {
-        throw new Exception(format("Can't dereference a register %s",
-                                   sourceBinding.name));
-    }
-
     auto outputType = sourceLocal.type.clone();
     outputType.pointer = false;
 
     auto outputLocal = state.addTemp(outputType);
     auto temp = state.addTemp(new PrimitiveType(Primitive.U64));
 
-    state.render(format("    mov %s, %s", temp.register,
+    state.render(format("    mov %s, %s", temp.expectSingleRegister(),
                         renderNode(state, sourceNode)));
 
     string targetRegister;
     if (outputType.isPrimitive(Primitive.U64))
     {
-        targetRegister = to!string(outputLocal.register);
+        targetRegister = to!string(outputLocal.expectSingleRegister());
     }
     else if (outputType.isPrimitive(Primitive.U8))
     {
-        targetRegister = lowByte(outputLocal.register);
+        targetRegister = lowByte(outputLocal.expectSingleRegister());
     }
     else
     {
         throw new Exception(format("Can't dereference type %s", outputType));
     }
 
-    state.render(format("    mov %s, [%s]", targetRegister, temp.register));
+    state.render(format("    mov %s, [%s]", targetRegister,
+            temp.expectSingleRegister()));
     state.freeTemp(temp);
 
     return outputLocal;
@@ -1652,7 +1815,7 @@ Local generateReference(GeneratorState state, Reference reference)
         throw new Exception(format("Can't find temp %s", sourceBinding.name));
     }
 
-    if (sourceLocal.location == Location.Register)
+    if (sourceLocal.inRegister())
     {
         throw new Exception(format("Can't reference a register %s",
                                    sourceBinding.name));
@@ -1663,7 +1826,7 @@ Local generateReference(GeneratorState state, Reference reference)
 
     auto outputLocal = state.addTemp(outputType);
 
-    state.render(format("    lea %s, %s", outputLocal.register,
+    state.render(format("    lea %s, %s", outputLocal.expectSingleRegister(),
                         renderNode(state, sourceNode)));
 
     return outputLocal;
@@ -1701,9 +1864,10 @@ Local generateCastU8ToU64(GeneratorState state, Cast typeCast)
 {
     auto source = renderNode(state, generateNode(state, typeCast.target));
     auto target = state.addTemp(typeCast.type.clone());
+    auto targetRegister = target.expectSingleRegister();
 
-    state.render(format("    xor %s, %s", target.register, target.register));
-    state.render(format("    mov %s, %s", lowByteRegister(target.register),
+    state.render(format("    xor %s, %s", targetRegister, targetRegister));
+    state.render(format("    mov %s, %s", lowByteRegister(targetRegister),
             source));
 
     return target;
@@ -1728,15 +1892,16 @@ Local generateCastLiteralIntegerToBool(GeneratorState state, Cast typeCast)
     }
 
     auto target = state.addTemp(new PrimitiveType(Primitive.Bool));
+    auto targetRegister = target.expectSingleRegister();
 
     if (castedValue)
     {
-        state.render(format("    mov %s, 1", target.register));
+        state.render(format("    mov %s, 1", targetRegister));
     }
     else
     {
-        state.render(format("    xor %s, %s", target.register,
-                            target.register));
+        state.render(format("    xor %s, %s", targetRegister,
+                            targetRegister));
     }
 
     return target;
@@ -1746,10 +1911,11 @@ Local generateCastLocalIntegerToBool(GeneratorState state, Cast typeCast)
 {
     auto source = renderNode(state, generateNode(state, typeCast.target));
     auto target = state.addTemp(new PrimitiveType(Primitive.Bool));
+    auto targetRegister = target.expectSingleRegister();
 
-    state.render(format("    xor %s, %s", target.register, target.register));
+    state.render(format("    xor %s, %s", targetRegister, targetRegister));
     state.render(format("    cmp %s, 0", source));
-    state.render(format("    setne %s", lowByte(target.register)));
+    state.render(format("    setne %s", lowByte(targetRegister)));
 
     return target;
 }
@@ -1782,6 +1948,7 @@ Local generateMathOperator(GeneratorState state, Operator operator)
     auto rdxTaken = state.registerTaken(Register.RDX);
 
     auto temp = state.addTemp(operator.type);
+    auto tempRegister = temp.expectSingleRegister();
 
     if (operator.operatorType == OperatorType.Divide ||
         operator.operatorType == OperatorType.Modulo)
@@ -1803,19 +1970,20 @@ Local generateMathOperator(GeneratorState state, Operator operator)
 
         state.render(format("    mov rax, %s", left));
         state.render(format("    xor rdx, rdx"));
-        state.render(format("    idiv %s", rightNodeRegister.register));
+        state.render(format("    idiv %s",
+                            rightNodeRegister.expectSingleRegister()));
 
         state.unreserve(Register.RDX);
         state.unreserve(Register.RAX);
 
         if (operator.operatorType == OperatorType.Divide)
         {
-            state.render(format("    mov %s, rax", temp.register));
+            state.render(format("    mov %s, rax", tempRegister));
         }
 
         if (operator.operatorType == OperatorType.Modulo)
         {
-            state.render(format("    mov %s, rdx", temp.register));
+            state.render(format("    mov %s, rdx", tempRegister));
         }
 
         state.freeTemp(rightNodeRegister);
@@ -1838,10 +2006,10 @@ Local generateMathOperator(GeneratorState state, Operator operator)
         auto leftNodeRegister = requireLocalInRegister(state, leftNode);
         auto rightNodeRegister = requireLocalInRegister(state, rightNode);
 
-        state.render(format("    mov %s, %s", temp.register,
-                leftNodeRegister.register));
-        state.render(format("    imul %s, %s", temp.register,
-                rightNodeRegister.register));
+        state.render(format("    mov %s, %s", tempRegister,
+                leftNodeRegister.expectSingleRegister()));
+        state.render(format("    imul %s, %s", tempRegister,
+                rightNodeRegister.expectSingleRegister()));
 
         state.freeTemp(rightNodeRegister);
         state.freeTemp(leftNodeRegister);
@@ -1849,24 +2017,24 @@ Local generateMathOperator(GeneratorState state, Operator operator)
         return temp;
     }
 
-    state.render(format("    mov %s, %s", temp.register, left));
+    state.render(format("    mov %s, %s", tempRegister, left));
 
     switch (operator.operatorType)
     {
         case OperatorType.Plus:
-            state.render(format("    add %s, %s", temp.register, right));
+            state.render(format("    add %s, %s", tempRegister, right));
             break;
         case OperatorType.Minus:
-            state.render(format("    sub %s, %s", temp.register, right));
+            state.render(format("    sub %s, %s", tempRegister, right));
             break;
         case OperatorType.LeftShift:
-            state.render(format("    shl %s, %s", temp.register, right));
+            state.render(format("    shl %s, %s", tempRegister, right));
             break;
         case OperatorType.RightShift:
-            state.render(format("    shr %s, %s", temp.register, right));
+            state.render(format("    shr %s, %s", tempRegister, right));
             break;
         case OperatorType.BitwiseAnd:
-            state.render(format("    and %s, %s", temp.register, right));
+            state.render(format("    and %s, %s", tempRegister, right));
             break;
         default:
             throw new Exception(format("Unrecognized math operator type: %s",
@@ -1913,7 +2081,7 @@ bool isInMemory(GeneratorState state, Node node)
         return false;
     }
 
-    return local.location != Location.Register;
+    return !local.inRegister();
 }
 
 Local generateRelationalOperator(GeneratorState state, Operator operator)
@@ -1930,7 +2098,8 @@ Local generateRelationalOperator(GeneratorState state, Operator operator)
     auto right = renderNode(state, rightNode);
 
     auto temp = state.addTemp(new PrimitiveType(Primitive.Bool));
-    state.render(format("    xor %s, %s", temp.register, temp.register));
+    auto tempRegister = temp.expectSingleRegister();
+    state.render(format("    xor %s, %s", tempRegister, tempRegister));
 
     auto sizeHint = renderSizeHint(leftNode, rightNode);
     state.render(format("    cmp %s%s, %s", sizeHint, left, right));
@@ -1962,7 +2131,7 @@ Local generateRelationalOperator(GeneratorState state, Operator operator)
                     operator.type));
     }
 
-    state.render(format("    %s %s", op, lowByte(temp.register)));
+    state.render(format("    %s %s", op, lowByte(tempRegister)));
 
     return temp;
 }
@@ -1970,7 +2139,8 @@ Local generateRelationalOperator(GeneratorState state, Operator operator)
 Local generateLogicalAndOperator(GeneratorState state, Operator operator)
 {
     auto temp = state.addTemp(new PrimitiveType(Primitive.Bool));
-    state.render(format("    xor %s, %s", temp.register, temp.register));
+    auto tempRegister = temp.expectSingleRegister();
+    state.render(format("    xor %s, %s", tempRegister, tempRegister));
 
     auto endComparison = state.addLabel("end_comparison_");
 
@@ -1981,7 +2151,7 @@ Local generateLogicalAndOperator(GeneratorState state, Operator operator)
     generateConditional(state, operator.right, endComparison);
 
     // Both were true
-    state.render(format("    mov %s, 1", temp.register));
+    state.render(format("    mov %s, 1", tempRegister));
 
     // Either were false
     state.render(format("%s:", endComparison));
@@ -2001,69 +2171,370 @@ class NonRegisterArg
     }
 }
 
+class DataMove
+{
+    DataLocation source;
+    DataLocation target;
+
+    this(DataLocation source, DataLocation target)
+    {
+        this.source = source;
+        this.target = target;
+    }
+}
+
+// Map a list of parameters to the registers and stack positions necessary for
+// a function call.
+DataMove[] mapCallParams(GeneratorState state, Node[] sourceLocals,
+        Register[] targetRegisters)
+{
+    DataMove[] ret;
+    int stackOffset;
+
+    Register nextTargetRegister()
+    {
+        auto ret = targetRegisters[0];
+        targetRegisters = targetRegisters[1 .. targetRegisters.length];
+        return ret;
+    }
+
+    foreach (sourceNode; sourceLocals)
+    {
+        auto sourceLiteral = cast(Literal)sourceNode;
+        if (sourceLiteral !is null)
+        {
+            // Literal -> register
+            if (targetRegisters.length > 0)
+            {
+                auto targetRegister = nextTargetRegister();
+                ret ~= new DataMove(new LiteralLocation(sourceLiteral),
+                        new RegisterLocation(targetRegister));
+
+                continue;
+            }
+
+            // Literal -> stack
+            ret ~= new DataMove(new LiteralLocation(sourceLiteral),
+                    new StackLocation(stackOffset, 8));
+
+            stackOffset += 8;
+
+            continue;
+        }
+
+        auto sourceLocal = cast(Local)sourceNode;
+        if (sourceLocal is null)
+        {
+            throw new Exception(format("Unrecognized node %s", sourceNode));
+        }
+
+        foreach (source; sourceLocal.data)
+        {
+            // Source is register?
+            auto register = cast(RegisterLocation)source;
+            if (register !is null)
+            {
+                // Register -> register
+                if (targetRegisters.length > 0)
+                {
+                    auto targetRegister = nextTargetRegister();
+
+                    // Don't move if the data is already in the right spot
+                    if (register.register == targetRegister)
+                    {
+                        continue;
+                    }
+
+                    ret ~= new DataMove(register,
+                            new RegisterLocation(targetRegister));
+
+                    continue;
+                }
+
+                // Register -> stack
+                ret ~= new DataMove(register,
+                        new StackLocation(stackOffset, register.bytes));
+
+                stackOffset += register.bytes;
+
+                continue;
+            }
+
+            // Source is stack?
+            auto stack = cast(StackLocation)source;
+            if (stack !is null)
+            {
+                int sourceOffset = stack.offset;
+                int sourceLeft = stack.bytes;
+
+                while (sourceLeft > 0)
+                {
+                    // Stack portion -> register
+                    if (targetRegisters.length > 0)
+                    {
+                        auto targetRegister = nextTargetRegister();
+
+                        ret ~= new DataMove(new StackLocation(sourceOffset, 8),
+                                new RegisterLocation(targetRegister));
+
+                        sourceOffset += 8;
+                        stackOffset += 8;
+                        sourceLeft -= 8;
+
+                        continue;
+                    }
+
+                    // Stack remainder -> stack
+                    ret ~= new DataMove(
+                            new StackLocation(sourceOffset, sourceLeft),
+                            new StackLocation(stackOffset, sourceLeft));
+
+                    stackOffset += sourceLeft;
+
+                    break;
+                }
+
+                continue;
+            }
+
+            // Source is data section?
+            auto dataSection = cast(DataSectionLocation)source;
+            if (dataSection !is null)
+            {
+                // Data section -> register
+                if (targetRegisters.length > 0)
+                {
+                    auto targetRegister = nextTargetRegister();
+
+                    ret ~= new DataMove(dataSection,
+                            new RegisterLocation(targetRegister));
+
+                    continue;
+                }
+
+                // Data section -> stack
+                ret ~= new DataMove(dataSection,
+                        new StackLocation(stackOffset, 8));
+
+                stackOffset += 8;
+
+                continue;
+            }
+
+            throw new Exception(format("Unrecognized data location: %s",
+                    source));
+        }
+    }
+
+    return ret;
+}
+
+string renderOffset(int offset)
+{
+    if (offset == 0)
+    {
+        return "";
+    }
+    else if (offset > 0)
+    {
+        return format("+ %d", offset);
+    }
+    else
+    {
+        return format("- %d", offset * -1);
+    }
+}
+
 Register[] prepareCallParams(GeneratorState state, Node[] params,
         Register[] registerList)
 {
+    // TODO: reorder stack pushes?
+
     // Generate all parameters
     for (int i = 0; i < params.length; i++)
     {
-        params[i] = generateNode(state, params[i]);
+        auto generated = generateNode(state, params[i]);
+
+        auto binding = cast(Binding)generated;
+
+        if (binding !is null)
+        {
+            auto bindingLocal = state.findLocal(binding.name);
+
+            if (bindingLocal is null)
+            {
+                throw new Exception(format("Can't find local %s",
+                        binding.name));
+            }
+
+            params[i] = bindingLocal;
+            continue;
+        }
+
+        auto literal = cast(Literal)generated;
+        auto local = cast(Local)generated;
+
+        if (local is null && literal is null)
+        {
+            throw new Exception(format(
+                    "Parameter didn't generate into a local or literal: %s",
+                    params[i]));
+        }
+
+        params[i] = generated;
     }
 
     // Save caller-preserved registers
-    // TODO: optimize
-    Register[] callerPreserved = state.callerPreservedRegistersInUse();
-    for (auto i = 0; i < callerPreserved.length; i++)
+    auto callerPreserved = state.callerPreservedRegistersInUse();
+    foreach (p; callerPreserved)
     {
-        state.generatePush(callerPreserved[i]);
+        state.generatePush(p);
     }
 
-    // Push stack arguments in reverse order
-    if (params.length > 0)
+    // Map parameters to their targets for the call
+    auto moves = mapCallParams(state, params, registerList);
+
+    // Perform any moves destined for stack
+    int i = 0;
+    while (i < moves.length)
     {
-        for (int i = cast(int)params.length - 1; i >= registerList.length; i--)
+        auto move = moves[i];
+
+        auto targetStack = cast(StackLocation)move.target;
+        if (targetStack is null)
         {
-            state.render(format("    push %s", renderNode(state, params[i])));
+            i++;
+            continue;
         }
+
+        auto sourceRegister = cast(RegisterLocation)move.source;
+        auto sourceStack = cast(StackLocation)move.source;
+        auto sourceLiteral = cast(LiteralLocation)move.source;
+        if (sourceRegister !is null)
+        {
+            state.render(format("    mov [rbp - %d], %s", targetStack.offset,
+                    sourceRegister.register));
+        }
+        else if (sourceStack !is null)
+        {
+            auto tempRegister = state.reserveNextFreeRegister();
+
+            auto offset = sourceStack.bytes - 8;
+            while (offset >= 0)
+            {
+                state.render(format("    mov %s, [rbp %s]", tempRegister,
+                        renderOffset(sourceStack.offset + offset)));
+                state.render(format("    push %s", tempRegister));
+
+                offset -= 8;
+            }
+
+            state.unreserve(tempRegister);
+        }
+        else if (sourceLiteral !is null)
+        {
+            state.render(format("    push %s",
+                    renderNode(state, sourceLiteral.literal)));
+        }
+        else
+        {
+            throw new Exception(format("Unrecognized source %s", move.source));
+        }
+
+        moves = moves.remove(i);
     }
 
-    // Build list of parameters in registers and where they have to move for
-    // the call to work.
+    // Build list of register-to-register moves
     RegisterMove[] registerMoves;
-    NonRegisterArg[] nonRegisterArgs;
-    for (int i = 0; i < params.length && i < registerList.length; i++)
+    i = 0;
+    while (i < moves.length)
     {
-        auto targetRegister = registerList[i];
+        auto move = moves[i];
 
-        auto binding = cast(Binding)params[i];
-        if (binding is null)
+        auto sourceRegister = cast(RegisterLocation)move.source;
+        auto targetRegister = cast(RegisterLocation)move.target;
+
+        if (sourceRegister is null || targetRegister is null)
         {
-            nonRegisterArgs ~= new NonRegisterArg(params[i], targetRegister);
+            i++;
             continue;
         }
 
-        auto local = state.findLocal(binding.name);
-        if (local is null)
-        {
-            throw new Exception(format("Local %s not found", binding.name));
-        }
+        registerMoves ~= new RegisterMove(sourceRegister.register,
+                targetRegister.register);
 
-        if (local.location != Location.Register)
-        {
-            nonRegisterArgs ~= new NonRegisterArg(params[i], targetRegister);
-            continue;
-        }
-
-        registerMoves ~= new RegisterMove(local.register, targetRegister);
+        moves = moves.remove(i);
     }
 
+    // Perform register-to-register moves
     shuffleRegisters(state, registerMoves);
 
-    // Pass args which aren't currently located in registers
-    foreach (arg; nonRegisterArgs)
+    // Perform stack-to-register moves
+    i = 0;
+    while (i < moves.length)
     {
-        state.render(format("    mov %s, %s",
-                            arg.target, renderNode(state, arg.node)));
+        auto move = moves[i];
+
+        auto sourceStack = cast(StackLocation)move.source;
+        auto targetRegister = cast(RegisterLocation)move.target;
+
+        if (sourceStack is null || targetRegister is null)
+        {
+            i++;
+            continue;
+        }
+
+        state.render(format("    mov %s, [rbp %s]", targetRegister.register,
+                renderOffset(sourceStack.offset)));
+
+        moves = moves.remove(i);
+    }
+
+    // Perform literal-to-register moves
+    i = 0;
+    while (i < moves.length)
+    {
+        auto move = moves[i];
+
+        auto sourceLiteral = cast(LiteralLocation)move.source;
+        auto targetRegister = cast(RegisterLocation)move.target;
+
+        if (sourceLiteral is null || targetRegister is null)
+        {
+            i++;
+            continue;
+        }
+
+        state.render(format("    mov %s, %s", targetRegister.register,
+                renderNode(state, sourceLiteral.literal)));
+
+        moves = moves.remove(i);
+    }
+
+    // Perform data-section-to-register moves
+    i = 0;
+    while (i < moves.length)
+    {
+        auto move = moves[i];
+
+        auto sourceDataSection = cast(DataSectionLocation)move.source;
+        auto targetRegister = cast(RegisterLocation)move.target;
+
+        if (sourceDataSection is null || targetRegister is null)
+        {
+            i++;
+            continue;
+        }
+
+        state.render(format("    mov %s, %s", targetRegister.register,
+                sourceDataSection.name));
+
+        moves = moves.remove(i);
+    }
+
+    if (moves.length > 0)
+    {
+        throw new Exception("Unprocessed data moves left");
     }
 
     return callerPreserved;
@@ -2074,9 +2545,10 @@ Local cleanupCall(GeneratorState state, Type returnType,
 {
     // Save return value (in rax) to a new temp variable
     auto temp = state.addTemp(returnType);
-    if (temp.register != Register.RAX)
+    auto tempRegister = temp.expectSingleRegister();
+    if (tempRegister != Register.RAX)
     {
-        state.render(format("    mov %s, rax", temp.register));
+        state.render(format("    mov %s, rax", tempRegister));
     }
 
     // Restore caller-preserved registers
@@ -2155,6 +2627,7 @@ Local generateVariadic(GeneratorState state, Call call)
 
     auto indexNode = generateNode(state, call.parameters[0]);
     auto index = requireLocalInRegister(state, indexNode);
+    auto indexRegister = index.expectSingleRegister();
 
     auto ret = state.addTemp(new PrimitiveType(Primitive.U64));
 
@@ -2162,25 +2635,25 @@ Local generateVariadic(GeneratorState state, Call call)
     auto end = state.addLabel("variadic_end_");
 
     // Skip non-variadic parameters
-    state.render(format("    add %s, %d", index.register,
+    state.render(format("    add %s, %d", indexRegister,
                                           func.parameters.length));
 
     // Different logic for stack- vs register-passed arguments
-    state.render(format("    cmp %s, 5", index.register));
+    state.render(format("    cmp %s, 5", indexRegister));
     state.render(format("    jg %s", inStack));
 
     // Parameter was passed through a register
-    state.render(format("    neg %s", index.register));
+    state.render(format("    neg %s", indexRegister));
     state.render(format("    jmp %s", end));
 
     // Parameter was passed on the stack
     state.render(format("%s:", inStack));
-    state.render(format("    sub %s, 3", index.register));
+    state.render(format("    sub %s, 3", indexRegister));
 
     // End if
     state.render(format("%s:", end));
-    state.render(format("    mov %s, [rbp + 8 * %s - 8]", ret.register,
-                        index.register));
+    state.render(format("    mov %s, [rbp + 8 * %s - 8]",
+                        ret.expectSingleRegister(), indexRegister));
 
     state.freeTemp(index);
 
@@ -2189,22 +2662,35 @@ Local generateVariadic(GeneratorState state, Call call)
 
 string renderLocal(Local local)
 {
-    switch (local.location)
+    if (local.data.length != 1)
     {
-        case Location.Register:
-            if (!local.type.pointer && local.type.baseTypeSize() == 1)
-            {
-                return format("%s", lowByte(local.register));
-            }
-
-            return format("%s", local.register);
-        case Location.Stack:
-            return renderStackLocation(local.stackOffset);
-        case Location.DataSection:
-            return format("[%s]", local.name);
-        default:
-            throw new Exception(format("Unknown location %s", local.location));
+        throw new Exception("Can't render local with more than 1 register");
     }
+
+    auto registerLocation = cast(RegisterLocation)local.data[0];
+    if (registerLocation !is null)
+    {
+        if (!local.type.pointer && local.type.baseTypeSize() == 1)
+        {
+            return format("%s", lowByte(registerLocation.register));
+        }
+
+        return format("%s", registerLocation.register);
+    }
+
+    auto stackLocation = cast(StackLocation)local.data[0];
+    if (stackLocation !is null)
+    {
+        return renderStackLocation(stackLocation.offset);
+    }
+
+    auto dataLocation = cast(DataSectionLocation)local.data[0];
+    if (dataLocation !is null)
+    {
+        return format("[%s]", local.name);
+    }
+
+    throw new Exception(format("Unknown location %s", local.data[0]));
 }
 
 string renderNode(GeneratorState state, Node node)
@@ -2253,16 +2739,17 @@ string renderNode(GeneratorState state, Node node)
 
         // TODO: free temp
         auto temp = state.addTemp(new PrimitiveType(Primitive.U64));
-        state.render(format("    mov %s, %s", temp.register, literalName));
+        auto tempRegister = temp.expectSingleRegister();
+        state.render(format("    mov %s, %s", tempRegister, literalName));
 
-        return to!string(temp.register);
+        return to!string(tempRegister);
     }
 
     auto operator = cast(Operator)node;
     if (operator !is null)
     {
         auto local = generateOperator(state, operator);
-        return format("%s", local.register);
+        return format("%s", local.expectSingleRegister());
     }
 
     throw new Exception(format("Node %s unrecognized", node));
@@ -2277,13 +2764,13 @@ string generateBinding(GeneratorState state, Binding binding)
         throw new Exception(format("Local %s not found", binding.name));
     }
 
-    if (local.location != Location.Register)
+    if (!local.inRegister())
     {
         throw new Exception(
                 format("Local %s not in a register", binding.name));
     }
 
-    return format("%s", local.register);
+    return format("%s", local.expectSingleRegister());
 }
 
 // Register shuffling ---------------------------------------------------------
@@ -2392,7 +2879,7 @@ void shuffleRegisters(GeneratorState state, RegisterMove[] moves)
 
         // Circular chain
         auto tempLocal = state.addTemp(new PrimitiveType(Primitive.U64));
-        auto temp = tempLocal.register;
+        auto temp = tempLocal.expectSingleRegister();
 
         state.render(format("    mov %s, %s", temp, chain[$-1]));
 
