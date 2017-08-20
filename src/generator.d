@@ -2191,11 +2191,28 @@ DataMove[] mapCallParams(GeneratorState state, Node[] sourceLocals,
     DataMove[] ret;
     int stackOffset;
 
-    Register nextTargetRegister()
+    void allocate(DataLocation source, int bytes)
     {
-        auto ret = targetRegisters[0];
-        targetRegisters = targetRegisters[1 .. targetRegisters.length];
-        return ret;
+        // If registers are left
+        if (targetRegisters.length > 0)
+        {
+            auto r = targetRegisters[0];
+            targetRegisters = targetRegisters[1 .. targetRegisters.length];
+
+            // Skip move from one register to itself
+            auto sourceRegister = cast(RegisterLocation)source;
+            if (sourceRegister !is null && sourceRegister.register == r)
+            {
+                return;
+            }
+
+            ret ~= new DataMove(source, new RegisterLocation(r));
+            return;
+        }
+
+        // Spill over to stack
+        ret ~= new DataMove(source, new StackLocation(stackOffset, bytes));
+        stackOffset += bytes;
     }
 
     foreach (sourceNode; sourceLocals)
@@ -2203,22 +2220,7 @@ DataMove[] mapCallParams(GeneratorState state, Node[] sourceLocals,
         auto sourceLiteral = cast(Literal)sourceNode;
         if (sourceLiteral !is null)
         {
-            // Literal -> register
-            if (targetRegisters.length > 0)
-            {
-                auto targetRegister = nextTargetRegister();
-                ret ~= new DataMove(new LiteralLocation(sourceLiteral),
-                        new RegisterLocation(targetRegister));
-
-                continue;
-            }
-
-            // Literal -> stack
-            ret ~= new DataMove(new LiteralLocation(sourceLiteral),
-                    new StackLocation(stackOffset, 8));
-
-            stackOffset += 8;
-
+            allocate(new LiteralLocation(sourceLiteral), 8);
             continue;
         }
 
@@ -2234,29 +2236,7 @@ DataMove[] mapCallParams(GeneratorState state, Node[] sourceLocals,
             auto register = cast(RegisterLocation)source;
             if (register !is null)
             {
-                // Register -> register
-                if (targetRegisters.length > 0)
-                {
-                    auto targetRegister = nextTargetRegister();
-
-                    // Don't move if the data is already in the right spot
-                    if (register.register == targetRegister)
-                    {
-                        continue;
-                    }
-
-                    ret ~= new DataMove(register,
-                            new RegisterLocation(targetRegister));
-
-                    continue;
-                }
-
-                // Register -> stack
-                ret ~= new DataMove(register,
-                        new StackLocation(stackOffset, register.bytes));
-
-                stackOffset += register.bytes;
-
+                allocate(register, register.bytes);
                 continue;
             }
 
@@ -2272,24 +2252,15 @@ DataMove[] mapCallParams(GeneratorState state, Node[] sourceLocals,
                     // Stack portion -> register
                     if (targetRegisters.length > 0)
                     {
-                        auto targetRegister = nextTargetRegister();
-
-                        ret ~= new DataMove(new StackLocation(sourceOffset, 8),
-                                new RegisterLocation(targetRegister));
-
+                        allocate(new StackLocation(sourceOffset, 8), 8);
                         sourceOffset += 8;
-                        stackOffset += 8;
                         sourceLeft -= 8;
 
                         continue;
                     }
 
-                    // Stack remainder -> stack
-                    ret ~= new DataMove(
-                            new StackLocation(sourceOffset, sourceLeft),
-                            new StackLocation(stackOffset, sourceLeft));
-
-                    stackOffset += sourceLeft;
+                    allocate(new StackLocation(sourceOffset, sourceLeft),
+                            sourceLeft);
 
                     break;
                 }
@@ -2301,23 +2272,7 @@ DataMove[] mapCallParams(GeneratorState state, Node[] sourceLocals,
             auto dataSection = cast(DataSectionLocation)source;
             if (dataSection !is null)
             {
-                // Data section -> register
-                if (targetRegisters.length > 0)
-                {
-                    auto targetRegister = nextTargetRegister();
-
-                    ret ~= new DataMove(dataSection,
-                            new RegisterLocation(targetRegister));
-
-                    continue;
-                }
-
-                // Data section -> stack
-                ret ~= new DataMove(dataSection,
-                        new StackLocation(stackOffset, 8));
-
-                stackOffset += 8;
-
+                allocate(dataSection, 8);
                 continue;
             }
 
