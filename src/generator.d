@@ -1420,22 +1420,7 @@ void generateReturn(GeneratorState state, Return r)
             throw new Exception(format("Can't return this: %s", value));
         }
 
-        if (!local.inRegister() ||
-            local.expectSingleRegister() != Register.RAX)
-        {
-            auto localRendered = renderLocal(local);
-            auto opSize = typeToOpSize(local.type);
-
-            auto target = Register.RAX;
-
-            if (opSize != OpSize.Qword)
-            {
-                target = convertRegisterSize(target, opSize);
-                state.render(format("    xor rax, rax"));
-            }
-
-            state.render(format("    mov %s, %s", target, localRendered));
-        }
+        copyData(state, local.data, [Register.RAX, Register.RDX], false);
     }
 
     state.render("    mov rsp, rbp");
@@ -2380,7 +2365,7 @@ void copyData(GeneratorState state, DataLocation[] sources,
         }
         else if (sourceDataSection !is null)
         {
-            sourceRendered = sourceDataSection.name;
+            sourceRendered = format("[%s]", sourceDataSection.name);
         }
         else
         {
