@@ -857,16 +857,6 @@ void generateFunction(GeneratorState state, Function func)
                 break;
             }
 
-            // TODO: make room above frame pointer for register-passed args
-            // to be copied to the stack?
-            /*
-            if (i < callRegisters.length)
-            {
-                stackOffset -= typeSize(func.signature.parameters[i].type);
-                local.stackOffset = stackOffset;
-            }
-            */
-
             state.locals ~= local;
         }
     }
@@ -922,21 +912,6 @@ void generateFunction(GeneratorState state, Function func)
         state.render(format("    sub rsp, %s", stackOffset * -1));
     }
 
-    // Copy locals into the stack
-    // TODO
-    /*
-    foreach (local; state.locals)
-    {
-        if (local.location == Location.Register)
-        {
-            state.render(format("    mov %s, %s",
-                    renderStackLocation(local.stackOffset), local.register));
-
-            local.location = Location.Stack;
-        }
-    }
-    */
-
     // Copy variadic parameters passed through registers into the stack
     if (func.signature.variadic)
     {
@@ -968,11 +943,6 @@ string renderStackLocation(int offset)
 
 void generateStatementBase(GeneratorState state, StatementBase st)
 {
-    if (st.line !is null)
-    {
-        //state.render(format("; %s", st.line.source));
-    }
-
     auto ignoreReturn = cast(Statement)st;
     if (ignoreReturn !is null)
     {
@@ -1070,14 +1040,9 @@ class GeneratorIfBlock
 
 void generateConditional(GeneratorState state, Node conditional, string label)
 {
-    state.render(format("; A <"));
     auto conditionalNode = generateNode(state, conditional);
-    state.render(format("; --"));
-    state.render(format("; B: %s", conditionalNode));
     auto conditionalRegister = requireLocalInRegister(state, conditionalNode);
-    state.render(format("; --"));
     auto register = conditionalRegister.expectSingleRegister();
-    state.render(format("; > A"));
 
     state.render(format("    test %s, %s", register, register));
     state.render(format("    je %s", label));
@@ -1635,16 +1600,6 @@ Local requireLocalInRegister(GeneratorState state, Node node)
     }
 
     // Not in a register: make a new temp and copy it there
-
-    // TODO: ?
-    /*
-    if (typeSize(node.type) > 8)
-    {
-        throw new Exception("Can't make a temp out of a value that can't " ~
-                "fit in a single register");
-    }
-    */
-
     return requireCopyInRegister(state, node);
 }
 
@@ -2183,10 +2138,10 @@ class DataMove
     }
 }
 
-// Map a list of parameters to the registers and stack positions necessary for
-// a function call.
-DataMove[] mapCallParams(GeneratorState state, Node[] sourceLocals,
-        Register[] targetRegisters)
+// Map source data locations to a list of target registers with optional
+// spill-over into the stack
+DataMove[] mapData(GeneratorState state, DataLocation[] sources,
+        Register[] targetRegisters, bool spill)
 {
     DataMove[] ret;
     int stackOffset;
@@ -2211,71 +2166,55 @@ DataMove[] mapCallParams(GeneratorState state, Node[] sourceLocals,
         }
 
         // Spill over to stack
+        if (!spill)
+        {
+            throw new Exception("Data mapping spilled to stack unexpectedly");
+        }
+
         ret ~= new DataMove(source, new StackLocation(stackOffset, bytes));
         stackOffset += bytes;
     }
 
-    foreach (sourceNode; sourceLocals)
+    foreach (source; sources)
     {
-        auto sourceLiteral = cast(Literal)sourceNode;
-        if (sourceLiteral !is null)
+        auto literal = cast(LiteralLocation)source;
+        auto register = cast(RegisterLocation)source;
+        auto stack = cast(StackLocation)source;
+        auto dataSection = cast(DataSectionLocation)source;
+
+        if (literal !is null || dataSection !is null)
         {
-            allocate(new LiteralLocation(sourceLiteral), 8);
-            continue;
+            allocate(source, 8);
         }
-
-        auto sourceLocal = cast(Local)sourceNode;
-        if (sourceLocal is null)
+        else if (register !is null)
         {
-            throw new Exception(format("Unrecognized node %s", sourceNode));
+            allocate(register, register.bytes);
         }
-
-        foreach (source; sourceLocal.data)
+        else if (stack !is null)
         {
-            // Source is register?
-            auto register = cast(RegisterLocation)source;
-            if (register !is null)
-            {
-                allocate(register, register.bytes);
-                continue;
-            }
+            int sourceOffset = stack.offset;
+            int sourceLeft = stack.bytes;
 
-            // Source is stack?
-            auto stack = cast(StackLocation)source;
-            if (stack !is null)
+            while (sourceLeft > 0)
             {
-                int sourceOffset = stack.offset;
-                int sourceLeft = stack.bytes;
-
-                while (sourceLeft > 0)
+                // Stack portion -> register
+                if (targetRegisters.length > 0)
                 {
-                    // Stack portion -> register
-                    if (targetRegisters.length > 0)
-                    {
-                        allocate(new StackLocation(sourceOffset, 8), 8);
-                        sourceOffset += 8;
-                        sourceLeft -= 8;
+                    allocate(new StackLocation(sourceOffset, 8), 8);
+                    sourceOffset += 8;
+                    sourceLeft -= 8;
 
-                        continue;
-                    }
-
-                    allocate(new StackLocation(sourceOffset, sourceLeft),
-                            sourceLeft);
-
-                    break;
+                    continue;
                 }
 
-                continue;
-            }
+                allocate(new StackLocation(sourceOffset, sourceLeft),
+                        sourceLeft);
 
-            // Source is data section?
-            auto dataSection = cast(DataSectionLocation)source;
-            if (dataSection !is null)
-            {
-                allocate(dataSection, 8);
-                continue;
+                break;
             }
-
+        }
+        else
+        {
             throw new Exception(format("Unrecognized data location: %s",
                     source));
         }
@@ -2300,11 +2239,167 @@ string renderOffset(int offset)
     }
 }
 
+DataLocation[] extractDataLocations(Node[] nodes)
+{
+    DataLocation[] ret;
+
+    foreach (node; nodes)
+    {
+        auto literal = cast(Literal)node;
+        if (literal !is null)
+        {
+            ret ~= new LiteralLocation(literal);
+            continue;
+        }
+
+        auto local = cast(Local)node;
+        if (local is null)
+        {
+            throw new Exception(format("Unrecognized node %s", node));
+        }
+
+        ret ~= local.data;
+    }
+
+    return ret;
+}
+
+DataMove[] extractMoves(ref DataMove[] moves, bool function(DataMove) p)
+{
+    DataMove[] ret;
+
+    int i = 0;
+    while (i < moves.length)
+    {
+        if (!p(moves[i]))
+        {
+            i++;
+            continue;
+        }
+
+        ret ~= moves[i];
+        moves = moves.remove(i);
+    }
+
+    return ret;
+}
+
+// Copy a list of data locations to registers, with optional stack spill
+void copyData(GeneratorState state, DataLocation[] sources,
+        Register[] targetRegisters, bool spill)
+{
+    // Map parameters to their targets for the call
+    auto moves = mapData(state, sources, targetRegisters, true);
+
+    // Extract moves destined for the stack
+    auto toStack = extractMoves(moves, function(DataMove m) =>
+            typeid(m.target) == typeid(StackLocation));
+
+    // Perform any moves destined for stack
+    foreach (move; toStack)
+    {
+        auto targetStack = cast(StackLocation)move.target;
+
+        auto sourceRegister = cast(RegisterLocation)move.source;
+        auto sourceStack = cast(StackLocation)move.source;
+        auto sourceLiteral = cast(LiteralLocation)move.source;
+
+        if (sourceRegister !is null)
+        {
+            state.render(format("    push %s", sourceRegister.register));
+        }
+        else if (sourceStack !is null)
+        {
+            auto tempRegister = state.reserveNextFreeRegister();
+
+            auto offset = sourceStack.bytes - 8;
+            while (offset >= 0)
+            {
+                state.render(format("    mov %s, [rbp %s]", tempRegister,
+                        renderOffset(sourceStack.offset + offset)));
+                state.render(format("    push %s", tempRegister));
+
+                offset -= 8;
+            }
+
+            state.unreserve(tempRegister);
+        }
+        else if (sourceLiteral !is null)
+        {
+            state.render(format("    push %s",
+                    renderNode(state, sourceLiteral.literal)));
+        }
+        else
+        {
+            throw new Exception(format("Unrecognized source %s", move.source));
+        }
+    }
+
+    // Extract moves from one register to another
+    auto registerToRegister = extractMoves(moves, function(DataMove m) =>
+            typeid(m.source) == typeid(RegisterLocation) &&
+            typeid(m.target) == typeid(RegisterLocation));
+
+    // Build list of register moves
+    RegisterMove[] registerMoves;
+    foreach (move; registerToRegister)
+    {
+        auto sourceRegister = cast(RegisterLocation)move.source;
+        auto targetRegister = cast(RegisterLocation)move.target;
+
+        registerMoves ~= new RegisterMove(sourceRegister.register,
+                targetRegister.register);
+    }
+
+    // Perform register-to-register moves
+    shuffleRegisters(state, registerMoves);
+
+    // Extract moves to registers from other sources
+    auto toRegister = extractMoves(moves, function(DataMove m) =>
+            typeid(m.target) == typeid(RegisterLocation));
+
+    // Perform moves to registers from other sources
+    foreach (move; toRegister)
+    {
+        auto targetRegister = cast(RegisterLocation)move.target;
+
+        auto sourceStack = cast(StackLocation)move.source;
+        auto sourceLiteral = cast(LiteralLocation)move.source;
+        auto sourceDataSection = cast(DataSectionLocation)move.source;
+
+        string sourceRendered;
+
+        if (sourceStack !is null)
+        {
+            sourceRendered = format("[rbp %s]",
+                    renderOffset(sourceStack.offset));
+        }
+        else if (sourceLiteral !is null)
+        {
+            sourceRendered = renderNode(state, sourceLiteral.literal);
+        }
+        else if (sourceDataSection !is null)
+        {
+            sourceRendered = sourceDataSection.name;
+        }
+        else
+        {
+            continue;
+        }
+
+        state.render(format("    mov %s, %s", targetRegister.register,
+                sourceRendered));
+    }
+
+    if (moves.length > 0)
+    {
+        throw new Exception("Unprocessed data moves left");
+    }
+}
+
 Register[] prepareCallParams(GeneratorState state, Node[] params,
         Register[] registerList)
 {
-    // TODO: reorder stack pushes?
-
     // Generate all parameters
     for (int i = 0; i < params.length; i++)
     {
@@ -2346,151 +2441,8 @@ Register[] prepareCallParams(GeneratorState state, Node[] params,
         state.generatePush(p);
     }
 
-    // Map parameters to their targets for the call
-    auto moves = mapCallParams(state, params, registerList);
-
-    // Perform any moves destined for stack
-    int i = 0;
-    while (i < moves.length)
-    {
-        auto move = moves[i];
-
-        auto targetStack = cast(StackLocation)move.target;
-        if (targetStack is null)
-        {
-            i++;
-            continue;
-        }
-
-        auto sourceRegister = cast(RegisterLocation)move.source;
-        auto sourceStack = cast(StackLocation)move.source;
-        auto sourceLiteral = cast(LiteralLocation)move.source;
-        if (sourceRegister !is null)
-        {
-            state.render(format("    mov [rbp - %d], %s", targetStack.offset,
-                    sourceRegister.register));
-        }
-        else if (sourceStack !is null)
-        {
-            auto tempRegister = state.reserveNextFreeRegister();
-
-            auto offset = sourceStack.bytes - 8;
-            while (offset >= 0)
-            {
-                state.render(format("    mov %s, [rbp %s]", tempRegister,
-                        renderOffset(sourceStack.offset + offset)));
-                state.render(format("    push %s", tempRegister));
-
-                offset -= 8;
-            }
-
-            state.unreserve(tempRegister);
-        }
-        else if (sourceLiteral !is null)
-        {
-            state.render(format("    push %s",
-                    renderNode(state, sourceLiteral.literal)));
-        }
-        else
-        {
-            throw new Exception(format("Unrecognized source %s", move.source));
-        }
-
-        moves = moves.remove(i);
-    }
-
-    // Build list of register-to-register moves
-    RegisterMove[] registerMoves;
-    i = 0;
-    while (i < moves.length)
-    {
-        auto move = moves[i];
-
-        auto sourceRegister = cast(RegisterLocation)move.source;
-        auto targetRegister = cast(RegisterLocation)move.target;
-
-        if (sourceRegister is null || targetRegister is null)
-        {
-            i++;
-            continue;
-        }
-
-        registerMoves ~= new RegisterMove(sourceRegister.register,
-                targetRegister.register);
-
-        moves = moves.remove(i);
-    }
-
-    // Perform register-to-register moves
-    shuffleRegisters(state, registerMoves);
-
-    // Perform stack-to-register moves
-    i = 0;
-    while (i < moves.length)
-    {
-        auto move = moves[i];
-
-        auto sourceStack = cast(StackLocation)move.source;
-        auto targetRegister = cast(RegisterLocation)move.target;
-
-        if (sourceStack is null || targetRegister is null)
-        {
-            i++;
-            continue;
-        }
-
-        state.render(format("    mov %s, [rbp %s]", targetRegister.register,
-                renderOffset(sourceStack.offset)));
-
-        moves = moves.remove(i);
-    }
-
-    // Perform literal-to-register moves
-    i = 0;
-    while (i < moves.length)
-    {
-        auto move = moves[i];
-
-        auto sourceLiteral = cast(LiteralLocation)move.source;
-        auto targetRegister = cast(RegisterLocation)move.target;
-
-        if (sourceLiteral is null || targetRegister is null)
-        {
-            i++;
-            continue;
-        }
-
-        state.render(format("    mov %s, %s", targetRegister.register,
-                renderNode(state, sourceLiteral.literal)));
-
-        moves = moves.remove(i);
-    }
-
-    // Perform data-section-to-register moves
-    i = 0;
-    while (i < moves.length)
-    {
-        auto move = moves[i];
-
-        auto sourceDataSection = cast(DataSectionLocation)move.source;
-        auto targetRegister = cast(RegisterLocation)move.target;
-
-        if (sourceDataSection is null || targetRegister is null)
-        {
-            i++;
-            continue;
-        }
-
-        state.render(format("    mov %s, %s", targetRegister.register,
-                sourceDataSection.name));
-
-        moves = moves.remove(i);
-    }
-
-    if (moves.length > 0)
-    {
-        throw new Exception("Unprocessed data moves left");
-    }
+    // Place params where they need to be for the call
+    copyData(state, extractDataLocations(params), registerList, true);
 
     return callerPreserved;
 }
@@ -2507,7 +2459,6 @@ Local cleanupCall(GeneratorState state, Type returnType,
     }
 
     // Restore caller-preserved registers
-    // TODO: optimize
     for (int i = cast(int)callerPreserved.length - 1; i >= 0; i--)
     {
         state.generatePop(callerPreserved[i]);
