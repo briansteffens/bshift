@@ -1,5 +1,7 @@
 # bshift
 
+[![Build Status](https://travis-ci.org/briansteffens/bshift.svg?branch=master)](https://travis-ci.org/briansteffens/bshift)
+
 This is a toy compiler for a vaguely C-style language with a couple of hints
 from Go.
 

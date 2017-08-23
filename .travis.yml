@@ -1,0 +1,14 @@
+sudo: required
+
+language: d
+
+d:
+    - ldc
+
+script:
+    - git clone https://github.com/briansteffens/basm
+    - cd basm && cabal build && cd ..
+    - sudo ln -s $PWD/basm/dist/build/basm/basm /usr/local/bin/basm
+    - git clone https://github.com/briansteffens/asmtest
+    - sudo ln -s `which $DC` /usr/local/bin/ldc
+    - asmtest/asmtest.py
