@@ -1,6 +1,7 @@
 import std.stdio;
 import std.format;
 import std.conv;
+import std.algorithm;
 
 import lexer;
 
@@ -86,11 +87,14 @@ abstract class Type
 class IncompleteType : Type
 {
     string name;
+    TypeParameter[] typeParameters;
 
-    this(string name, bool pointer=false, Node elements=null)
+    this(string name, TypeParameter[] typeParameters, bool pointer=false,
+            Node elements=null)
     {
         super(pointer=pointer, elements=elements);
         this.name = name;
+        this.typeParameters = typeParameters;
     }
 
     override string baseTypeToString()
@@ -105,8 +109,8 @@ class IncompleteType : Type
 
     override Type clone()
     {
-        return new IncompleteType(this.name, pointer=this.pointer,
-                elements=this.elements);
+        return new IncompleteType(this.name, this.typeParameters,
+                pointer=this.pointer, elements=this.elements);
     }
 
     override bool compare(Type other)
@@ -352,6 +356,11 @@ abstract class Node : InsideFunction
 
         return this.parent.containingFunction();
     }
+
+    Node clone()
+    {
+        throw new Exception("No clone() implementation for this Node");
+    }
 }
 
 enum OperatorType
@@ -427,6 +436,12 @@ class Operator : Node
         this.retype();
     }
 
+    override Node clone()
+    {
+        return new Operator(this.left.clone(), this.operatorType,
+                this.right.clone());
+    }
+
     override void retype()
     {
         if (this.left.type is null || this.right.type is null ||
@@ -483,6 +498,12 @@ class Binding : Node
         this.retype();
     }
 
+    override Node clone()
+    {
+        return new Binding(this.local !is null ? this.local.clone() : null,
+                this.name);
+    }
+
     override void retype()
     {
         if (this.local is null)
@@ -519,6 +540,11 @@ class U64Literal : Literal
         this.value = value;
     }
 
+    override Node clone()
+    {
+        return new U64Literal(this.value);
+    }
+
     override string toString()
     {
         return to!string(this.value);
@@ -533,6 +559,11 @@ class U8Literal : Literal
     {
         super(Primitive.U8);
         this.value = value;
+    }
+
+    override Node clone()
+    {
+        return new U8Literal(this.value);
     }
 
     override string toString()
@@ -551,6 +582,11 @@ class BoolLiteral : Literal
         this.value = value;
     }
 
+    override Node clone()
+    {
+        return new BoolLiteral(this.value);
+    }
+
     override string toString()
     {
         return to!string(this.value);
@@ -565,6 +601,11 @@ class StringLiteral : Literal
     {
         super(Primitive.U64);
         this.value = value;
+    }
+
+    override Node clone()
+    {
+        return new StringLiteral(this.value);
     }
 
     override string toString()
@@ -583,6 +624,11 @@ class SizeOf : Node
         this.type = new PrimitiveType(Primitive.U64);
     }
 
+    override Node clone()
+    {
+        return new SizeOf(this.argument.clone());
+    }
+
     override string toString()
     {
         return format("sizeof(%s)", this.argument);
@@ -596,17 +642,38 @@ class Call : Node
     string functionName;
     Node[] parameters;
     FunctionSignature targetSignature;
+    Type[] typeParameters;
 
-    this(string moduleName, string functionName, Node[] parameters)
+    this(string moduleName, string functionName, Node[] parameters,
+            Type[] typeParameters)
     {
         this.moduleName = moduleName;
         this.functionName = functionName;
         this.parameters = parameters;
+        this.typeParameters = typeParameters;
 
         foreach (param; this.parameters)
         {
             param.parent = this;
         }
+    }
+
+    override Node clone()
+    {
+        Node[] params;
+        foreach (p; this.parameters)
+        {
+            params ~= p.clone();
+        }
+
+        Type[] typeParams;
+        foreach (t; this.typeParameters)
+        {
+            typeParams ~= t.clone();
+        }
+
+        return new Call(this.moduleName, this.functionName, params,
+                typeParams);
     }
 
     override void retype()
@@ -623,15 +690,30 @@ class Call : Node
 
     override string toString()
     {
-        if (this.moduleName is null)
+        auto moduleName = "";
+        if (this.moduleName !is null)
         {
-            return format("%s(%s)", this.functionName, this.parameters);
+            moduleName = this.moduleName ~ "::";
         }
-        else
+
+        auto typeParams = "";
+        if (this.typeParameters.length > 0)
         {
-            return format("%s::%s(%s)", this.moduleName, this.functionName,
-                          this.parameters);
+            foreach (typeParam; this.typeParameters)
+            {
+                if (typeParams != "")
+                {
+                    typeParams ~= ", ";
+                }
+
+                typeParams ~= typeParam.toString();
+            }
+
+            typeParams = "<" ~ typeParams ~ ">";
         }
+
+        return format("%s%s%s(%s)", moduleName, this.functionName,
+                typeParams, this.parameters);
     }
 
     override Node[] childNodes()
@@ -646,11 +728,23 @@ class MethodCall : Call
 
     this(Node container, string functionName, Node[] parameters)
     {
-        super(null, functionName, parameters);
+        super(null, functionName, parameters, []);
 
         this.container = container;
 
         this.container.parent = this;
+    }
+
+    override Node clone()
+    {
+        Node[] params;
+        foreach (p; this.parameters)
+        {
+            params ~= p.clone();
+        }
+
+        return new MethodCall(this.container.clone(), this.functionName,
+                params);
     }
 
     override string toString()
@@ -719,6 +813,11 @@ class Cast : Node
         this.type = newType;
     }
 
+    override Node clone()
+    {
+        return new Cast(this.type.clone(), this.target.clone());
+    }
+
     override string toString()
     {
         return format("(%s)%s", this.type, this.target);
@@ -740,6 +839,11 @@ class Reference : Node
         this.source.parent = this;
 
         this.retype();
+    }
+
+    override Node clone()
+    {
+        return new Reference(this.source.clone());
     }
 
     override void retype()
@@ -776,6 +880,11 @@ class Dereference : Node
         this.source.parent = this;
 
         this.retype();
+    }
+
+    override Node clone()
+    {
+        return new Dereference(this.source.clone());
     }
 
     override void retype()
@@ -817,6 +926,13 @@ class DotAccessor : Node
         this.container.parent = this;
 
         this.retype();
+    }
+
+    override Node clone()
+    {
+        auto ret = new DotAccessor(this.container.clone(), this.memberName);
+        ret.member = this.member.clone();
+        return ret;
     }
 
     override string toString()
@@ -880,6 +996,11 @@ class TypeSignature
     {
         return format("%s %s", this.type, this.name);
     }
+
+    TypeSignature clone()
+    {
+        return new TypeSignature(this.type.clone(), this.name);
+    }
 }
 
 class Struct
@@ -918,6 +1039,8 @@ abstract class StatementBase : InsideFunction
         this.line = line;
         this.id = nextId++;
     }
+
+    StatementBase clone();
 
     LocalDeclaration[] declarations()
     {
@@ -978,6 +1101,11 @@ class Indexer : Node
         this.retype();
     }
 
+    override Node clone()
+    {
+        return new Indexer(this.source.clone(), this.index.clone());
+    }
+
     override void retype()
     {
         if (this.source.type is null)
@@ -1019,6 +1147,11 @@ class Statement : StatementBase
         }
     }
 
+    override StatementBase clone()
+    {
+        return new Statement(this.line, this.expression.clone());
+    }
+
     override string toString()
     {
         return format("Statement %s", this.expression);
@@ -1053,6 +1186,12 @@ class LocalDeclaration : StatementBase
         {
             this.value.parent = this;
         }
+    }
+
+    override StatementBase clone()
+    {
+        return new LocalDeclaration(this.line, this.signature.clone(),
+                this.value.clone());
     }
 
     override string toString()
@@ -1101,6 +1240,12 @@ class Assignment : StatementBase
         this.value.parent = this;
     }
 
+    override StatementBase clone()
+    {
+        return new Assignment(this.line, this.lvalue.clone(),
+                this.value.clone());
+    }
+
     override string toString()
     {
         return format("%s = %s", this.lvalue, this.value);
@@ -1119,6 +1264,11 @@ class Break : StatementBase
         super(line);
     }
 
+    override StatementBase clone()
+    {
+        return new Break(this.line);
+    }
+
     override string toString()
     {
         return "break";
@@ -1130,6 +1280,11 @@ class Continue : StatementBase
     this(Line line)
     {
         super(line);
+    }
+
+    override StatementBase clone()
+    {
+        return new Continue(this.line);
     }
 
     override string toString()
@@ -1149,6 +1304,11 @@ class Defer : StatementBase
         this.statement = statement;
 
         this.statement.parent = this;
+    }
+
+    override StatementBase clone()
+    {
+        return new Defer(this.line, this.statement.clone());
     }
 
     override string toString()
@@ -1178,6 +1338,12 @@ class ConditionalBlock : StatementBase
         this.block.parent = this;
     }
 
+    override StatementBase clone()
+    {
+        return new ConditionalBlock(this.line, this.conditional.clone(),
+                this.block.clone());
+    }
+
     override string toString()
     {
         return format("(%s)\n%s", this.conditional, this.block);
@@ -1204,6 +1370,12 @@ class While : ConditionalBlock
     this(Line line, Node conditional, StatementBase block)
     {
         super(line, conditional, block);
+    }
+
+    override StatementBase clone()
+    {
+        return new While(this.line, this.conditional.clone(),
+                this.block.clone());
     }
 
     override string toString()
@@ -1248,6 +1420,31 @@ class If : StatementBase
         {
             this.elseBlock.parent = this;
         }
+    }
+
+    override StatementBase clone()
+    {
+        ConditionalBlock ifBlock = cast(ConditionalBlock)this.ifBlock.clone();
+        if (ifBlock is null)
+        {
+            throw new Exception("Clone failed");
+        }
+
+        ConditionalBlock[] elseIfs;
+        foreach (e; this.elseIfBlocks)
+        {
+            ConditionalBlock cloned = cast(ConditionalBlock)e.clone();
+            if (cloned is null)
+            {
+                throw new Exception("Clone failed");
+            }
+            elseIfs ~= cloned;
+        }
+
+        auto elseBlock = this.elseBlock !is null ? this.elseBlock.clone() :
+                this.elseBlock;
+
+        return new If(ifBlock, elseIfs, elseBlock);
     }
 
     override string toString()
@@ -1317,6 +1514,11 @@ class Return : StatementBase
         }
     }
 
+    override StatementBase clone()
+    {
+        return new Return(this.line, this.expression.clone());
+    }
+
     override string toString()
     {
         return format("return %s", this.expression);
@@ -1351,6 +1553,17 @@ class Block : StatementBase
         }
     }
 
+    override StatementBase clone()
+    {
+        StatementBase[] st;
+        foreach (s; this.statements)
+        {
+            st ~= s.clone();
+        }
+
+        return new Block(st);
+    }
+
     override string toString()
     {
         auto ret = "{\n";
@@ -1381,6 +1594,21 @@ class Block : StatementBase
     }
 }
 
+class TypeParameter
+{
+    string name;
+
+    this(string name)
+    {
+        this.name = name;
+    }
+
+    override string toString()
+    {
+        return this.name;
+    }
+}
+
 class FunctionSignature
 {
     Module mod;
@@ -1396,6 +1624,22 @@ class FunctionSignature
         this.name = name;
         this.parameters = parameters;
         this.variadic = variadic;
+    }
+
+    FunctionSignature clone()
+    {
+        TypeSignature[] params;
+        foreach (p; this.parameters)
+        {
+            params ~= p.clone();
+        }
+
+        auto ret = new FunctionSignature(this.returnType.clone(), this.name,
+                params, this.variadic);
+
+        ret.mod = this.mod;
+
+        return ret;
     }
 
     string fullName()
@@ -1427,7 +1671,8 @@ class FunctionSignature
             params ~= "...";
         }
 
-        return format("%s %s(%s)", this.returnType, this.fullName(), params);
+        return format("%s %s(%s)", this.returnType, this.fullName(),
+                params);
     }
 }
 
@@ -1475,6 +1720,110 @@ class Function : InsideFunction
     FunctionSignature containingFunction()
     {
         return this.signature;
+    }
+}
+
+class FunctionRendering
+{
+    FunctionTemplate functionTemplate;
+    Function rendering;
+    Type[] typeParameters;
+
+    this(FunctionTemplate functionTemplate, Function rendering,
+            Type[] typeParameters)
+    {
+        this.functionTemplate = functionTemplate;
+        this.rendering = rendering;
+        this.typeParameters = typeParameters;
+    }
+}
+
+class FunctionTemplate : Function
+{
+    TypeParameter[] typeParameters;
+    FunctionRendering[] renderings;
+
+    this(FunctionSignature signature, Block block,
+            TypeParameter[] typeParameters)
+    {
+        super(signature, block);
+
+        this.typeParameters = typeParameters;
+        this.renderings = [];
+    }
+
+    Type replaceTypeParameter(Type type, Type[] replacements)
+    {
+        if (this.typeParameters.length != replacements.length)
+        {
+            throw new Exception("Type parameter count mismatch");
+        }
+
+        auto incomplete = cast(IncompleteType)type;
+        if (incomplete is null)
+        {
+            return type;
+        }
+
+        if (incomplete.typeParameters.length > 0)
+        {
+            throw new Exception("Not implemented");
+        }
+
+        for (int i = 0; i < this.typeParameters.length; i++)
+        {
+            if (incomplete.name == this.typeParameters[i].name)
+            {
+                return replacements[i].clone();
+            }
+        }
+
+        return type;
+    }
+
+    FunctionRendering render(Type[] types)
+    {
+        auto signature = this.signature.clone();
+
+        // Mangle the name
+        signature.name = "template_" ~ signature.name;
+        foreach (t; types)
+        {
+            signature.name ~= "_" ~ t.toString();
+        }
+
+        signature.returnType = this.replaceTypeParameter(signature.returnType,
+                types);
+
+        foreach (p; signature.parameters)
+        {
+            p.type = this.replaceTypeParameter(p.type, types);
+        }
+
+        auto block = cast(Block)this.block.clone();
+        if (block is null)
+        {
+            throw new Exception("Clone failure");
+        }
+
+        StatementBase[] stack = [block];
+        while (stack.length > 0)
+        {
+            auto cur = stack[stack.length - 1];
+            stack = stack.remove(stack.length - 1);
+
+            stack ~= cur.childStatements();
+
+            auto local = cast(LocalDeclaration)cur;
+            if (local !is null)
+            {
+                local.signature.type = this.replaceTypeParameter(
+                        local.signature.type, types);
+            }
+        }
+
+        return new FunctionRendering(this, new Function(signature, block),
+                types);
     }
 }
 
@@ -1635,9 +1984,25 @@ class Module
 
         foreach (func; this.functions)
         {
-            if (cast(Method)func is null)
+            if (cast(Method)func is null && cast(FunctionTemplate)func is null)
             {
                 ret ~= func;
+            }
+        }
+
+        return ret;
+    }
+
+    FunctionTemplate[] justFunctionTemplates()
+    {
+        FunctionTemplate[] ret;
+
+        foreach (func; this.functions)
+        {
+            auto ft = cast(FunctionTemplate)func;
+            if (ft !is null)
+            {
+                ret ~= ft;
             }
         }
 
@@ -1655,6 +2020,18 @@ class Module
             {
                 ret ~= method;
             }
+        }
+
+        return ret;
+    }
+
+    Function[] justFunctionsAndMethods()
+    {
+        Function[] ret = this.justFunctions();
+
+        foreach (method; this.justMethods())
+        {
+            ret ~= method;
         }
 
         return ret;
@@ -1701,14 +2078,17 @@ class Module
         throw new Exception(format("Method %s not found", call));
     }
 
+    // TODO: dead?
     FunctionSignature findFunction(Call call)
     {
+        // Built-in: syscall
         if (call.functionName == "syscall")
         {
             return new FunctionSignature(new PrimitiveType(Primitive.U64),
                     "syscall", [], false);
         }
 
+        // Built-in: variadic
         if (call.functionName == "variadic")
         {
             return new FunctionSignature(
@@ -1722,6 +2102,7 @@ class Module
         // Search the current module
         if (call.moduleName is null)
         {
+            // Search functions
             foreach (func; this.justFunctions())
             {
                 if (func.signature.name == call.functionName)

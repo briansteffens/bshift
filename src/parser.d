@@ -143,14 +143,16 @@ class TokenFeed
         return true;
     }
 
-    bool rewind(int distance)
+    bool seek(int distance)
     {
-        if (distance == 0 && distance > this.index)
+        auto changed = this.index + distance;
+
+        if (changed < 0 || changed >= this.tokens.length)
         {
             return false;
         }
 
-        this.index -= distance;
+        this.index = changed;
         return true;
     }
 
@@ -401,7 +403,8 @@ FunctionSignature parseExtern(TokenFeed tokens)
         throw new Exception("Expected a function signature after extern");
     }
 
-    auto sig = parseFunctionSignature(tokens);
+    TypeParameter[] typeParams;
+    auto sig = parseFunctionSignature(tokens, &typeParams);
 
     if (!tokens.next() || !tokens.current().match(TokenType.Symbol, ";"))
     {
@@ -411,7 +414,8 @@ FunctionSignature parseExtern(TokenFeed tokens)
     return sig;
 }
 
-FunctionSignature parseFunctionSignature(TokenFeed tokens)
+FunctionSignature parseFunctionSignature(TokenFeed tokens,
+        TypeParameter[]* typeParams)
 {
     // Return value
     auto token = tokens.current();
@@ -431,6 +435,13 @@ FunctionSignature parseFunctionSignature(TokenFeed tokens)
 
     auto name = tokens.current().value;
 
+    // Template type parameters
+    foreach (typeParam; parseTypeParams(tokens))
+    {
+        *typeParams ~= typeParam;
+    }
+
+    // Parameters
     TypeSignature[] params;
     bool variadic;
     if (!parseParameterList(tokens, &params, &variadic))
@@ -484,6 +495,124 @@ MethodSignature parseMethodSignature(TokenFeed tokens)
 
     return new MethodSignature(returnType, containerType, functionName,
                                params, variadic);
+}
+
+TypeParameter parseTypeParam(TokenFeed tokens)
+{
+    auto name = tokens.current();
+
+    if (name.type != TokenType.Word)
+    {
+        return null;
+    }
+
+    return new TypeParameter(name.value);
+}
+
+// Parse template type params, as in: <T, U>
+TypeParameter[] parseTypeParams(TokenFeed tokens)
+{
+    int rewindTarget = tokens.index;
+    TypeParameter[] rewind()
+    {
+        tokens.index = rewindTarget;
+        return [];
+    }
+
+    if (!tokens.next())
+    {
+        return rewind();
+    }
+
+    // Open bracket
+    if (!tokens.current.match(TokenType.Symbol, "<"))
+    {
+        return rewind();
+    }
+
+    TypeParameter[] ret;
+
+    while (tokens.next())
+    {
+        auto token = tokens.current();
+
+        // Close bracket - end of type param list
+        if (token.match(TokenType.Symbol, ">"))
+        {
+            return ret;
+        }
+
+        auto typeParam = parseTypeParam(tokens);
+        if (typeParam is null)
+        {
+            return rewind();
+        }
+        ret ~= typeParam;
+
+        // Commas separate parameters
+        auto next = tokens.peek(1);
+        if (next !is null &&
+            next.type == TokenType.Symbol &&
+            next.value == ",")
+        {
+            tokens.next();
+        }
+    }
+
+    throw new Exception("Type parameter list ended unexpectedly");
+}
+
+// Parse concrete template type params, as in: <u64, u8>
+Type[] parseConcreteTypeParams(TokenFeed tokens)
+{
+    int rewindTarget = tokens.index;
+    Type[] rewind()
+    {
+        tokens.index = rewindTarget;
+        return [];
+    }
+
+    if (!tokens.next())
+    {
+        return rewind();
+    }
+
+    // Open bracket
+    if (!tokens.current.match(TokenType.Symbol, "<"))
+    {
+        return rewind();
+    }
+
+    Type[] ret;
+
+    while (tokens.next())
+    {
+        auto token = tokens.current();
+
+        // Close bracket - end of type param list
+        if (token.match(TokenType.Symbol, ">"))
+        {
+            return ret;
+        }
+
+        auto type = parseType(tokens);
+        if (type is null)
+        {
+            return rewind();
+        }
+        ret ~= type;
+
+        // Commas separate parameters
+        auto next = tokens.peek(1);
+        if (next !is null &&
+            next.type == TokenType.Symbol &&
+            next.value == ",")
+        {
+            tokens.next();
+        }
+    }
+
+    throw new Exception("Concrete type parameter list ended unexpectedly");
 }
 
 bool parseParameterList(TokenFeed tokens, TypeSignature[]* params,
@@ -541,7 +670,8 @@ Function parseFunction(TokenFeed tokens)
 {
     auto rewindTarget = tokens.index;
 
-    auto sig = parseFunctionSignature(tokens);
+    TypeParameter[] typeParams;
+    auto sig = parseFunctionSignature(tokens, &typeParams);
     if (sig is null)
     {
         tokens.index = rewindTarget;
@@ -550,7 +680,14 @@ Function parseFunction(TokenFeed tokens)
 
     auto functionBody = parseBlock(tokens);
 
-    return new Function(sig, functionBody);
+    if (typeParams.length > 0)
+    {
+        return new FunctionTemplate(sig, functionBody, typeParams);
+    }
+    else
+    {
+        return new Function(sig, functionBody);
+    }
 }
 
 Method parseMethod(TokenFeed tokens)
@@ -609,7 +746,7 @@ StatementBase parseStatementBase(TokenFeed tokens)
     // Start of block
     if (current.match(TokenType.Symbol, "{"))
     {
-        if (!tokens.rewind(1))
+        if (!tokens.seek(-1))
         {
             throw new Exception("Can't rewind?");
         }
@@ -699,22 +836,42 @@ LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
 
 Type parseType(TokenFeed tokens)
 {
-    auto current = tokens.current();
-    auto name = current.value;
-
-    bool pointer = false;
-    auto next = tokens.peek(1);
-    if (next.match(TokenType.Symbol, "*"))
+    int rewindTarget = tokens.index;
+    Type rewind()
     {
-        pointer = true;
-        tokens.next();
+        tokens.index = rewindTarget;
+        return null;
     }
 
-    Node elements = null;
-    next = tokens.peek(1);
-    if (next.match(TokenType.Symbol, "["))
+    // Read type name
+    if (tokens.current().type != TokenType.Word)
     {
-        tokens.next();
+        return rewind();
+    }
+    auto name = tokens.current().value;
+
+    // Read type parameters
+    auto typeParams = parseTypeParams(tokens);
+
+    // Read pointer symbol
+    bool pointer = false;
+    if (tokens.peek(1).match(TokenType.Symbol, "*"))
+    {
+        pointer = true;
+        if (!tokens.next())
+        {
+            return rewind();
+        }
+    }
+
+    // Read array element count
+    Node elements = null;
+    if (tokens.peek(1).match(TokenType.Symbol, "["))
+    {
+        if (!tokens.next())
+        {
+            return rewind();
+        }
 
         auto parser = new ExpressionParser(tokens);
         parser.until ~= new Token(current.line, current.lineOffset, TokenType.Symbol, "]");
@@ -723,7 +880,8 @@ Type parseType(TokenFeed tokens)
         pointer = true;
     }
 
-    return new IncompleteType(name, pointer=pointer, elements=elements);
+    return new IncompleteType(name, typeParams, pointer=pointer,
+            elements=elements);
 }
 
 // Try to parse a type signature (like "u64* x"), returning null if it can't
@@ -768,7 +926,7 @@ Assignment parseAssignment(TokenFeed tokens)
     auto rewindTarget = tokens.index;
 
     // parseExpression always starts by calling .next()
-    tokens.rewind(1);
+    tokens.seek(-1);
     Node lvalue;
     try
     {
@@ -808,7 +966,7 @@ Statement parseStatement(TokenFeed tokens)
     auto line = tokens.current().line;
 
     // parseExpression always starts by calling .next()
-    tokens.rewind(1);
+    tokens.seek(-1);
     auto expression = new ExpressionParser(tokens).run();
 
     return new Statement(line, expression);
@@ -906,6 +1064,8 @@ class ParserItem
 
     // Represents the first open parenthesis in a call
     bool parameterListStart;
+
+    Type[] typeParameters;
 
     this(Token token)
     {
@@ -1200,55 +1360,82 @@ class ExpressionParser
         this.outputPush(new ParserItem(op));
     }
 
-    // Function calls can start like "func(" or "mod::func("
+    // Function calls can start like "func(", "mod::func(", "func<T>(", or
+    // "mod::func<T>("
     bool startFunctionCall()
     {
-        auto token0 = this.input.current();
-        auto token1 = this.input.peek(1);
-        auto token2 = this.input.peek(2);
-        auto token3 = this.input.peek(3);
-
-        if (token0.type != TokenType.Word)
+        int rewindTarget = this.input.index;
+        bool rewind()
         {
+            this.input.index = rewindTarget;
             return false;
         }
 
-        if (token1.match(TokenType.Symbol, "("))
+        auto token0 = this.input.current();
+
+        if (token0.type != TokenType.Word)
         {
-            auto nameToken = new ParserItem(token0);
-            nameToken.functionName = true;
-            this.outputPush(nameToken);
-
-            auto startList = new ParserItem(token1);
-            startList.parameterListStart = true;
-            this.operators.push(startList);
-
-            this.input.next();
-
-            return true;
+            return rewind();
         }
 
-        if (token1.match(TokenType.Symbol, "::") &&
-            token2.type == TokenType.Word &&
-            token3.match(TokenType.Symbol, "("))
+        if (!this.input.next())
         {
-            auto nameToken = new ParserItem(token2);
-            nameToken.functionName = true;
-            nameToken.moduleName = token0.value;
-            this.outputPush(nameToken);
-
-            auto startList = new ParserItem(token3);
-            startList.parameterListStart = true;
-            this.operators.push(startList);
-
-            this.input.next();
-            this.input.next();
-            this.input.next();
-
-            return true;
+            return rewind();
         }
 
-        return false;
+        Token moduleToken = null;
+        Token functionToken = null;
+
+        if (this.input.current().match(TokenType.Symbol, "::"))
+        {
+            if (!this.input.next())
+            {
+                return rewind();
+            }
+
+            moduleToken = token0;
+            functionToken = this.input.current();
+
+            if (!this.input.next())
+            {
+                return rewind();
+            }
+        }
+        else
+        {
+            functionToken = token0;
+        }
+
+        Type[] typeParameters = [];
+        if (this.input.current().match(TokenType.Symbol, "<"))
+        {
+            this.input.seek(-1);
+            typeParameters = parseConcreteTypeParams(this.input);
+            if (!this.input.next())
+            {
+                return rewind();
+            }
+        }
+
+        if (!this.input.current().match(TokenType.Symbol, "("))
+        {
+            return rewind();
+        }
+
+        auto nameToken = new ParserItem(functionToken);
+        nameToken.functionName = true;
+        nameToken.typeParameters = typeParameters;
+        if (moduleToken !is null)
+        {
+            nameToken.moduleName = moduleToken.value;
+        }
+        this.outputPush(nameToken);
+
+        auto startList = new ParserItem(this.input.current());
+        startList.parameterListStart = true;
+        this.operators.push(startList);
+
+        return true;
     }
 
     void consumeFunctionCall()
@@ -1266,7 +1453,8 @@ class ExpressionParser
             {
                 // Push the new call onto the output stack
                 auto call = new Call(topOutput.moduleName,
-                            topOutput.token.value, parameters);
+                            topOutput.token.value, parameters,
+                            topOutput.typeParameters);
 
                 this.outputPush(new ParserItem(call));
 
@@ -1758,13 +1946,13 @@ void validate(Module mod)
     }
 
     // Complete function signatures
-    foreach (func; mod.functions)
+    foreach (func; mod.justFunctionsAndMethods())
     {
         completeFunction(mod, func.signature);
     }
 
     // Complete functions
-    foreach (func; mod.functions)
+    foreach (func; mod.justFunctionsAndMethods())
     {
         validateFunction(mod, func);
     }
@@ -2008,6 +2196,59 @@ Type completeType(Module mod, Type type)
     return ret;
 }
 
+void validateCall(Module mod, Call call)
+{
+    // Search function templates
+    templateLoop: foreach (ft; mod.justFunctionTemplates())
+    {
+        if (ft.signature.name != call.functionName)
+            continue;
+
+        if (ft.typeParameters.length != call.typeParameters.length)
+            throw new Exception("Mismatched template parameters");
+
+        for (int i = 0; i < call.typeParameters.length; i++)
+        {
+            call.typeParameters[i] = completeType(mod, call.typeParameters[i]);
+        }
+
+        // Check existing renderings
+        renderingLoop: foreach (r; ft.renderings)
+        {
+            // Match type parameters
+            for (int i = 0; i < r.typeParameters.length; i++)
+            {
+                auto ct = call.typeParameters[i];
+                auto rt = r.typeParameters[i];
+
+                if (!call.typeParameters[i].compare(r.typeParameters[i]))
+                {
+                    continue renderingLoop;
+                }
+            }
+
+            // Found a matching rendering
+            throw new Exception("Matching rendering");
+        }
+
+        // Make a new rendering for this template
+        auto newRendering = ft.render(call.typeParameters);
+        validateFunction(mod, newRendering.rendering);
+        ft.renderings ~= newRendering;
+        call.targetSignature = newRendering.rendering.signature;
+
+        break;
+    }
+
+    // No template found? Normal function lookup
+    if (call.targetSignature is null)
+    {
+        call.targetSignature = mod.findFunction(call);
+    }
+
+    call.retype();
+}
+
 void validateNode(Module mod, Node node)
 {
     foreach (childNode; node.childNodes())
@@ -2032,8 +2273,7 @@ void validateNode(Module mod, Node node)
     auto call = cast(Call)node;
     if (call !is null)
     {
-        call.targetSignature = mod.findFunction(call);
-        node.retype();
+        validateCall(mod, call);
         return;
     }
 

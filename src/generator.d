@@ -694,9 +694,18 @@ string[] generate(Module mod)
     state.render("section .text");
 
     // Generate functions
-    foreach (func; mod.functions)
+    foreach (func; mod.justFunctionsAndMethods())
     {
         generateFunction(state, func);
+    }
+
+    // Generate function template renderings
+    foreach (ft; mod.justFunctionTemplates())
+    {
+        foreach (r; ft.renderings)
+        {
+            generateFunction(state, r.rendering);
+        }
     }
 
     // Bootstrap the main function if there is one
