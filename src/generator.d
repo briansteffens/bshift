@@ -694,7 +694,7 @@ string[] generate(Module mod)
     state.render("section .text");
 
     // Generate functions
-    foreach (func; mod.justFunctionsAndMethods())
+    foreach (func; mod.functionsAndMethods())
     {
         generateFunction(state, func);
     }

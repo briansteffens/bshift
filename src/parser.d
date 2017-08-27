@@ -294,7 +294,36 @@ Module parse(string name, Token[] tokenArray)
         auto method = parseMethod(tokens);
         if (method !is null)
         {
-            functions ~= method;
+            bool foundStruct = false;
+
+            auto incomplete =
+                    cast(IncompleteType)method.methodSignature.containerType;
+
+            if (incomplete is null)
+            {
+                throw new Exception("Unexpected method container type");
+            }
+
+            foreach (st; structs)
+            {
+                if (st.name == incomplete.name)
+                {
+                    st.methods ~= method;
+
+                    method.methodSignature.containerType =
+                            new StructType(st);
+
+                    foundStruct = true;
+
+                    break;
+                }
+            }
+
+            if (!foundStruct)
+            {
+                throw new Exception("Couldn't find struct for method");
+            }
+
             continue;
         }
 
@@ -320,9 +349,17 @@ Module parse(string name, Token[] tokenArray)
     auto ret = new Module(name, imports, structs, functions, globals,
             externs, structTemplates);
 
-    foreach (func; functions)
+    foreach (func; ret.functions)
     {
         func.signature.mod = ret;
+    }
+
+    foreach (st; ret.structs)
+    {
+        foreach (met; st.methods)
+        {
+            met.signature.mod = ret;
+        }
     }
 
     try
@@ -391,6 +428,7 @@ TypeSignature[] parseStructMembers(TokenFeed tokens)
         // Assignment operator (=) or semi-colon
         if (!tokens.next() || !tokens.current().match(TokenType.Symbol, ";"))
         {
+            auto current = tokens.current();
             throw new ProgrammerException(
                 "Expected semi-colon near",
                 current.value, current.line, current.lineOffset);
@@ -914,7 +952,9 @@ Type parseType(TokenFeed tokens)
     {
         return rewind();
     }
-    auto name = tokens.current().value;
+
+    auto current = tokens.current();
+    auto name = current.value;
 
     // Read type parameters
     auto typeParams = parseConcreteTypeParams(tokens);
@@ -940,7 +980,8 @@ Type parseType(TokenFeed tokens)
         }
 
         auto parser = new ExpressionParser(tokens);
-        parser.until ~= new Token(current.line, current.lineOffset, TokenType.Symbol, "]");
+        parser.until ~= new Token(current.line, current.lineOffset,
+                TokenType.Symbol, "]");
         elements = parser.run();
 
         pointer = true;
@@ -1992,30 +2033,14 @@ void validate(Module mod)
         global.signature.type = completeType(mod, global.signature.type);
     }
 
-    // Complete method container types
-    foreach (method; mod.justMethods())
-    {
-        method.methodSignature.containerType = completeType(mod,
-                method.methodSignature.containerType);
-
-        auto container = cast(StructType)method.methodSignature.containerType;
-
-        if (container is null)
-        {
-            throw new Exception("Method's container (%s) is not a struct near");
-        }
-
-        container.struct_.methods ~= method.methodSignature;
-    }
-
     // Complete function signatures
-    foreach (func; mod.justFunctionsAndMethods())
+    foreach (func; mod.functionsAndMethods())
     {
         completeFunction(mod, func.signature);
     }
 
     // Complete functions
-    foreach (func; mod.justFunctionsAndMethods())
+    foreach (func; mod.functionsAndMethods())
     {
         validateFunction(mod, func);
     }
@@ -2087,23 +2112,25 @@ StatementBase[] validateCleanup(Module mod, StatementBase parent,
 
             foreach (met; structType.struct_.methods)
             {
-                auto voidRet = cast(VoidType)met.returnType;
+                auto sig = met.methodSignature;
+
+                auto voidRet = cast(VoidType)sig.returnType;
                 if (voidRet is null)
                 {
                     continue;
                 }
 
-                if (met.name != "destruct")
+                if (sig.name != "destruct")
                 {
                     continue;
                 }
 
-                if (met.parameters.length != 1 || met.variadic)
+                if (sig.parameters.length != 1 || sig.variadic)
                 {
                     continue;
                 }
 
-                destructMethod = met;
+                destructMethod = sig;
                 break;
             }
 

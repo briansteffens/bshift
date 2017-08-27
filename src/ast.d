@@ -1024,7 +1024,7 @@ class Struct
 {
     string name;
     TypeSignature[] members;
-    MethodSignature[] methods;
+    Method[] methods;
 
     this(string name, TypeSignature[] members)
     {
@@ -1034,14 +1034,29 @@ class Struct
 
     override string toString()
     {
-        auto ret = format("struct %s {\n", this.name);
-
-        foreach (member; this.members)
+        auto methods = "";
+        foreach (method; this.methods)
         {
-            ret ~= format("    %s;\n", member);
+            if (methods != "")
+            {
+                methods ~= "\n";
+            }
+
+            methods ~= method.toString();
         }
 
-        return ret ~ "}\n";
+        auto members = "";
+        foreach (member; this.members)
+        {
+            if (members != "")
+            {
+                members ~= "\n";
+            }
+
+            members ~= format("    %s;", member);
+        }
+
+        return format("struct %s {\n%s\n}\n%s", this.name, members, methods);
     }
 }
 
@@ -2073,6 +2088,26 @@ class Module
         return ret;
     }
 
+    Function[] functionsAndMethods()
+    {
+        Function[] ret;
+
+        foreach (func; this.functions)
+        {
+            if (cast(FunctionTemplate)func is null)
+            {
+                ret ~= func;
+            }
+        }
+
+        foreach (st; this.structs)
+        {
+            ret ~= st.methods;
+        }
+
+        return ret;
+    }
+
     Function[] justFunctions()
     {
         Function[] ret;
@@ -2099,34 +2134,6 @@ class Module
             {
                 ret ~= ft;
             }
-        }
-
-        return ret;
-    }
-
-    Method[] justMethods()
-    {
-        Method[] ret;
-
-        foreach (func; this.functions)
-        {
-            auto method = cast(Method)func;
-            if (method !is null)
-            {
-                ret ~= method;
-            }
-        }
-
-        return ret;
-    }
-
-    Function[] justFunctionsAndMethods()
-    {
-        Function[] ret = this.justFunctions();
-
-        foreach (method; this.justMethods())
-        {
-            ret ~= method;
         }
 
         return ret;
@@ -2161,11 +2168,14 @@ class Module
     MethodSignature findMethod(MethodCall call)
     {
         // Search the current module
-        foreach (method; this.justMethods())
+        foreach (s; this.structs)
         {
-            if (method.methodSignature.matchMethodCall(call))
+            foreach (method; s.methods)
             {
-                return method.methodSignature;
+                if (method.methodSignature.matchMethodCall(call))
+                {
+                    return method.methodSignature;
+                }
             }
         }
 
