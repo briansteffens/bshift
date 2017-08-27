@@ -24,7 +24,7 @@ int main(string[] args)
 
     foreach (arg; args[1..$])
     {
-        if (arg == "-v")
+        if (arg == "-v" || arg == "--verbose")
         {
             verbose = true;
             continue;
@@ -41,7 +41,7 @@ int main(string[] args)
 
     if (sourceFilename is null)
     {
-        writeln("Usage: bin/bshift <filename>");
+        writeln("Usage: bin/bshift [--basm | --nasm] [-v, --verbose] <filename>");
         return 1;
     }
 
@@ -141,7 +141,8 @@ string[] assemble(Assembler assembler, string[] sources)
 
         if (asmOut.status != 0)
         {
-            throw new Exception(format("Failed to assemble %s", source));
+            throw new Exception(format("Failed to assemble %s: %d", source,
+                                       asmOut.status));
         }
 
         ret ~= source[0..$-4] ~ ".o";

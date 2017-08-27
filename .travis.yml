@@ -6,6 +6,7 @@ d:
     - ldc
 
 script:
+    - sudo apt-get install -y nasm
     - git clone https://github.com/briansteffens/basm
     - cd basm && cabal build && cd ..
     - sudo ln -s $PWD/basm/dist/build/basm/basm /usr/local/bin/basm

@@ -2472,13 +2472,7 @@ Local generateCall(GeneratorState state, Call call)
     state.render(format("    call %s", renderName(func)));
 
     // Make sure the function gets listed as an extern
-    auto bshiftFunc = cast(Function)func;
-    auto funcLocal = bshiftFunc !is null &&
-                     bshiftFunc.signature.mod == state.mod;
-    auto bshiftMethod = cast(Method)func;
-    auto methodLocal = bshiftMethod !is null &&
-                       bshiftMethod.signature.mod == state.mod;
-    if (!funcLocal && !methodLocal)
+    if (func.mod != state.mod)
     {
         state.addExtern(renderName(func));
     }
