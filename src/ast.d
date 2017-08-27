@@ -1862,13 +1862,16 @@ class Import
     string filename;
     string name;
     FunctionSignature[] functions;
+    FunctionTemplate[] functionTemplates;
     Struct[] structs;
 
-    this(string filename, string name, FunctionSignature[] functions)
+    this(string filename, string name, FunctionSignature[] functions,
+            FunctionTemplate[] functionTemplates)
     {
         this.filename = filename;
         this.name = name;
         this.functions = functions;
+        this.functionTemplates = functionTemplates;
     }
 
     override string toString()
@@ -1878,6 +1881,11 @@ class Import
         foreach (func; this.functions)
         {
             ret ~= format("    %s", func);
+        }
+
+        foreach (ft; this.functionTemplates)
+        {
+            ret ~= format("    %s", ft);
         }
 
         foreach (s; this.structs)

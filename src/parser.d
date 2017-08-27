@@ -227,13 +227,24 @@ Import parseImport(TokenFeed tokens)
     // Parse the import
     auto parsed = parse(name, lex(readText(filename), filename));
 
+    FunctionTemplate[] functionTemplates;
     FunctionSignature[] signatures;
     foreach (func; parsed.functions)
     {
-        signatures ~= func.signature;
+        // Extract entire function templates but only signatures for regular
+        // functions.
+        auto ft = cast(FunctionTemplate)func;
+        if (ft !is null)
+        {
+            functionTemplates ~= ft;
+        }
+        else
+        {
+            signatures ~= func.signature;
+        }
     }
 
-    return new Import(filename, name, signatures);
+    return new Import(filename, name, signatures, functionTemplates);
 }
 
 Module parse(string name, Token[] tokenArray)
@@ -254,6 +265,7 @@ Module parse(string name, Token[] tokenArray)
         if (imp !is null)
         {
             imports ~= imp;
+            functions ~= imp.functionTemplates;
             continue;
         }
 
@@ -297,7 +309,8 @@ Module parse(string name, Token[] tokenArray)
             current.value, current.line, current.lineOffset);
     }
 
-    auto ret = new Module(name, imports, structs, functions, globals, externs);
+    auto ret = new Module(name, imports, structs, functions, globals,
+            externs);
 
     foreach (func; functions)
     {

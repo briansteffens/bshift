@@ -1,0 +1,39 @@
+T max<T>(T a, T b)
+{
+    T ret = a;
+
+    if (b > a)
+    {
+        ret = b;
+    }
+
+    return ret;
+}
+
+u64 main()
+{
+    u64 x = max<u64>(3, 5);
+    if (x != 5)
+    {
+        return 1;
+    }
+
+    u8 y = max<u8>(8, 2);
+    if (y != 8)
+    {
+        return 2;
+    }
+
+    return 0;
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "call function template with explicit type parameter",
+            "expect_status": "0"
+        }
+    ]
+}
