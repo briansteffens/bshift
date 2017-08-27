@@ -47,8 +47,7 @@ OperatorType parseOperatorType(string input)
         case "dereference":
             return OperatorType.Dereference;
         default:
-            throw new Exception(
-                    format("Unrecognized OperatorType: %s", input));
+            throw new Exception("We will re-raise this with more info later.");
     }
 }
 
@@ -83,7 +82,7 @@ int operatorPrecedence(OperatorType t)
         case OperatorType.LogicalAnd:
             return 6;
         default:
-            throw new Exception(format("Unknown precedence for %s", t));
+            throw new Exception("We'll re-raise this later with more info.");
     }
 }
 
@@ -111,7 +110,7 @@ int operatorInputCount(OperatorType t)
         case OperatorType.BitwiseAnd:
             return 2;
         default:
-            throw new Exception(format("Unknown input count for %s", t));
+            throw new Exception("We'll re-raise this later with more info.");
     }
 }
 
@@ -186,17 +185,20 @@ string[] possibleImportPaths(string moduleName)
 
 Import parseImport(TokenFeed tokens)
 {
-    if (!tokens.current().match(TokenType.Word, "import"))
+    auto current = tokens.current();
+    if (!current.match(TokenType.Word, "import"))
     {
         return null;
     }
 
-    if (!tokens.next() || tokens.current().type != TokenType.Word)
+    if (!tokens.next() || current.type != TokenType.Word)
     {
-        throw new Exception("Expected a module name to import");
+        throw new ProgrammerException("Expected a module name to import near",
+            current.value, current.line, current.lineOffset);
     }
 
-    auto name = tokens.current().value;
+    current = tokens.current();
+    auto name = current.value;
     tokens.next();
 
     // Resolve import
@@ -213,13 +215,15 @@ Import parseImport(TokenFeed tokens)
 
     if (filename is null)
     {
-        throw new Exception(format(
-                "Couldn't find a file to match the imported module %s. " ~
-                "Checked: %s", name, possibilities));
+        throw new ProgrammerException(
+            format(
+                "Can't find a file (among %s) to match the imported module",
+                possibilities),
+            current.value, current.line, current.lineOffset);
     }
 
     // Parse the import
-    auto parsed = parse(name, lex(readText(filename)));
+    auto parsed = parse(name, lex(readText(filename), filename));
 
     FunctionSignature[] signatures;
     foreach (func; parsed.functions)
@@ -239,9 +243,11 @@ Module parse(string name, Token[] tokenArray)
     FunctionSignature[] externs;
     Struct[] structs;
     Global[] globals;
+    Token current = tokens.current();
 
     while (tokens.next())
     {
+        current = tokens.current();
         auto imp = parseImport(tokens);
         if (imp !is null)
         {
@@ -284,7 +290,9 @@ Module parse(string name, Token[] tokenArray)
             continue;
         }
 
-        throw new Exception("Unexpected token");
+        throw new ProgrammerException(
+            "Can't parse grammar near",
+            current.value, current.line, current.lineOffset);
     }
 
     auto ret = new Module(name, imports, structs, functions, globals, externs);
@@ -294,7 +302,15 @@ Module parse(string name, Token[] tokenArray)
         func.signature.mod = ret;
     }
 
-    validate(ret);
+    try
+    {
+        validate(ret);
+    }
+    catch (Exception e)
+    {
+        throw new ProgrammerException(e.msg, current.value, current.line,
+                                      current.lineOffset, e.file, e.line);
+    }
 
     return ret;
 }
@@ -332,21 +348,27 @@ Global parseGlobal(TokenFeed tokens)
 
 Struct parseStruct(TokenFeed tokens)
 {
-    if (!tokens.current().match(TokenType.Word, "struct"))
+    auto current = tokens.current();
+    if (!current.match(TokenType.Word, "struct"))
     {
         return null;
     }
 
-    if (!tokens.next() || tokens.current().type != TokenType.Word)
+    if (!tokens.next() || current.type != TokenType.Word)
     {
-        throw new Exception("Expected a struct name");
+        throw new ProgrammerException(
+            "Expected a struct name near",
+            current.value, current.line, current.lineOffset);
     }
 
-    auto name = tokens.current().value;
+    current = tokens.current();
+    auto name = current.value;
 
-    if (!tokens.next() || !tokens.current().match(TokenType.Symbol, "{"))
+    if (!tokens.next() || !(current = tokens.current()).match(TokenType.Symbol, "{"))
     {
-        throw new Exception("Expected a { after struct");
+        throw new ProgrammerException(
+            "Expected a { after struct near",
+            current.value, current.line, current.lineOffset);
     }
 
     // Parse struct members
@@ -358,7 +380,9 @@ Struct parseStruct(TokenFeed tokens)
         // Assignment operator (=) or semi-colon
         if (!tokens.next() || !tokens.current().match(TokenType.Symbol, ";"))
         {
-            throw new Exception("Expected semi-colon");
+            throw new ProgrammerException(
+                "Expected semi-colon near",
+                current.value, current.line, current.lineOffset);
         }
     }
 
@@ -631,7 +655,9 @@ StatementBase parseStatementBase(TokenFeed tokens)
     }
 
     throw new Exception(format(
-            "Unable to parse starting at %s", tokens.current()));
+            "Can't parse grammar starting with \"%s\" at %s:%d,%d",
+            current.value, current.line.file, current.line.number,
+            current.lineOffset));
 }
 
 // Try to parse a local declaration (like "u64 x = 3;") and return null if it
@@ -673,7 +699,8 @@ LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
 
 Type parseType(TokenFeed tokens)
 {
-    auto name = tokens.current().value;
+    auto current = tokens.current();
+    auto name = current.value;
 
     bool pointer = false;
     auto next = tokens.peek(1);
@@ -690,7 +717,7 @@ Type parseType(TokenFeed tokens)
         tokens.next();
 
         auto parser = new ExpressionParser(tokens);
-        parser.until ~= new Token(null, TokenType.Symbol, "]");
+        parser.until ~= new Token(current.line, current.lineOffset, TokenType.Symbol, "]");
         elements = parser.run();
 
         pointer = true;
@@ -1024,8 +1051,8 @@ class ExpressionParser
         this.output = new ParserItemStack();
         this.operators = new ParserItemStack();
 
-        this.until ~= new Token(null, TokenType.Symbol, ";");
-        this.until ~= new Token(null, TokenType.Symbol, "=");
+        this.until ~= new Token(null, 0, TokenType.Symbol, ";");
+        this.until ~= new Token(null, 0, TokenType.Symbol, "=");
     }
 
     void printState()
@@ -1080,17 +1107,44 @@ class ExpressionParser
 
     void consume()
     {
+        auto current = this.current;
+
         if (this.operators.len() == 0)
         {
             return;
         }
 
-        auto operator = parseOperatorType(this.operators.peek(0).token.value);
-        auto inputCount = operatorInputCount(operator);
+        OperatorType operator;
+        try
+        {
+            operator = parseOperatorType(this.operators.peek(0).token.value);
+        }
+        catch (Exception)
+        {
+            throw new ProgrammerException(
+                "Unrecognized operator",
+                current.value, current.line, current.lineOffset);
+        }
+
+        int inputCount;
+        try
+        {
+            inputCount = operatorInputCount(operator);
+        }
+        catch (Exception)
+        {
+            throw new ProgrammerException(
+                "Unknown number of operands for operator",
+                current.value, current.line, current.lineOffset);
+        }
 
         if (this.output.len() < inputCount)
         {
-            throw new Exception("Not enough output on the stack to consume!");
+            throw new ProgrammerException(
+                format(
+                    "Unexpected number of operands (got %d, expected %d) near",
+                    this.output.len(), inputCount),
+                current.value, current.line, current.lineOffset);
         }
 
         this.operators.pop();
@@ -1134,8 +1188,8 @@ class ExpressionParser
                     op = new Dereference(right);
                     break;
                 default:
-                    throw new Exception(format("Unrecognized operator %s",
-                            operator));
+                    throw new ProgrammerException("Unrecognized operator",
+                        current.value, current.line, current.lineOffset);
             }
         }
         else
@@ -1380,9 +1434,19 @@ class ExpressionParser
 
         try
         {
-            int cur = operatorPrecedence(parseOperatorType(current.value));
-            int prev = operatorPrecedence(parseOperatorType(
+            int cur, prev;
+            try
+            {
+                cur = operatorPrecedence(parseOperatorType(current.value));
+                prev = operatorPrecedence(parseOperatorType(
                     this.operators.peek(0).token.value));
+            }
+            catch (Exception)
+            {
+                auto current = this.current;
+                throw new ProgrammerException("Unknown precedence for",
+                    current.value, current.line, current.lineOffset);
+            }
 
             if (prev >= cur)
             {
@@ -1400,10 +1464,11 @@ class ExpressionParser
 
     bool next()
     {
+        auto previous = this.input.current();
         if (!this.input.next())
         {
-            throw new Exception(
-                    "Ran out of tokens while parsing an expression");
+            throw new ProgrammerException("Unexpected",
+                "EOF", current.line, current.lineOffset);
         }
 
         this.current = this.input.current();
@@ -1574,13 +1639,19 @@ class ExpressionParser
 
     Node run()
     {
+        Token current = this.input.current();
         while (this.next())
         {
+            current = this.input.current();
         }
 
-        if (this.output.len() != 1)
+        auto len = this.output.len();
+        if (len != 1)
         {
-            throw new Exception("Expected one node to be left in parser");
+            // TODO: clarify what this implies.
+            throw new ProgrammerException(
+                format("Expected one (got %d) token to be left near", len),
+                current.value, current.line, current.lineOffset);
         }
 
         return getOrParseNode(this.output.pop());
@@ -1593,8 +1664,10 @@ Node parseExpressionParenthesis(TokenFeed tokens)
 {
     auto parser = new ExpressionParser(tokens);
 
+    Token current = tokens.current();
     while (parser.next())
     {
+        current = tokens.current();
         // Look for the terminating close parenthesis
         if (parser.input.peek(1) !is null &&
             parser.input.peek(1).match(TokenType.Symbol, ")") &&
@@ -1606,14 +1679,18 @@ Node parseExpressionParenthesis(TokenFeed tokens)
 
             if (parser.output.len() != 1)
             {
-                throw new Exception("Expected one node to be left in parser");
+                throw new ProgrammerException(
+                    "Expected one token to be left near",
+                    current.value, current.line, current.lineOffset);
             }
 
             return getOrParseNode(parser.output.pop());
         }
     }
 
-    throw new Exception("Expected a close parenthesis");
+    throw new ProgrammerException(
+        "Expected a closing parenthesis near",
+        current.value, current.line, current.lineOffset);
 }
 
 // Validation pass ------------------------------------------------------------
@@ -1674,8 +1751,7 @@ void validate(Module mod)
 
         if (container is null)
         {
-            throw new Exception(format(
-                    "Method's container is not a struct: %s", method));
+            throw new Exception("Method's container (%s) is not a struct near");
         }
 
         container.struct_.methods ~= method.methodSignature;

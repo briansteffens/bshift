@@ -176,7 +176,7 @@ CompileResult compile(string sourceFilename)
     }
 
     // Lexer
-    auto tokens = lex(source);
+    auto tokens = lex(source, sourceFilename);
 
     if (verbose)
     {

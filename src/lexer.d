@@ -15,12 +15,14 @@ enum TokenType
 class Token
 {
     Line line;
+    int lineOffset;
     TokenType type;
     string value;
 
-    pure this(Line line, TokenType type, string value)
+    pure this(Line line, int lineOffset, TokenType type, string value)
     {
         this.line = line;
+        this.lineOffset = lineOffset;
         this.type = type;
         this.value = value;
     }
@@ -42,7 +44,19 @@ class Token
 
     pure Token clone()
     {
-        return new Token(this.line, this.type, this.value);
+        return new Token(this.line, this.lineOffset, this.type, this.value);
+    }
+}
+
+class ProgrammerException : Exception
+{
+    this(string msg, string item, Line line, int lineOffset,
+         string efile = __FILE__, size_t eline = __LINE__)
+    {
+        auto fullMsg = format("[%s:%d,%d] %s \"%s\":\n%s",
+                              line.file, line.number + 1, lineOffset,
+                              msg, item, line.source);
+        super(fullMsg, efile, eline);
     }
 }
 
@@ -108,8 +122,7 @@ pure string resolveEscapeSequence(dchar second)
         case '\'':
             return "'";
         default:
-            throw new Exception(format(
-                    "Unrecognized escape sequence: \\%s", second));
+            throw new Exception("We'll re-reraise this with more info");
     }
 }
 
@@ -117,11 +130,12 @@ class Line
 {
     int number;
     string source;
+    string file;
 
-    this(int number, string source)
+    this(int number, string file)
     {
         this.number = number;
-        this.source = source;
+        this.file = file;
     }
 }
 
@@ -137,16 +151,16 @@ class Char
     }
 }
 
-Char[] breakLines(string input)
+Char[] breakLines(string input, string file)
 {
     Char[] ret;
-    Line line = new Line(0, "");
+    Line line = new Line(0, file);
 
     foreach (c; input)
     {
         if (c == '\n')
         {
-            line = new Line(line.number + 1, "");
+            line = new Line(line.number + 1, file);
         }
         else
         {
@@ -163,11 +177,13 @@ Char[] breakLines(string input)
 class Reader
 {
     Char[] input;
+    string source;
     int index = -1;
 
-    pure this(Char[] input)
+    pure this(Char[] input, string source)
     {
         this.input = input;
+        this.source = source;
     }
 
     pure bool isFirst()
@@ -190,6 +206,22 @@ class Reader
         return this.input[this.index].value;
     }
 
+    pure int currentLineOffset()
+    {
+        auto thisLine = this.currentLine();
+        int offset = 0;
+        foreach (c; this.input)
+        {
+            if (c.line.number == thisLine.number)
+            {
+                break;
+            }
+            offset++;
+        }
+
+        return this.index - offset;
+    }
+
     pure Line currentLine()
     {
         return this.input[this.index].line;
@@ -207,7 +239,7 @@ class Reader
 
     pure Reader clone()
     {
-        auto ret = new Reader(this.input);
+        auto ret = new Reader(this.input, this.source);
 
         ret.index = this.index;
 
@@ -215,9 +247,9 @@ class Reader
     }
 }
 
-Token[] lex(string src)
+Token[] lex(string src, string srcName)
 {
-    auto reader = new Reader(breakLines(src));
+    auto reader = new Reader(breakLines(src, srcName), srcName);
     Token[] tokens;
 
     while (true)
@@ -278,8 +310,9 @@ Token read(Reader r)
         }
     }
 
-    throw new Exception(format(
-            "Can't parse token starting with %c", r.current()));
+    auto line = r.currentLine();
+    throw new ProgrammerException("Can't lex token", format("%c", r.current()),
+                                  line, r.currentLineOffset());
 }
 
 // Run the function f and advance the reader only if f successfully read a
@@ -386,7 +419,19 @@ Token readQuote(Reader r, char quote, TokenType type)
         {
             r.advance();
 
-            value ~= resolveEscapeSequence(r.current());
+            try
+            {
+                value ~= resolveEscapeSequence(r.current());
+            }
+            catch (Exception)
+            {
+                throw new ProgrammerException(
+                    "Unrecognized escape sequence",
+                    format("%c", r.current()),
+                    line,
+                    r.currentLineOffset()
+                );
+            }
 
             continue;
         }
@@ -410,7 +455,7 @@ Token readQuote(Reader r, char quote, TokenType type)
         value ~= r.current();
     }
 
-    return new Token(line, type, value);
+    return new Token(line, r.currentLineOffset(), type, value);
 }
 
 Token readNumeric(Reader r)
@@ -435,7 +480,7 @@ Token readNumeric(Reader r)
         r.advance();
     }
 
-    return new Token(line, TokenType.Integer, value);
+    return new Token(line, r.currentLineOffset(), TokenType.Integer, value);
 }
 
 Token readSymbol(Reader r)
@@ -467,7 +512,7 @@ Token readSymbol(Reader r)
                 r.advance();
             }
 
-            return new Token(line, TokenType.Symbol, possibility);
+            return new Token(line, r.currentLineOffset(), TokenType.Symbol, possibility);
         }
     }
 
@@ -496,5 +541,5 @@ Token readWord(Reader r)
         r.advance();
     }
 
-    return new Token(line, TokenType.Word, value);
+    return new Token(line, r.currentLineOffset(), TokenType.Word, value);
 }
