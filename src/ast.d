@@ -87,9 +87,9 @@ abstract class Type
 class IncompleteType : Type
 {
     string name;
-    TypeParameter[] typeParameters;
+    Type[] typeParameters;
 
-    this(string name, TypeParameter[] typeParameters, bool pointer=false,
+    this(string name, Type[] typeParameters, bool pointer=false,
             Node elements=null)
     {
         super(pointer=pointer, elements=elements);
@@ -104,7 +104,24 @@ class IncompleteType : Type
 
     override string toString()
     {
-        return "Incomplete(" ~ super.toString() ~ ")";
+        string typeParams = "";
+
+        foreach (t; this.typeParameters)
+        {
+            if (typeParams != "")
+            {
+                typeParams ~= ", ";
+            }
+
+            typeParams ~= t.toString();
+        }
+
+        if (typeParams != "")
+        {
+            typeParams = "<" ~ typeParams ~ ">";
+        }
+
+        return format("Incomplete(%s%s)", super.toString(), typeParams);
     }
 
     override Type clone()
@@ -1028,6 +1045,62 @@ class Struct
     }
 }
 
+class StructRendering
+{
+    StructTemplate structTemplate;
+    Struct rendering;
+    Type[] typeParameters;
+
+    this(StructTemplate structTemplate, Struct rendering,
+            Type[] typeParameters)
+    {
+        this.structTemplate = structTemplate;
+        this.rendering = rendering;
+        this.typeParameters = typeParameters;
+    }
+}
+
+class StructTemplate : Struct
+{
+    TypeParameter[] typeParameters;
+    StructRendering[] renderings;
+
+    this(string name, TypeParameter[] typeParameters, TypeSignature[] members)
+    {
+        super(name, members);
+        this.typeParameters = typeParameters;
+    }
+
+    override string toString()
+    {
+        return "template " ~ super.toString();
+    }
+
+    StructRendering render(Type[] types)
+    {
+        // Mangle the name
+        auto name = "template_" ~ this.name;
+        foreach (t; types)
+        {
+            name ~= "_" ~ t.toString();
+        }
+
+        // Replace type parameter names in members
+        TypeSignature[] members;
+        foreach (member; this.members)
+        {
+            auto cloned = member.clone();
+            cloned.type = replaceTypeParameter(cloned.type,
+                    this.typeParameters, types);
+            members ~= cloned;
+        }
+
+        auto ret = new StructRendering(this, new Struct(name, members), types);
+        this.renderings ~= ret;
+        return ret;
+    }
+}
+
 abstract class StatementBase : InsideFunction
 {
     Line           line;
@@ -1738,6 +1811,36 @@ class FunctionRendering
     }
 }
 
+Type replaceTypeParameter(Type type, TypeParameter[] params,
+        Type[] replacements)
+{
+    if (params.length != replacements.length)
+    {
+        throw new Exception("Type parameter count mismatch");
+    }
+
+    auto incomplete = cast(IncompleteType)type;
+    if (incomplete is null)
+    {
+        return type;
+    }
+
+    if (incomplete.typeParameters.length > 0)
+    {
+        throw new Exception("Not implemented");
+    }
+
+    for (int i = 0; i < params.length; i++)
+    {
+        if (incomplete.name == params[i].name)
+        {
+            return replacements[i].clone();
+        }
+    }
+
+    return type;
+}
+
 class FunctionTemplate : Function
 {
     TypeParameter[] typeParameters;
@@ -1752,33 +1855,9 @@ class FunctionTemplate : Function
         this.renderings = [];
     }
 
-    Type replaceTypeParameter(Type type, Type[] replacements)
+    override string toString()
     {
-        if (this.typeParameters.length != replacements.length)
-        {
-            throw new Exception("Type parameter count mismatch");
-        }
-
-        auto incomplete = cast(IncompleteType)type;
-        if (incomplete is null)
-        {
-            return type;
-        }
-
-        if (incomplete.typeParameters.length > 0)
-        {
-            throw new Exception("Not implemented");
-        }
-
-        for (int i = 0; i < this.typeParameters.length; i++)
-        {
-            if (incomplete.name == this.typeParameters[i].name)
-            {
-                return replacements[i].clone();
-            }
-        }
-
-        return type;
+        return "template " ~ super.toString();
     }
 
     FunctionRendering render(Type[] types)
@@ -1792,12 +1871,12 @@ class FunctionTemplate : Function
             signature.name ~= "_" ~ t.toString();
         }
 
-        signature.returnType = this.replaceTypeParameter(signature.returnType,
-                types);
+        signature.returnType = replaceTypeParameter(signature.returnType,
+                this.typeParameters, types);
 
         foreach (p; signature.parameters)
         {
-            p.type = this.replaceTypeParameter(p.type, types);
+            p.type = replaceTypeParameter(p.type, this.typeParameters, types);
         }
 
         auto block = cast(Block)this.block.clone();
@@ -1817,8 +1896,8 @@ class FunctionTemplate : Function
             auto local = cast(LocalDeclaration)cur;
             if (local !is null)
             {
-                local.signature.type = this.replaceTypeParameter(
-                        local.signature.type, types);
+                local.signature.type = replaceTypeParameter(
+                        local.signature.type, this.typeParameters, types);
             }
         }
 
@@ -1939,12 +2018,14 @@ class Module
     string name;
     Import[] imports;
     Struct[] structs;
+    StructTemplate[] structTemplates;
     Function[] functions;
     Global[] globals;
     FunctionSignature[] externs;
 
     this(string name, Import[] imports, Struct[] structs, Function[] functions,
-         Global[] globals, FunctionSignature[] externs)
+         Global[] globals, FunctionSignature[] externs,
+         StructTemplate[] structTemplates)
     {
         this.name = name;
         this.imports = imports;
@@ -1952,6 +2033,7 @@ class Module
         this.functions = functions;
         this.globals = globals;
         this.externs = externs;
+        this.structTemplates = structTemplates;
     }
 
     override string toString()
@@ -1974,6 +2056,11 @@ class Module
         }
 
         foreach (s; this.structs)
+        {
+            ret ~= s.toString() ~ "\n";
+        }
+
+        foreach (s; this.structTemplates)
         {
             ret ~= s.toString() ~ "\n";
         }

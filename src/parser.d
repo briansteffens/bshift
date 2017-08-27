@@ -255,6 +255,7 @@ Module parse(string name, Token[] tokenArray)
     Function[] functions;
     FunctionSignature[] externs;
     Struct[] structs;
+    StructTemplate[] structTemplates;
     Global[] globals;
     Token current = tokens.current();
 
@@ -273,6 +274,13 @@ Module parse(string name, Token[] tokenArray)
         if (ext !is null)
         {
             externs ~= ext;
+            continue;
+        }
+
+        auto structTemplate = parseStructTemplate(tokens);
+        if (structTemplate !is null)
+        {
+            structTemplates ~= structTemplate;
             continue;
         }
 
@@ -310,7 +318,7 @@ Module parse(string name, Token[] tokenArray)
     }
 
     auto ret = new Module(name, imports, structs, functions, globals,
-            externs);
+            externs, structTemplates);
 
     foreach (func; functions)
     {
@@ -361,32 +369,20 @@ Global parseGlobal(TokenFeed tokens)
     return new Global(signature, value);
 }
 
-Struct parseStruct(TokenFeed tokens)
+TypeSignature[] parseStructMembers(TokenFeed tokens)
 {
-    auto current = tokens.current();
-    if (!current.match(TokenType.Word, "struct"))
+    auto rewindTarget = tokens.index;
+    TypeSignature[] rewind()
     {
+        tokens.index = rewindTarget;
         return null;
     }
 
-    if (!tokens.next() || current.type != TokenType.Word)
+    if (!tokens.next() || !tokens.current().match(TokenType.Symbol, "{"))
     {
-        throw new ProgrammerException(
-            "Expected a struct name near",
-            current.value, current.line, current.lineOffset);
+        return rewind();
     }
 
-    current = tokens.current();
-    auto name = current.value;
-
-    if (!tokens.next() || !(current = tokens.current()).match(TokenType.Symbol, "{"))
-    {
-        throw new ProgrammerException(
-            "Expected a { after struct near",
-            current.value, current.line, current.lineOffset);
-    }
-
-    // Parse struct members
     TypeSignature[] members;
     while (tokens.next() && !tokens.current().match(TokenType.Symbol, "}"))
     {
@@ -401,7 +397,64 @@ Struct parseStruct(TokenFeed tokens)
         }
     }
 
+    return members;
+}
+
+Struct parseStruct(TokenFeed tokens)
+{
+    if (!tokens.current().match(TokenType.Word, "struct"))
+    {
+        return null;
+    }
+
+    if (!tokens.next() || tokens.current().type != TokenType.Word)
+    {
+        throw new Exception("Expected a struct name");
+    }
+
+    auto name = tokens.current().value;
+
+    // Parse struct members
+    auto members = parseStructMembers(tokens);
+
     return new Struct(name, members);
+}
+
+StructTemplate parseStructTemplate(TokenFeed tokens)
+{
+    auto rewindTarget = tokens.index;
+    StructTemplate rewind()
+    {
+        tokens.index = rewindTarget;
+        return null;
+    }
+
+    if (!tokens.current().match(TokenType.Word, "struct"))
+    {
+        return rewind();
+    }
+
+    if (!tokens.next() || tokens.current().type != TokenType.Word)
+    {
+        return rewind();
+    }
+
+    auto name = tokens.current().value;
+
+    // Template type parameters
+    auto typeParams = parseTypeParams(tokens);
+
+    if (typeParams.length == 0)
+    {
+        return rewind();
+    }
+
+    // Parse struct members
+    auto members = parseStructMembers(tokens);
+
+    writeln(tokens.current());
+
+    return new StructTemplate(name, typeParams, members);
 }
 
 FunctionSignature parseExtern(TokenFeed tokens)
@@ -864,7 +917,7 @@ Type parseType(TokenFeed tokens)
     auto name = tokens.current().value;
 
     // Read type parameters
-    auto typeParams = parseTypeParams(tokens);
+    auto typeParams = parseConcreteTypeParams(tokens);
 
     // Read pointer symbol
     bool pointer = false;
@@ -1930,10 +1983,7 @@ void validate(Module mod)
     // Complete struct definitions
     foreach (struct_; mod.structs)
     {
-        foreach (member; struct_.members)
-        {
-            member.type = completeType(mod, member.type);
-        }
+        validateStruct(mod, struct_);
     }
 
     // Complete globals
@@ -1968,6 +2018,14 @@ void validate(Module mod)
     foreach (func; mod.justFunctionsAndMethods())
     {
         validateFunction(mod, func);
+    }
+}
+
+void validateStruct(Module mod, Struct struct_)
+{
+    foreach (member; struct_.members)
+    {
+        member.type = completeType(mod, member.type);
     }
 }
 
@@ -2183,6 +2241,63 @@ Type completeType(Module mod, Type type)
         }
         catch (Throwable)
         {
+        }
+    }
+
+    // Try struct templates
+    if (ret is null)
+    {
+        foreach (st; mod.structTemplates)
+        {
+            if (st.name != incomplete.name)
+            {
+                continue;
+            }
+
+            if (st.typeParameters.length != incomplete.typeParameters.length)
+            {
+                throw new Exception("Mismatched template parameters");
+            }
+
+            // Complete type parameters
+            for (int i = 0; i < incomplete.typeParameters.length; i++)
+            {
+                incomplete.typeParameters[i] = completeType(mod,
+                        incomplete.typeParameters[i]);
+            }
+
+            StructRendering rendering = null;
+
+            // Check existing renderings
+            renderingLoop: foreach (r; st.renderings)
+            {
+                // Match type parameters
+                for (int i = 0; i < r.typeParameters.length; i++)
+                {
+                    auto ct = incomplete.typeParameters[i];
+                    auto rt = r.typeParameters[i];
+
+                    if (!incomplete.typeParameters[i].compare(
+                            r.typeParameters[i]))
+                    {
+                        continue renderingLoop;
+                    }
+                }
+
+                // Found a matching rendering
+                rendering = r;
+            }
+
+            if (rendering is null)
+            {
+                // Make a new rendering for this template
+                rendering = st.render(incomplete.typeParameters);
+                validateStruct(mod, rendering.rendering);
+            }
+
+            ret = new StructType(rendering.rendering);
+
+            break;
         }
     }
 
