@@ -1,0 +1,19 @@
+T max<T>(T a, T b)
+{
+    if (a > b)
+    {
+        return a;
+    }
+
+    return b;
+}
+
+T min<T>(T a, T b)
+{
+    if (a < b)
+    {
+        return a;
+    }
+
+    return b;
+}

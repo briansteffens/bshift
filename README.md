@@ -512,3 +512,61 @@ Output:
 Greet
 Greetings!
 ```
+
+
+
+
+
+
+
+## math
+
+The *math* module contains common math functions.
+
+
+
+### T math::max<T>(T a, T b)
+
+Returns the larger of the two given values.
+
+```c
+import io;
+import math;
+
+u64 main()
+{
+    auto r = math::max<u64>(10, 25);
+
+    io::print("%u\n", r);
+}
+```
+
+Output:
+```
+25
+```
+
+
+
+
+### T math::min<T>(T a, T b)
+
+Returns the smaller of the two given values.
+
+```c
+import io;
+import math;
+
+u64 main()
+{
+    auto r = math::min<u64>(5, 3);
+
+    io::print("%u\n", r);
+}
+```
+
+Output:
+```
+3
+```
+
