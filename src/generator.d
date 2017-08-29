@@ -708,6 +708,18 @@ string[] generate(Module mod)
         }
     }
 
+    // Generate struct template methods
+    foreach (st; mod.structTemplates)
+    {
+        foreach (r; st.renderings)
+        {
+            foreach (m; r.rendering.methods)
+            {
+                generateFunction(state, m);
+            }
+        }
+    }
+
     // Bootstrap the main function if there is one
     if (mod.functionExists("main"))
     {

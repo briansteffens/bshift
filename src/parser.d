@@ -294,8 +294,6 @@ Module parse(string name, Token[] tokenArray)
         auto method = parseMethod(tokens);
         if (method !is null)
         {
-            bool foundStruct = false;
-
             auto incomplete =
                     cast(IncompleteType)method.methodSignature.containerType;
 
@@ -304,25 +302,38 @@ Module parse(string name, Token[] tokenArray)
                 throw new Exception("Unexpected method container type");
             }
 
+            Struct container = null;
+
+            // Look for a matching struct
             foreach (st; structs)
             {
                 if (st.name == incomplete.name)
                 {
-                    st.methods ~= method;
-
-                    method.methodSignature.containerType =
-                            new StructType(st);
-
-                    foundStruct = true;
-
+                    container = st;
                     break;
                 }
             }
 
-            if (!foundStruct)
+            // Look for a matching struct template
+            if (container is null)
+            {
+                foreach (st; structTemplates)
+                {
+                    if (st.name == incomplete.name)
+                    {
+                        container = st;
+                        break;
+                    }
+                }
+            }
+
+            if (container is null)
             {
                 throw new Exception("Couldn't find struct for method");
             }
+
+            container.methods ~= method;
+            method.methodSignature.containerType = new StructType(container);
 
             continue;
         }
@@ -355,6 +366,14 @@ Module parse(string name, Token[] tokenArray)
     }
 
     foreach (st; ret.structs)
+    {
+        foreach (met; st.methods)
+        {
+            met.signature.mod = ret;
+        }
+    }
+
+    foreach (st; ret.structTemplates)
     {
         foreach (met; st.methods)
         {
@@ -489,8 +508,6 @@ StructTemplate parseStructTemplate(TokenFeed tokens)
 
     // Parse struct members
     auto members = parseStructMembers(tokens);
-
-    writeln(tokens.current());
 
     return new StructTemplate(name, typeParams, members);
 }
@@ -2351,6 +2368,64 @@ Type completeType(Module mod, Type type)
     return ret;
 }
 
+void validateMethodCall(Module mod, MethodCall call)
+{
+    auto structType = cast(StructType)call.container.type;
+    if (structType is null)
+    {
+        // TODO: enforce this with the type system
+        throw new Exception("Method container must be a struct");
+    }
+
+    auto struct_ = structType.struct_;
+
+    // If this is a struct template method, render the needed method if it
+    // hasn't been rendered already.
+    auto r = mod.findStructRendering(structType.struct_);
+    if (r !is null)
+    {
+        struct_ = r.rendering;
+
+        foreach (method; r.rendering.methods)
+        {
+            if (method.methodSignature.matchMethodCall(call))
+            {
+                call.methodSignature = method.methodSignature;
+                break;
+            }
+        }
+
+        // Render required
+        if (call.methodSignature is null)
+        {
+            foreach (method; r.structTemplate.methods)
+            {
+                if (method.signature.name == call.functionName)
+                {
+                    auto newRendering = r.renderMethod(method);
+                    completeFunction(mod, newRendering.signature);
+                    validateFunction(mod, newRendering);
+                    call.methodSignature = newRendering.methodSignature;
+                    r.rendering.methods ~= newRendering;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (call.methodSignature is null)
+    {
+        call.methodSignature = struct_.findMethod(call);
+    }
+
+    call.retype();
+
+    // Inject 'this' argument
+    auto thisArg = new Reference(call.container);
+    thisArg.retype();
+    call.parameters = thisArg ~ call.parameters;
+}
+
 void validateCall(Module mod, Call call)
 {
     // Search function templates
@@ -2414,14 +2489,7 @@ void validateNode(Module mod, Node node)
     auto methodCall = cast(MethodCall)node;
     if (methodCall !is null)
     {
-        methodCall.methodSignature = mod.findMethod(methodCall);
-        node.retype();
-
-        // Inject 'this' argument
-        auto thisArg = new Reference(methodCall.container);
-        thisArg.retype();
-        methodCall.parameters = thisArg ~ methodCall.parameters;
-
+        validateMethodCall(mod, methodCall);
         return;
     }
 

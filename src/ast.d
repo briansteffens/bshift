@@ -378,6 +378,16 @@ abstract class Node : InsideFunction
     {
         throw new Exception("No clone() implementation for this Node");
     }
+
+    // Walk the tree replacing template type parameters with the given
+    // actual types.
+    void templateReplace(TypeParameter[] params, Type[] types)
+    {
+        foreach (c; this.childNodes())
+        {
+            c.templateReplace(params, types);
+        }
+    }
 }
 
 enum OperatorType
@@ -948,7 +958,10 @@ class DotAccessor : Node
     override Node clone()
     {
         auto ret = new DotAccessor(this.container.clone(), this.memberName);
-        ret.member = this.member.clone();
+        if (this.member !is null)
+        {
+            ret.member = this.member.clone();
+        }
         return ret;
     }
 
@@ -1058,6 +1071,19 @@ class Struct
 
         return format("struct %s {\n%s\n}\n%s", this.name, members, methods);
     }
+
+    MethodSignature findMethod(MethodCall call)
+    {
+        foreach (method; this.methods)
+        {
+            if (method.methodSignature.name == call.functionName)
+            {
+                return method.methodSignature;
+            }
+        }
+
+        throw new Exception(format("Method %s not found", call));
+    }
 }
 
 class StructRendering
@@ -1072,6 +1098,22 @@ class StructRendering
         this.structTemplate = structTemplate;
         this.rendering = rendering;
         this.typeParameters = typeParameters;
+    }
+
+    Method renderMethod(Method original)
+    {
+        FunctionSignature signature;
+        Block block;
+        renderAsTemplate(this.structTemplate.typeParameters,
+                this.typeParameters, original.signature, original.block,
+                signature, block);
+        auto methodSig = cast(MethodSignature)signature;
+        if (methodSig is null)
+        {
+            throw new Exception("Rendered signature is wrong type");
+        }
+        methodSig.containerType = new StructType(this.rendering);
+        return new Method(methodSig, block);
     }
 }
 
@@ -1170,6 +1212,21 @@ abstract class StatementBase : InsideFunction
         }
 
         return null;
+    }
+
+    // Walk the tree replacing template type parameters with the given
+    // actual types.
+    void templateReplace(TypeParameter[] params, Type[] types)
+    {
+        foreach (c; this.childStatements())
+        {
+            c.templateReplace(params, types);
+        }
+
+        foreach (c; this.childNodes())
+        {
+            c.templateReplace(params, types);
+        }
     }
 }
 
@@ -1309,6 +1366,16 @@ class LocalDeclaration : StatementBase
         {
             return [this.value];
         }
+    }
+
+    // Walk the tree replacing template type parameters with the given
+    // actual types.
+    override void templateReplace(TypeParameter[] params, Type[] types)
+    {
+        super.templateReplace(params, types);
+
+        this.signature.type = replaceTypeParameter(this.signature.type, params,
+                types);
     }
 }
 
@@ -1785,6 +1852,22 @@ class MethodSignature : FunctionSignature
         return call.container.type.compare(this.containerType) &&
                call.functionName == this.name;
     }
+
+    override FunctionSignature clone()
+    {
+        TypeSignature[] params;
+        foreach (p; this.parameters)
+        {
+            params ~= p.clone();
+        }
+
+        auto ret = new MethodSignature(this.returnType.clone(),
+                this.containerType.clone(), this.name, params, this.variadic);
+
+        ret.mod = this.mod;
+
+        return ret;
+    }
 }
 
 class Function : InsideFunction
@@ -1856,6 +1939,44 @@ Type replaceTypeParameter(Type type, TypeParameter[] params,
     return type;
 }
 
+string templateName(string name, Type[] types)
+{
+    auto ret = "template_" ~ name;
+
+    foreach (t; types)
+    {
+        ret ~= "_" ~ t.toString();
+    }
+
+    return ret;
+}
+
+// TODO: make this part of FunctionTemplate or something? The problem is
+// method templates need this functionality but there isn't really a
+// MethodTemplate object, just a StuctTemplate.
+void renderAsTemplate(TypeParameter[] typeParams, Type[] types,
+        FunctionSignature originalSignature, StatementBase originalBlock,
+        out FunctionSignature signature, out Block block)
+{
+    signature = originalSignature.clone();
+    signature.name = templateName(signature.name, types);
+    signature.returnType = replaceTypeParameter(signature.returnType,
+            typeParams, types);
+
+    foreach (p; signature.parameters)
+    {
+        p.type = replaceTypeParameter(p.type, typeParams, types);
+    }
+
+    block = cast(Block)originalBlock.clone();
+    if (block is null)
+    {
+        throw new Exception("Clone failure");
+    }
+
+    block.templateReplace(typeParams, types);
+}
+
 class FunctionTemplate : Function
 {
     TypeParameter[] typeParameters;
@@ -1877,45 +1998,10 @@ class FunctionTemplate : Function
 
     FunctionRendering render(Type[] types)
     {
-        auto signature = this.signature.clone();
-
-        // Mangle the name
-        signature.name = "template_" ~ signature.name;
-        foreach (t; types)
-        {
-            signature.name ~= "_" ~ t.toString();
-        }
-
-        signature.returnType = replaceTypeParameter(signature.returnType,
-                this.typeParameters, types);
-
-        foreach (p; signature.parameters)
-        {
-            p.type = replaceTypeParameter(p.type, this.typeParameters, types);
-        }
-
-        auto block = cast(Block)this.block.clone();
-        if (block is null)
-        {
-            throw new Exception("Clone failure");
-        }
-
-        StatementBase[] stack = [block];
-        while (stack.length > 0)
-        {
-            auto cur = stack[stack.length - 1];
-            stack = stack.remove(stack.length - 1);
-
-            stack ~= cur.childStatements();
-
-            auto local = cast(LocalDeclaration)cur;
-            if (local !is null)
-            {
-                local.signature.type = replaceTypeParameter(
-                        local.signature.type, this.typeParameters, types);
-            }
-        }
-
+        FunctionSignature signature;
+        Block block;
+        renderAsTemplate(this.typeParameters, types, this.signature,
+                this.block, signature, block);
         return new FunctionRendering(this, new Function(signature, block),
                 types);
     }
@@ -2165,25 +2251,6 @@ class Module
         throw new Exception(format("Function %s not found", name));
     }
 
-    MethodSignature findMethod(MethodCall call)
-    {
-        // Search the current module
-        foreach (s; this.structs)
-        {
-            foreach (method; s.methods)
-            {
-                if (method.methodSignature.matchMethodCall(call))
-                {
-                    return method.methodSignature;
-                }
-            }
-        }
-
-        // TODO: Search imports
-        throw new Exception(format("Method %s not found", call));
-    }
-
-    // TODO: dead?
     FunctionSignature findFunction(Call call)
     {
         // Built-in: syscall
@@ -2245,5 +2312,23 @@ class Module
         }
 
         throw new Exception(format("Import %s not found", name));
+    }
+
+    // If the given struct is a rendering of a struct template, find that
+    // rendering. Otherwise, return null.
+    StructRendering findStructRendering(Struct struct_)
+    {
+        foreach (st; this.structTemplates)
+        {
+            foreach (r; st.renderings)
+            {
+                if (r.rendering is struct_)
+                {
+                    return r;
+                }
+            }
+        }
+
+        return null;
     }
 }
