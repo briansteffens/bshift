@@ -2386,7 +2386,14 @@ void copyData(GeneratorState state, DataLocation[] sources,
         }
         else if (sourceDataSection !is null)
         {
-            sourceRendered = format("[%s]", sourceDataSection.name);
+            auto fmt = "[%s]";
+            version (OSX)
+            {
+                // Mac requires you implicitly designating access as relative.
+                // See https://forum.nasm.us/index.php?topic=2032.0
+                fmt = "[rel %s]";
+            }
+            sourceRendered = format(fmt, sourceDataSection.name);
         }
         else
         {
@@ -2593,7 +2600,14 @@ string renderLocal(Local local)
     auto dataLocation = cast(DataSectionLocation)local.data[0];
     if (dataLocation !is null)
     {
-        return format("[%s]", local.name);
+        auto fmt = "[%s]";
+        version (OSX)
+        {
+            // Mac requires you implicitly designating access as relative.
+            // See https://forum.nasm.us/index.php?topic=2032.0
+            fmt = "[rel %s]";
+        }
+        return format(fmt, local.name);
     }
 
     throw new Exception(format("Unknown location %s", local.data[0]));
