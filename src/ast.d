@@ -660,6 +660,13 @@ class SizeOf : Node
     {
         return format("sizeof(%s)", this.argument);
     }
+
+    override void templateReplace(TypeParameter[] params, Type[] types)
+    {
+        super.templateReplace(params, types);
+
+        this.argument = replaceTypeParameter(this.argument, params, types);
+    }
 }
 
 class Call : Node
