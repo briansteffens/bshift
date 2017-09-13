@@ -1343,7 +1343,7 @@ class LocalDeclaration : StatementBase
     override StatementBase clone()
     {
         return new LocalDeclaration(this.line, this.signature.clone(),
-                this.value.clone());
+                this.value is null ? null : this.value.clone());
     }
 
     override string toString()
