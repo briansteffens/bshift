@@ -2386,30 +2386,41 @@ void validateMethodCall(Module mod, MethodCall call)
     {
         struct_ = r.rendering;
 
+        // TODO: shouldn't need to render the method before checking if it
+        // needed to be rendered
+        Method newRendering = null;
+
+        foreach (method; r.structTemplate.methods)
+        {
+            if (method.signature.name == call.functionName)
+            {
+                newRendering = r.renderMethod(method);
+                break;
+            }
+        }
+
+        if (newRendering is null)
+        {
+            throw new Exception("Method template not found");
+        }
+
+        // See if the method rendering already exists
         foreach (method; r.rendering.methods)
         {
-            if (method.methodSignature.matchMethodCall(call))
+            if (method.signature.name == newRendering.signature.name)
             {
                 call.methodSignature = method.methodSignature;
                 break;
             }
         }
 
-        // Render required
+        // If the method rendering doesn't already exist, add it
         if (call.methodSignature is null)
         {
-            foreach (method; r.structTemplate.methods)
-            {
-                if (method.signature.name == call.functionName)
-                {
-                    auto newRendering = r.renderMethod(method);
-                    completeFunction(mod, newRendering.signature);
-                    validateFunction(mod, newRendering);
-                    call.methodSignature = newRendering.methodSignature;
-                    r.rendering.methods ~= newRendering;
-                    break;
-                }
-            }
+            completeFunction(mod, newRendering.signature);
+            validateFunction(mod, newRendering);
+            call.methodSignature = newRendering.methodSignature;
+            r.rendering.methods ~= newRendering;
         }
     }
 
