@@ -356,6 +356,16 @@ bool isCallerPreserved(Register r)
            r == Register.R11;
 }
 
+bool isCalleePreserved(Register r)
+{
+    return r == Register.RBX ||
+           //r == Register.RBP ||
+           r == Register.R12 ||
+           r == Register.R13 ||
+           r == Register.R14 ||
+           r == Register.R15;
+}
+
 string renderStringLiteralName(ulong index)
 {
     return format("string_literal_%d", index);
@@ -376,6 +386,8 @@ class GeneratorState
     string[] externs;
     string[] stringLiterals;
 
+    Register[] usedByFunction;
+
     int nextTempIndex = 0;
 
     this(Module mod)
@@ -383,9 +395,25 @@ class GeneratorState
         this.mod = mod;
     }
 
+    // Mark a register as used by some part of the currently generating
+    // function
+    void markUsed(Register r)
+    {
+        foreach (reg; this.usedByFunction)
+        {
+            if (reg == r)
+            {
+                return;
+            }
+        }
+
+        this.usedByFunction ~= r;
+    }
+
     // Prevent register from being used for temps/locals until unreserved.
     void reserve(Register r)
     {
+        this.markUsed(r);
         this.reserved ~= r;
     }
 
@@ -557,7 +585,9 @@ class GeneratorState
     Local addTemp(Type type)
     {
         auto ret = new Local(type, format("temp%d", this.nextTempIndex++));
-        ret.data = [new RegisterLocation(this.findFreeRegister())];
+        auto register = this.findFreeRegister();
+        this.markUsed(register);
+        ret.data = [new RegisterLocation(register)];
 
         this.temps ~= ret;
 
@@ -810,6 +840,8 @@ string renderName(FunctionSignature sig)
 
 void generateFunction(GeneratorState state, Function func)
 {
+    state.usedByFunction = [];
+
     int stackOffset = 0;
 
     // Detect main function with argc and argv
@@ -944,7 +976,21 @@ void generateFunction(GeneratorState state, Function func)
         }
     }
 
+    // Remember the beginning of the function body so we can insert push
+    // instructions to save any callee-preserved registers used in this
+    // function.
+    auto bodyStart = state.output.length;
+
     generateBlock(state, func.block);
+
+    // Save and restore callee-preserved registers
+    foreach (r; state.usedByFunction)
+    {
+        if (isCalleePreserved(r))
+        {
+            state.output.insertInPlace(bodyStart, format("    push %s", r));
+        }
+    }
 
     state.locals.length = 0;
     state.temps.length = 0;
@@ -1442,6 +1488,17 @@ void generateReturn(GeneratorState state, Return r)
         }
 
         copyData(state, local.data, [Register.RAX, Register.RDX], false);
+    }
+
+    // Restore callee-preserved registers
+    for (int i = cast(int)state.usedByFunction.length - 1; i >= 0; i--)
+    {
+        auto reg = state.usedByFunction[i];
+
+        if (isCalleePreserved(reg))
+        {
+            state.render(format("    pop %s", reg));
+        }
     }
 
     state.render("    mov rsp, rbp");
