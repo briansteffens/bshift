@@ -3,6 +3,7 @@ import std.format;
 import std.conv;
 import std.array;
 import std.file;
+import std.algorithm;
 
 import globals;
 import lexer;
@@ -2137,7 +2138,10 @@ StatementBase[] validateCleanup(Module mod, StatementBase parent,
                     continue;
                 }
 
-                if (sig.name != "destruct")
+                // TODO: we should still know at this point if a function is
+                // called template - mangling should happen later, probably in
+                // the generator.
+                if (!sig.name.canFind("destruct"))
                 {
                     continue;
                 }
@@ -2337,6 +2341,25 @@ Type completeType(Module mod, Type type)
                 // Make a new rendering for this template
                 rendering = st.render(incomplete.typeParameters);
                 validateStruct(mod, rendering.rendering);
+
+                // Render destruct if it exists
+                Method destructRendering = null;
+
+                foreach (method; rendering.structTemplate.methods)
+                {
+                    if (method.signature.name == "destruct")
+                    {
+                        destructRendering = rendering.renderMethod(method);
+                        break;
+                    }
+                }
+
+                if (destructRendering !is null)
+                {
+                    completeFunction(mod, destructRendering.signature);
+                    validateFunction(mod, destructRendering);
+                    rendering.rendering.methods ~= destructRendering;
+                }
             }
 
             ret = new StructType(rendering.rendering);
