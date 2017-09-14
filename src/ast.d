@@ -348,6 +348,9 @@ abstract class Node : InsideFunction
     Type           type;
     InsideFunction parent;
 
+    // TODO: this sucks, shouldn't need this.
+    string         tag;
+
     Node[] childNodes()
     {
         return [];
@@ -1779,6 +1782,10 @@ class FunctionSignature
     TypeSignature[] parameters;
     bool variadic;
 
+    // For generating return variables and other things that can't clash within
+    // a function.
+    int nextGeneratedIndex;
+
     this(Type returnType, string name, TypeSignature[] parameters,
          bool variadic)
     {
@@ -1786,6 +1793,7 @@ class FunctionSignature
         this.name = name;
         this.parameters = parameters;
         this.variadic = variadic;
+        this.nextGeneratedIndex = 0;
     }
 
     FunctionSignature clone()

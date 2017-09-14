@@ -2207,8 +2207,35 @@ ValidationResult validateStatement(Module mod, StatementBase st)
     auto retSt = cast(Return)st;
     if (retSt !is null)
     {
+        // Generate an unused variable name to store the temporary return value
+        // TODO: pretty gross; put these in a totally different namespace or
+        // maybe have the generator phase work this out?
+
+        // Save returned expression in a local
+        TypeSignature sig;
+        if (retSt.expression !is null)
+        {
+            auto name = format("__ret%d",
+                    retSt.containingFunction().nextGeneratedIndex++);
+            auto type = retSt.containingFunction().returnType;
+            sig = new TypeSignature(type, name);
+            auto retVar = new LocalDeclaration(retSt.line, sig,
+                    retSt.expression);
+            retVar.parent = retSt.parent;
+            validateStatement(mod, retVar);
+            ret.injectBefore ~= retVar;
+        }
+
+        // Process things like destruct calls
         ret.injectBefore ~= validateCleanup(mod, st,
                 previousStatementsAll(mod, st));
+
+        // Return the local
+        if (retSt.expression !is null)
+        {
+            retSt.expression = new Binding(sig, sig.name);
+            retSt.expression.parent = retSt;
+        }
     }
 
     auto block = cast(Block)st;
@@ -2455,11 +2482,19 @@ void validateMethodCall(Module mod, MethodCall call)
     call.retype();
 
     // Inject 'this' argument
-    auto thisArg = new Reference(call.container);
-    thisArg.retype();
-    call.parameters = thisArg ~ call.parameters;
+    // TODO: shouldn't need to guard this, it shouldn't be called multiple
+    // times
+    if (call.parameters.length == 0 || call.parameters[0].tag != "this")
+    {
+        auto thisArg = new Reference(call.container);
+        thisArg.tag = "this";
+        thisArg.retype();
+        call.parameters = thisArg ~ call.parameters;
+        thisArg.parent = call;
+    }
 }
 
+// TODO: this seems to be getting called multiple times for the same call
 void validateCall(Module mod, Call call)
 {
     // Search function templates
@@ -2492,7 +2527,8 @@ void validateCall(Module mod, Call call)
             }
 
             // Found a matching rendering
-            throw new Exception("Matching rendering");
+            call.targetSignature = r.rendering.signature;
+            break templateLoop;
         }
 
         // Make a new rendering for this template
