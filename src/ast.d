@@ -86,15 +86,17 @@ abstract class Type
 // not yet been parsed or linked up to the AST.
 class IncompleteType : Type
 {
+    string moduleName;
     string name;
     Type[] typeParameters;
 
     this(string name, Type[] typeParameters, bool pointer=false,
-            Node elements=null)
+            Node elements=null, string moduleName=null)
     {
         super(pointer=pointer, elements=elements);
         this.name = name;
         this.typeParameters = typeParameters;
+        this.moduleName = moduleName;
     }
 
     override string baseTypeToString()
@@ -121,13 +123,20 @@ class IncompleteType : Type
             typeParams = "<" ~ typeParams ~ ">";
         }
 
-        return format("Incomplete(%s%s)", super.toString(), typeParams);
+        string mod = "";
+        if (this.moduleName !is null)
+        {
+            mod = moduleName ~ "::";
+        }
+
+        return format("Incomplete(%s%s%s)", mod, super.toString(), typeParams);
     }
 
     override Type clone()
     {
         return new IncompleteType(this.name, this.typeParameters,
-                pointer=this.pointer, elements=this.elements);
+                pointer=this.pointer, elements=this.elements,
+                moduleName=this.moduleName);
     }
 
     override bool compare(Type other)
@@ -2059,14 +2068,16 @@ class Import
     FunctionSignature[] functions;
     FunctionTemplate[] functionTemplates;
     Struct[] structs;
+    StructTemplate[] structTemplates;
 
     this(string filename, string name, FunctionSignature[] functions,
-            FunctionTemplate[] functionTemplates)
+            FunctionTemplate[] functionTemplates, Struct[] structs)
     {
         this.filename = filename;
         this.name = name;
         this.functions = functions;
         this.functionTemplates = functionTemplates;
+        this.structs = structs;
     }
 
     override string toString()

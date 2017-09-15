@@ -245,7 +245,8 @@ Import parseImport(TokenFeed tokens)
         }
     }
 
-    return new Import(filename, name, signatures, functionTemplates);
+    return new Import(filename, name, signatures, functionTemplates,
+            parsed.structs);
 }
 
 Module parse(string name, Token[] tokenArray)
@@ -587,12 +588,12 @@ MethodSignature parseMethodSignature(TokenFeed tokens)
     auto returnType = parseType(tokens);
 
     // Container type
-    if (!tokens.next())
+    if (!tokens.next() || tokens.current().type != TokenType.Word)
     {
         return null;
     }
 
-    auto containerType = parseType(tokens);
+    auto containerType = new IncompleteType(tokens.current().value, []);
 
     // Member operator ::
     if (!tokens.next() || !tokens.current().match(TokenType.Symbol, "::"))
@@ -965,14 +966,28 @@ Type parseType(TokenFeed tokens)
         return null;
     }
 
-    // Read type name
+    // Read either the module or type name
     if (tokens.current().type != TokenType.Word)
     {
         return rewind();
     }
 
     auto current = tokens.current();
-    auto name = current.value;
+    string moduleName = null;
+    string typeName = tokens.current().value;
+
+    // Detect scope operator, which means we have a module and a type name
+    if (tokens.peek(1).match(TokenType.Symbol, "::"))
+    {
+        if (!tokens.next() || !tokens.next() ||
+            tokens.current().type != TokenType.Word)
+        {
+            return rewind();
+        }
+
+        moduleName = typeName;
+        typeName = tokens.current().value;
+    }
 
     // Read type parameters
     auto typeParams = parseConcreteTypeParams(tokens);
@@ -1005,8 +1020,8 @@ Type parseType(TokenFeed tokens)
         pointer = true;
     }
 
-    return new IncompleteType(name, typeParams, pointer=pointer,
-            elements=elements);
+    return new IncompleteType(typeName, typeParams, pointer=pointer,
+            elements=elements, moduleName=moduleName);
 }
 
 // Try to parse a type signature (like "u64* x"), returning null if it can't
@@ -2403,6 +2418,28 @@ Type completeType(Module mod, Type type)
             if (struct_.name == incomplete.name)
             {
                 ret = new StructType(struct_);
+                break;
+            }
+        }
+    }
+
+    // Try imported structs
+    if (ret is null && incomplete.moduleName !is null)
+    {
+        importLoop: foreach (imp; mod.imports)
+        {
+            if (imp.name != incomplete.moduleName)
+            {
+                continue;
+            }
+
+            foreach (s; imp.structs)
+            {
+                if (s.name == incomplete.name)
+                {
+                    ret = new StructType(s);
+                    break importLoop;
+                }
             }
         }
     }
