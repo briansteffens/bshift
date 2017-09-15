@@ -17,28 +17,20 @@ void vector::init()
 
 void vector::add(T item)
 {
+    // Double the array size if we're out of space
     if (this.length >= this.allocated)
     {
         this.allocated = this.allocated * 2;
         this.data = heap::reallocate(this.data, sizeof(T) * this.allocated);
     }
 
-    // TODO: allow indexing pointers
-    //this.data[this.length] = item;
-
-    T val = item;
-    u8* ptr = this.data + this.length * sizeof(T);
-    memory::copy(&val, ptr, sizeof(T));
-
+    this.data[this.length] = item;
     this.length = this.length + 1;
 }
 
 T vector::get(u64 index)
 {
-    u8* ptr = this.data + index * sizeof(T);
-    T ret;
-    memory::copy(ptr, &ret, sizeof(T));
-    return ret;
+    return this.data[index];
 }
 
 void vector::destruct()

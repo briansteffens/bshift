@@ -1885,6 +1885,23 @@ class ExpressionParser
             return true;
         }
 
+        // Hack to allow indexing a struct member
+        if (current.value == "[")
+        {
+            while (this.operators.len() > 0)
+            {
+                auto topOperator = this.operators.peek(0);
+
+                if (!topOperator.isToken() ||
+                    !topOperator.token.match(TokenType.Symbol, "."))
+                {
+                    break;
+                }
+
+                this.consume();
+            }
+        }
+
         // Handle end of indexer
         if (current.value == "]")
         {
