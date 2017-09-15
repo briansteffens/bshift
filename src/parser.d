@@ -186,7 +186,7 @@ string[] possibleImportPaths(string moduleName)
     return ret;
 }
 
-Import parseImport(TokenFeed tokens)
+Import[] parseImport(TokenFeed tokens)
 {
     auto current = tokens.current();
     if (!current.match(TokenType.Word, "import"))
@@ -245,8 +245,8 @@ Import parseImport(TokenFeed tokens)
         }
     }
 
-    return new Import(filename, name, signatures, functionTemplates,
-            parsed.structs);
+    return [new Import(filename, name, signatures, functionTemplates,
+            parsed.structs, parsed.structTemplates)] ~ parsed.imports;
 }
 
 Module parse(string name, Token[] tokenArray)
@@ -264,11 +264,14 @@ Module parse(string name, Token[] tokenArray)
     while (tokens.next())
     {
         current = tokens.current();
-        auto imp = parseImport(tokens);
-        if (imp !is null)
+        auto imps = parseImport(tokens);
+        if (imps !is null)
         {
-            imports ~= imp;
-            functions ~= imp.functionTemplates;
+            foreach (imp; imps)
+            {
+                imports ~= imp;
+                functions ~= imp.functionTemplates;
+            }
             continue;
         }
 
@@ -383,15 +386,15 @@ Module parse(string name, Token[] tokenArray)
         }
     }
 
-    try
-    {
+    //try
+    //{
         validate(ret);
-    }
-    catch (Exception e)
-    {
-        throw new ProgrammerException(e.msg, current.value, current.line,
-                                      current.lineOffset, e.file, e.line);
-    }
+    //}
+    //catch (Exception e)
+    //{
+    //    throw new ProgrammerException(e.msg, current.value, current.line,
+      //                                current.lineOffset, e.file, e.line);
+    //}
 
     return ret;
 }
@@ -2337,13 +2340,19 @@ Type completeType(Module mod, Type type)
     // Try struct templates
     if (ret is null)
     {
-        foreach (st; mod.structTemplates)
-        {
-            if (st.name != incomplete.name)
-            {
-                continue;
-            }
+        StructTemplate st = null;
 
+        try
+        {
+            st = mod.findStructTemplate(incomplete.moduleName,
+                    incomplete.name);
+        }
+        catch (NotFoundException)
+        {
+        }
+
+        if (st !is null)
+        {
             if (st.typeParameters.length != incomplete.typeParameters.length)
             {
                 throw new Exception("Mismatched template parameters");
@@ -2405,8 +2414,6 @@ Type completeType(Module mod, Type type)
             }
 
             ret = new StructType(rendering.rendering);
-
-            break;
         }
     }
 
@@ -2422,6 +2429,9 @@ Type completeType(Module mod, Type type)
             }
         }
     }
+
+    // Try imported struct templates
+
 
     // Try imported structs
     if (ret is null && incomplete.moduleName !is null)

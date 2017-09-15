@@ -750,6 +750,21 @@ string[] generate(Module mod)
         }
     }
 
+    // Generate imported struct template methods
+    foreach (imp; mod.imports)
+    {
+        foreach (st; imp.structTemplates)
+        {
+            foreach (r; st.renderings)
+            {
+                foreach (m; r.rendering.methods)
+                {
+                    generateFunction(state, m);
+                }
+            }
+        }
+    }
+
     // Bootstrap the main function if there is one
     if (mod.functionExists("main"))
     {
@@ -2557,7 +2572,8 @@ Local generateCall(GeneratorState state, Call call)
     state.render(format("    call %s", renderName(func)));
 
     // Make sure the function gets listed as an extern
-    if (func.mod != state.mod)
+    // TODO: string matching to find a template rendering is bad
+    if (func.mod != state.mod && !func.name.startsWith("template_"))
     {
         state.addExtern(renderName(func));
     }

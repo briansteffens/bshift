@@ -15,6 +15,14 @@ enum Primitive
     Auto,
 }
 
+class NotFoundException : Exception
+{
+    this(string msg)
+    {
+        super(msg);
+    }
+}
+
 abstract class Type
 {
     bool pointer;
@@ -1093,6 +1101,7 @@ class Struct
 
     MethodSignature findMethod(MethodCall call)
     {
+        writeln(this);
         foreach (method; this.methods)
         {
             if (method.methodSignature.name == call.functionName)
@@ -2071,13 +2080,15 @@ class Import
     StructTemplate[] structTemplates;
 
     this(string filename, string name, FunctionSignature[] functions,
-            FunctionTemplate[] functionTemplates, Struct[] structs)
+            FunctionTemplate[] functionTemplates, Struct[] structs,
+            StructTemplate[] structTemplates)
     {
         this.filename = filename;
         this.name = name;
         this.functions = functions;
         this.functionTemplates = functionTemplates;
         this.structs = structs;
+        this.structTemplates = structTemplates;
     }
 
     override string toString()
@@ -2097,6 +2108,11 @@ class Import
         foreach (s; this.structs)
         {
             ret ~= format("    %s", s);
+        }
+
+        foreach (st; this.structTemplates)
+        {
+            ret ~= format("    %s", st);
         }
 
         return ret;
@@ -2337,7 +2353,7 @@ class Module
             }
         }
 
-        throw new Exception(format("Import %s not found", name));
+        throw new NotFoundException(format("Import %s not found", name));
     }
 
     // If the given struct is a rendering of a struct template, find that
@@ -2355,6 +2371,41 @@ class Module
             }
         }
 
+        // Look in imports
+        foreach (imp; this.imports)
+        {
+            foreach (st; imp.structTemplates)
+            {
+                foreach (r; st.renderings)
+                {
+                    if (r.rendering is struct_)
+                    {
+                        return r;
+                    }
+                }
+            }
+        }
+
         return null;
+    }
+
+    StructTemplate findStructTemplate(string moduleName, string structName)
+    {
+        StructTemplate[] search = this.structTemplates;
+
+        if (moduleName !is null)
+        {
+            search = this.findImport(moduleName).structTemplates;
+        }
+
+        foreach (st; search)
+        {
+            if (st.name == structName)
+            {
+                return st;
+            }
+        }
+
+        throw new NotFoundException("Struct not found");
     }
 }
