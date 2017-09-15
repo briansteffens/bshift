@@ -1,0 +1,33 @@
+import vector;
+
+u64 main()
+{
+    vector::vector<u64> v;
+
+    v.init();
+
+    v.add(3);
+    v.add(7);
+    v.add(9);
+
+    u64 sum = 0;
+    u64 i = 0;
+    while (i < v.length)
+    {
+        sum = sum + v.get(i);
+        i = i + 1;
+    }
+
+    return sum;
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "add some data, then retrieve it",
+            "expect_status": "19"
+        }
+    ]
+}

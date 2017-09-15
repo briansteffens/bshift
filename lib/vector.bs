@@ -1,0 +1,47 @@
+import heap;
+import memory;
+
+struct vector<T>
+{
+    T* data;
+    u64 allocated;
+    u64 length;
+}
+
+void vector::init()
+{
+    this.length = 0;
+    this.allocated = 8;
+    this.data = heap::allocate(sizeof(T) * this.allocated);
+}
+
+void vector::add(T item)
+{
+    if (this.length >= this.allocated)
+    {
+        this.allocated = this.allocated * 2;
+        this.data = heap::reallocate(sizeof(T) * this.allocated);
+    }
+
+    // TODO: allow indexing pointers
+    //this.data[this.length] = item;
+
+    T val = item;
+    u8* ptr = this.data + this.length * sizeof(T);
+    memory::copy(&val, ptr, sizeof(T));
+
+    this.length = this.length + 1;
+}
+
+T vector::get(u64 index)
+{
+    u8* ptr = this.data + index * sizeof(T);
+    T ret;
+    memory::copy(ptr, &ret, sizeof(T));
+    return ret;
+}
+
+void vector::destruct()
+{
+    heap::free(this.data);
+}
