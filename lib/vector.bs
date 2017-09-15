@@ -20,7 +20,7 @@ void vector::add(T item)
     if (this.length >= this.allocated)
     {
         this.allocated = this.allocated * 2;
-        this.data = heap::reallocate(sizeof(T) * this.allocated);
+        this.data = heap::reallocate(this.data, sizeof(T) * this.allocated);
     }
 
     // TODO: allow indexing pointers
