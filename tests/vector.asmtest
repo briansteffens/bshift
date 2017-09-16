@@ -2,8 +2,7 @@ import vector;
 
 u64 add_and_get()
 {
-    vector::vector<u64> v;
-    v.init();
+    vector::vector<u64> v();
 
     v.add(3);
     v.add(7);
@@ -13,8 +12,7 @@ u64 add_and_get()
 
 u64 add_length()
 {
-    vector::vector<u64> v;
-    v.init();
+    vector::vector<u64> v();
 
     if (v.length != 0)
     {
@@ -40,8 +38,7 @@ u64 add_length()
 
 u64 capacity_double()
 {
-    vector::vector<u64> v;
-    v.init();
+    vector::vector<u64> v();
 
     if (v.allocated != 8)
     {

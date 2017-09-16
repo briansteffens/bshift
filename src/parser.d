@@ -949,9 +949,31 @@ LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
 
     // Try to parse the rvalue if there is one
     Node expression = null;
+
+    // Assignment
     if (current.match(TokenType.Symbol, "="))
     {
         expression = new ExpressionParser(tokens).run();
+    }
+    // Constructor
+    else if (current.match(TokenType.Symbol, "("))
+    {
+        // Kinda weird - rewind so the expression parser sees the local name.
+        // So "point p(3, 7)" gets parsed as the call "p(3, 7)". Then we can
+        // replace "p" with the real constructor to be called. Just hacking
+        // around the expression parser which is getting pretty due for a
+        // refactor.
+        tokens.index -= 2;
+        auto parsed = new ExpressionParser(tokens).run();
+        auto call = cast(Call)parsed;
+        if (call is null)
+        {
+            throw new Exception("Bad constructor call");
+        }
+        auto container = new Binding(typeSignature, call.functionName);
+        auto constructor = new MethodCall(container, "construct",
+                call.parameters);
+        expression = constructor;
     }
     else if (!current.match(TokenType.Symbol, ";"))
     {

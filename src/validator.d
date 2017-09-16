@@ -1,5 +1,6 @@
 import std.format;
 import std.algorithm;
+import std.stdio;
 
 import ast;
 
@@ -27,6 +28,9 @@ class ValidationResult
 {
     // Inject these statements before the statement being validated
     StatementBase[] injectBefore;
+
+    // Inject these statements after the statement being validated
+    StatementBase[] injectAfter;
 
     // Remove the thing being validated
     bool remove;
@@ -177,12 +181,29 @@ ValidationResult validateStatement(Module mod, StatementBase st)
 {
     auto ret = new ValidationResult();
 
+    // Break out a constructor call if present
+    MethodCall constructorCall = null;
+    auto local = cast(LocalDeclaration)st;
+    if (local !is null)
+    {
+        constructorCall = cast(MethodCall)local.value;
+
+        if (constructorCall !is null &&
+            constructorCall.functionName == "construct")
+        {
+            local.value = null;
+        }
+        else
+        {
+            constructorCall = null;
+        }
+    }
+
     foreach (childNode; st.childNodes)
     {
         validateNode(mod, childNode);
     }
 
-    auto local = cast(LocalDeclaration)st;
     if (local !is null)
     {
         local.signature.type = completeType(mod, local.signature.type);
@@ -197,6 +218,25 @@ ValidationResult validateStatement(Module mod, StatementBase st)
 
             local.signature.type = local.value.type;
         }
+    }
+
+    // Insert the constructor call (if it exists) after the declaration
+    // TODO: use a tag or something instead of string checking?
+    if (constructorCall !is null)
+    {
+        auto constructorSt = new Statement(local.line, constructorCall);
+
+        auto binding = cast(Binding)constructorCall.container;
+        if (binding is null)
+        {
+            throw new Exception("Expected a struct");
+        }
+
+        binding.local = local.signature;
+
+        validateStatement(mod, constructorSt);
+
+        ret.injectAfter ~= constructorSt;
     }
 
     auto retSt = cast(Return)st;
@@ -256,6 +296,8 @@ ValidationResult validateStatement(Module mod, StatementBase st)
             {
                 newChildren ~= childStatement;
             }
+
+            newChildren ~= res.injectAfter;
         }
 
         block.statements = newChildren;
@@ -597,7 +639,10 @@ void validateNode(Module mod, Node node)
     auto binding = cast(Binding)node;
     if (binding !is null)
     {
-        binding.local = findLocal(mod, binding, binding.name);
+        if (binding.local is null)
+        {
+            binding.local = findLocal(mod, binding, binding.name);
+        }
         node.retype();
         return;
     }

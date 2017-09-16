@@ -8,7 +8,7 @@ struct vector<T>
     u64 length;
 }
 
-void vector::init()
+void vector::construct()
 {
     this.length = 0;
     this.allocated = 8;
