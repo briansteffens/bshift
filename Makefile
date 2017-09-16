@@ -1,7 +1,7 @@
 .PHONY: bshift test clean
 default: bin/bshift
 
-bin/bshift: src/main.d src/globals.d src/lexer.d src/ast.d src/parser.d src/generator.d
+bin/bshift: src/main.d src/globals.d src/lexer.d src/ast.d src/parser.d src/validator.d src/generator.d
 	ldc -g -of=bin/bshift $^
 
 install:
