@@ -8,3 +8,5 @@ bin/bshift
 bin/bshift.o
 lib/*.asm
 lib/*.o
+test*.bs
+show
