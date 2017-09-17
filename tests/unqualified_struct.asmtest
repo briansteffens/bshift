@@ -1,0 +1,22 @@
+import unqualified point;
+
+u64 main()
+{
+    point p;
+
+    p.x = 3;
+    p.y = 7;
+
+    return p.x + p.y;
+}
+
+-----
+
+{
+    "cases": [
+        {
+            "name": "import struct without qualification",
+            "expect_status": "10"
+        }
+    ]
+}

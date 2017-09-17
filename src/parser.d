@@ -189,13 +189,36 @@ string[] possibleImportPaths(string moduleName)
 
 Import[] parseImport(TokenFeed tokens)
 {
-    auto current = tokens.current();
-    if (!current.match(TokenType.Word, "import"))
+    auto rewindTarget = tokens.index;
+    Import[] rewind()
     {
+        tokens.index = rewindTarget;
         return null;
     }
 
-    if (!tokens.next() || current.type != TokenType.Word)
+    auto current = tokens.current();
+    if (!current.match(TokenType.Word, "import"))
+    {
+        return rewind();
+    }
+
+    if (!tokens.next() || tokens.current().type != TokenType.Word)
+    {
+        return rewind();
+    }
+
+    bool unqualified = false;
+    if (tokens.current().value == "unqualified")
+    {
+        unqualified = true;
+
+        if (!tokens.next())
+        {
+            return rewind();
+        }
+    }
+
+    if (current.type != TokenType.Word)
     {
         throw new ProgrammerException("Expected a module name to import near",
             current.value, current.line, current.lineOffset);
@@ -270,7 +293,8 @@ Import[] parseImport(TokenFeed tokens)
     }
 
     return [new Import(filename, name, signatures, functionTemplates,
-            structs, structTemplates)] ~ parsed.imports;
+            structs, structTemplates, unqualified=unqualified)]
+           ~ parsed.imports;
 }
 
 Module parse(string name, Token[] tokenArray)
@@ -288,14 +312,11 @@ Module parse(string name, Token[] tokenArray)
     while (tokens.next())
     {
         current = tokens.current();
+
         auto imps = parseImport(tokens);
         if (imps !is null)
         {
-            foreach (imp; imps)
-            {
-                imports ~= imp;
-                functions ~= imp.functionTemplates;
-            }
+            imports ~= imps;
             continue;
         }
 

@@ -2089,9 +2089,13 @@ class Import
     Struct[] structs;
     StructTemplate[] structTemplates;
 
+    // Unqualified imports do not require a module name and scope operator to
+    // references their exports
+    bool unqualified;
+
     this(string filename, string name, FunctionSignature[] functions,
             FunctionTemplate[] functionTemplates, Struct[] structs,
-            StructTemplate[] structTemplates)
+            StructTemplate[] structTemplates, bool unqualified=false)
     {
         this.filename = filename;
         this.name = name;
@@ -2099,6 +2103,7 @@ class Import
         this.functionTemplates = functionTemplates;
         this.structs = structs;
         this.structTemplates = structTemplates;
+        this.unqualified = unqualified;
     }
 
     override string toString()
@@ -2277,6 +2282,21 @@ class Module
         return ret;
     }
 
+    FunctionTemplate[] unqualifiedFunctionTemplates()
+    {
+        FunctionTemplate[] ret = this.justFunctionTemplates();
+
+        foreach (imp; this.imports)
+        {
+            if (imp.unqualified)
+            {
+                ret ~= imp.functionTemplates;
+            }
+        }
+
+        return ret;
+    }
+
     bool functionExists(string name)
     {
         foreach (func; this.justFunctions())
@@ -2344,6 +2364,18 @@ class Module
                 }
             }
 
+            // Search unqualified imports
+            foreach (imp; this.imports)
+            {
+                foreach (f; imp.functions)
+                {
+                    if (f.name == call.functionName)
+                    {
+                        return f;
+                    }
+                }
+            }
+
             throw new Exception(format("Function %s not found",
                     call.functionName));
         }
@@ -2403,9 +2435,21 @@ class Module
     {
         StructTemplate[] search = this.structTemplates;
 
+        // Find qualified import
         if (moduleName !is null)
         {
             search = this.findImport(moduleName).structTemplates;
+        }
+        // Find unqualified imports
+        else
+        {
+            foreach (imp; this.imports)
+            {
+                if (imp.unqualified)
+                {
+                    search ~= imp.structTemplates;
+                }
+            }
         }
 
         foreach (st; search)

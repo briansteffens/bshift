@@ -738,6 +738,18 @@ string[] generate(Module mod)
         }
     }
 
+    // Generate imported function template renderings
+    foreach (imp; mod.imports)
+    {
+        foreach (ft; imp.functionTemplates)
+        {
+            foreach (r; ft.renderings)
+            {
+                generateFunction(state, r.rendering);
+            }
+        }
+    }
+
     // Generate struct template methods
     foreach (st; mod.structTemplates)
     {

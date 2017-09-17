@@ -436,32 +436,24 @@ Type completeType(Module mod, Type type)
         }
     }
 
-    // Try structs
-    if (ret is null)
+    // Try structs from this module
+    if (ret is null && incomplete.moduleName is null)
     {
-        foreach (struct_; mod.structs)
+        foreach (s; mod.structs)
         {
-            if (struct_.name == incomplete.name)
+            if (s.name == incomplete.name)
             {
-                ret = new StructType(struct_);
+                ret = new StructType(s);
                 break;
             }
         }
     }
 
-    // Try imported struct templates
-
-
-    // Try imported structs
-    if (ret is null && incomplete.moduleName !is null)
+    // Try imported unqualified structs
+    if (ret is null && incomplete.moduleName is null)
     {
         importLoop: foreach (imp; mod.imports)
         {
-            if (imp.name != incomplete.moduleName)
-            {
-                continue;
-            }
-
             foreach (s; imp.structs)
             {
                 if (s.name == incomplete.name)
@@ -469,6 +461,21 @@ Type completeType(Module mod, Type type)
                     ret = new StructType(s);
                     break importLoop;
                 }
+            }
+        }
+    }
+
+    // Try imported qualified structs
+    if (ret is null && incomplete.moduleName !is null)
+    {
+        auto imp = mod.findImport(incomplete.moduleName);
+
+        foreach (s; imp.structs)
+        {
+            if (s.name == incomplete.name)
+            {
+                ret = new StructType(s);
+                break;
             }
         }
     }
@@ -564,7 +571,20 @@ void validateMethodCall(Module mod, MethodCall call)
 void validateCall(Module mod, Call call)
 {
     // Search function templates
-    templateLoop: foreach (ft; mod.justFunctionTemplates())
+    FunctionTemplate[] functionTemplates;
+
+    // No module scope: search current module and unqualified imports
+    if (call.moduleName is null)
+    {
+        functionTemplates = mod.unqualifiedFunctionTemplates();
+    }
+    // Module scope: search the named module only
+    else
+    {
+        functionTemplates = mod.findImport(call.moduleName).functionTemplates;
+    }
+
+    templateLoop: foreach (ft; functionTemplates)
     {
         if (ft.signature.name != call.functionName)
             continue;
