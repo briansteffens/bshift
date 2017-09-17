@@ -1,6 +1,6 @@
 import cstring;
 
-u64 print(u8* fmt, ...)
+export u64 print(u8* fmt, ...)
 {
     u8[256] buffer;
     u8* out = &buffer;

@@ -1,7 +1,7 @@
 import heap;
 import memory;
 
-struct vector<T>
+export struct vector<T>
 {
     T* data;
     u64 allocated;

@@ -233,6 +233,11 @@ Import[] parseImport(TokenFeed tokens)
     FunctionSignature[] signatures;
     foreach (func; parsed.functions)
     {
+        if (!func.signature.exported)
+        {
+            continue;
+        }
+
         // Extract entire function templates but only signatures for regular
         // functions.
         auto ft = cast(FunctionTemplate)func;
@@ -246,8 +251,26 @@ Import[] parseImport(TokenFeed tokens)
         }
     }
 
+    Struct[] structs;
+    foreach (s; parsed.structs)
+    {
+        if (s.exported)
+        {
+            structs ~= s;
+        }
+    }
+
+    StructTemplate[] structTemplates;
+    foreach (st; parsed.structTemplates)
+    {
+        if (st.exported)
+        {
+            structTemplates ~= st;
+        }
+    }
+
     return [new Import(filename, name, signatures, functionTemplates,
-            parsed.structs, parsed.structTemplates)] ~ parsed.imports;
+            structs, structTemplates)] ~ parsed.imports;
 }
 
 Module parse(string name, Token[] tokenArray)
@@ -465,9 +488,26 @@ TypeSignature[] parseStructMembers(TokenFeed tokens)
 
 Struct parseStruct(TokenFeed tokens)
 {
+    auto rewindTarget = tokens.index;
+    Struct rewind()
+    {
+        tokens.index = rewindTarget;
+        return null;
+    }
+
+    bool exported = false;
+    if (tokens.current().match(TokenType.Word, "export"))
+    {
+        exported = true;
+        if (!tokens.next())
+        {
+            return rewind();
+        }
+    }
+
     if (!tokens.current().match(TokenType.Word, "struct"))
     {
-        return null;
+        return rewind();
     }
 
     if (!tokens.next() || tokens.current().type != TokenType.Word)
@@ -480,7 +520,7 @@ Struct parseStruct(TokenFeed tokens)
     // Parse struct members
     auto members = parseStructMembers(tokens);
 
-    return new Struct(name, members);
+    return new Struct(name, members, exported=exported);
 }
 
 StructTemplate parseStructTemplate(TokenFeed tokens)
@@ -490,6 +530,16 @@ StructTemplate parseStructTemplate(TokenFeed tokens)
     {
         tokens.index = rewindTarget;
         return null;
+    }
+
+    bool exported = false;
+    if (tokens.current().match(TokenType.Word, "export"))
+    {
+        exported = true;
+        if (!tokens.next())
+        {
+            return rewind();
+        }
     }
 
     if (!tokens.current().match(TokenType.Word, "struct"))
@@ -515,7 +565,7 @@ StructTemplate parseStructTemplate(TokenFeed tokens)
     // Parse struct members
     auto members = parseStructMembers(tokens);
 
-    return new StructTemplate(name, typeParams, members);
+    return new StructTemplate(name, typeParams, members, exported=exported);
 }
 
 FunctionSignature parseExtern(TokenFeed tokens)
@@ -544,14 +594,23 @@ FunctionSignature parseExtern(TokenFeed tokens)
 FunctionSignature parseFunctionSignature(TokenFeed tokens,
         TypeParameter[]* typeParams)
 {
-    // Return value
-    auto token = tokens.current();
-
-    if (token.type != TokenType.Word)
+    if (tokens.current().type != TokenType.Word)
     {
         return null;
     }
 
+    // Check for 'export' keyword
+    bool exported = false;
+    if (tokens.current().value == "export")
+    {
+        exported = true;
+        if (!tokens.next())
+        {
+            return null;
+        }
+    }
+
+    // Parse the return value
     auto type = parseType(tokens);
 
     // Function name
@@ -576,7 +635,8 @@ FunctionSignature parseFunctionSignature(TokenFeed tokens,
         return null;
     }
 
-    return new FunctionSignature(type, name, params, variadic);
+    return new FunctionSignature(type, name, params, variadic,
+            exported=exported);
 }
 
 MethodSignature parseMethodSignature(TokenFeed tokens)

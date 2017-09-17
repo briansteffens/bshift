@@ -1,4 +1,4 @@
-u64 length(u8* str)
+export u64 length(u8* str)
 {
     u64 ret = 0;
 
@@ -11,7 +11,7 @@ u64 length(u8* str)
     return ret;
 }
 
-u8* find(u8* haystack, u8* needle)
+export u8* find(u8* haystack, u8* needle)
 {
     while (*haystack != 0)
     {
@@ -45,7 +45,7 @@ u8* find(u8* haystack, u8* needle)
     return 0;
 }
 
-bool compare(u8* source, u8* destination)
+export bool compare(u8* source, u8* destination)
 {
     while (*source != 0 && *destination != 0)
     {
@@ -61,7 +61,7 @@ bool compare(u8* source, u8* destination)
     return *source == 0 && *destination == 0;
 }
 
-u64 copy(u8* source, u8* destination)
+export u64 copy(u8* source, u8* destination)
 {
     while (*source != 0)
     {
@@ -74,7 +74,7 @@ u64 copy(u8* source, u8* destination)
     return 0;
 }
 
-u64 copy_limit(u8* source, u8* destination, u64 count)
+export u64 copy_limit(u8* source, u8* destination, u64 count)
 {
     u64 copied = 0;
 
@@ -90,7 +90,7 @@ u64 copy_limit(u8* source, u8* destination, u64 count)
     return copied;
 }
 
-u64 reverse(u8* str)
+export u64 reverse(u8* str)
 {
     u64 len = length(str);
     u64 midpoint = str + len / 2;
@@ -110,7 +110,7 @@ u64 reverse(u8* str)
     return 0;
 }
 
-u64 from_u64(u64 source, u8* destination)
+export u64 from_u64(u64 source, u8* destination)
 {
     if (source == 0)
     {
@@ -141,7 +141,7 @@ u64 from_u64(u64 source, u8* destination)
     return digits;
 }
 
-bool to_u64(u8* source, u64* destination)
+export bool to_u64(u8* source, u64* destination)
 {
     u64 ret = 0;
 

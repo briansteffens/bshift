@@ -210,7 +210,7 @@ region* allocate_region(u64 min_bytes)
     return new_region;
 }
 
-u8* allocate(u64 bytes)
+export u8* allocate(u64 bytes)
 {
     if (super_region == 0)
     {
@@ -252,7 +252,7 @@ u8* allocate(u64 bytes)
     return alloc_ptr + sizeof(allocation);
 }
 
-u8* reallocate(u8* ptr, u64 bytes)
+export u8* reallocate(u8* ptr, u64 bytes)
 {
     bytes = align(bytes, 16);
 
@@ -275,7 +275,7 @@ u8* reallocate(u8* ptr, u64 bytes)
     return new_alloc;
 }
 
-void free(u8* ptr)
+export void free(u8* ptr)
 {
     allocation* alloc = ptr - sizeof(allocation);
 
@@ -330,12 +330,12 @@ void free(u8* ptr)
 
 // Debugging stuff ------------------------------------------------------------
 
-u64 __debug_region_count()
+export u64 __debug_region_count()
 {
     return *region_count;
 }
 
-u64 __debug_super_region_size()
+export u64 __debug_super_region_size()
 {
     return super_region_size;
 }

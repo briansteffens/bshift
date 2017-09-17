@@ -1,4 +1,4 @@
-void copy(u8* source, u8* destination, u64 bytes)
+export void copy(u8* source, u8* destination, u64 bytes)
 {
     while (bytes > 0)
     {

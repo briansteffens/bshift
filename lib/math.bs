@@ -1,4 +1,4 @@
-T max<T>(T a, T b)
+export T max<T>(T a, T b)
 {
     if (a > b)
     {
@@ -8,7 +8,7 @@ T max<T>(T a, T b)
     return b;
 }
 
-T min<T>(T a, T b)
+export T min<T>(T a, T b)
 {
     if (a < b)
     {

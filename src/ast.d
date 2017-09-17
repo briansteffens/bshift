@@ -1066,10 +1066,15 @@ class Struct
     TypeSignature[] members;
     Method[] methods;
 
-    this(string name, TypeSignature[] members)
+    // Whether this struct (and all of its methods) is available for import
+    // by other modules.
+    bool exported;
+
+    this(string name, TypeSignature[] members, bool exported=false)
     {
         this.name = name;
         this.members = members;
+        this.exported = exported;
     }
 
     override string toString()
@@ -1150,9 +1155,10 @@ class StructTemplate : Struct
     TypeParameter[] typeParameters;
     StructRendering[] renderings;
 
-    this(string name, TypeParameter[] typeParameters, TypeSignature[] members)
+    this(string name, TypeParameter[] typeParameters, TypeSignature[] members,
+         bool exported=false)
     {
-        super(name, members);
+        super(name, members, exported=exported);
         this.typeParameters = typeParameters;
     }
 
@@ -1800,17 +1806,21 @@ class FunctionSignature
     TypeSignature[] parameters;
     bool variadic;
 
+    // Whether the function is available for import by other modules
+    bool exported;
+
     // For generating return variables and other things that can't clash within
     // a function.
     int nextGeneratedIndex;
 
     this(Type returnType, string name, TypeSignature[] parameters,
-         bool variadic)
+         bool variadic, bool exported=false)
     {
         this.returnType = returnType;
         this.name = name;
         this.parameters = parameters;
         this.variadic = variadic;
+        this.exported = exported;
         this.nextGeneratedIndex = 0;
     }
 
