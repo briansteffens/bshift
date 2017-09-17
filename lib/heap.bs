@@ -1,5 +1,6 @@
 import io;
 import memory;
+import math;
 
 struct region
 {
@@ -33,18 +34,6 @@ allocation* next_free = 0;
 u64 give_up_after = 2;
 
 u64 region_min_size = 4096;
-
-u64 align(u64 value, u64 alignment)
-{
-    u64 remainder = value % alignment;
-
-    if (remainder == 0)
-    {
-        return value;
-    }
-
-    return value + alignment - remainder;
-}
 
 u64 get_region_index(region* r)
 {
@@ -217,7 +206,7 @@ export u8* allocate(u64 bytes)
         init();
     }
 
-    bytes = align(bytes, 16);
+    bytes = math::align<u64>(bytes, 16);
 
     auto alloc = find_free(bytes);
 
@@ -254,7 +243,7 @@ export u8* allocate(u64 bytes)
 
 export u8* reallocate(u8* ptr, u64 bytes)
 {
-    bytes = align(bytes, 16);
+    bytes = math::align<u64>(bytes, 16);
 
     allocation* original_alloc = ptr - sizeof(allocation);
 

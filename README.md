@@ -570,3 +570,26 @@ Output:
 3
 ```
 
+
+
+
+### T math::align<T>(T value, T alignment)
+
+Aligns `value` to the nearest larger multiple of `alignment`. For example,
+`align(13, 4) = 16` and `align(12, 4) = 12`.
+
+```c
+import math;
+
+u64 main()
+{
+    auto r = math::align<u64>(13, 4);
+
+    io::print("%u\n", r);
+}
+```
+
+Output:
+```
+16
+```

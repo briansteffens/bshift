@@ -17,3 +17,15 @@ export T min<T>(T a, T b)
 
     return b;
 }
+
+export T align<T>(T value, T alignment)
+{
+    T remainder = value % alignment;
+
+    if (remainder == 0)
+    {
+        return value;
+    }
+
+    return value + alignment - remainder;
+}

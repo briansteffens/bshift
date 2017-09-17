@@ -317,6 +317,21 @@ Module parse(string name, Token[] tokenArray)
         if (imps !is null)
         {
             imports ~= imps;
+
+            // TODO: have a separate parsing pass for imports to avoid this
+            // Clear template renderings
+            foreach (imp; imports)
+            {
+                foreach (ft; imp.functionTemplates)
+                {
+                    ft.renderings = [];
+                }
+                foreach (st; imp.structTemplates)
+                {
+                    st.renderings = [];
+                }
+            }
+
             continue;
         }
 
