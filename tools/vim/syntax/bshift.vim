@@ -24,7 +24,7 @@ syn keyword cOperator     sizeof syscall variadic
 syn keyword cType         auto void bool u8 u64
 syn keyword cStructure    struct construct destruct
 syn keyword cStorageClass extern
-syn keyword cConstant     true false
+syn keyword cConstant     true false this
 
 
 " cCommentGroup allows adding matches for special things in comments
