@@ -1717,6 +1717,12 @@ IndexerResolveData resolveIndexer(GeneratorState state, Indexer indexer)
     data.sourceRegister = requireLocalInRegister(state, sourceNode);
 
     auto scale = data.sourceRegister.type.baseTypeSize();
+    if (data.sourceRegister.type.pointer)
+    {
+        auto copy = data.sourceRegister.type.clone();
+        copy.pointer = false;
+        scale = copy.baseTypeSize();
+    }
 
     data.address = format("[%s + %d * %s]",
             data.sourceRegister.expectSingleRegister(), scale,
