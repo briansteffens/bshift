@@ -424,6 +424,7 @@ enum OperatorType
     LessThan,
     LessThanOrEqual,
     LogicalAnd,
+    LogicalOr,
     DotAccessor,
     LeftShift,
     RightShift,
@@ -459,6 +460,7 @@ OperatorClass operatorTypeToClass(OperatorType t)
         case OperatorType.LessThanOrEqual:
             return OperatorClass.Relational;
         case OperatorType.LogicalAnd:
+        case OperatorType.LogicalOr:
             return OperatorClass.Logical;
         default:
             throw new Exception(format("Unrecognized OperatorType: %s", t));
@@ -1106,7 +1108,6 @@ class Struct
 
     MethodSignature findMethod(MethodCall call)
     {
-        writeln(this);
         foreach (method; this.methods)
         {
             if (method.methodSignature.name == call.functionName)

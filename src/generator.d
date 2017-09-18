@@ -1132,14 +1132,16 @@ class GeneratorIfBlock
     }
 }
 
-void generateConditional(GeneratorState state, Node conditional, string label)
+void generateConditional(GeneratorState state, Node conditional,
+        bool jumpIfTrue, string label)
 {
     auto conditionalNode = generateNode(state, conditional);
     auto conditionalRegister = requireLocalInRegister(state, conditionalNode);
     auto register = conditionalRegister.expectSingleRegister();
+    auto instruction = jumpIfTrue ? "jne" : "je";
 
     state.render(format("    test %s, %s", register, register));
-    state.render(format("    je %s", label));
+    state.render(format("    %s %s", instruction, label));
 
     state.freeTemp(conditionalRegister);
 }
@@ -1225,7 +1227,8 @@ void generateIf(GeneratorState state, If _if)
                 nextBlockLabel = blocks[i + 1].label;
             }
 
-            generateConditional(state, block.conditional, nextBlockLabel);
+            generateConditional(state, block.conditional, false,
+                    nextBlockLabel);
         }
 
         // Block: run if the conditional was true
@@ -1980,7 +1983,7 @@ Local generateOperator(GeneratorState state, Operator operator)
         case OperatorClass.Relational:
             return generateRelationalOperator(state, operator);
         case OperatorClass.Logical:
-            return generateLogicalAndOperator(state, operator);
+            return generateLogicalOperator(state, operator);
         default:
             throw new Exception(format("Unrecognized operator type: %s",
                                        operator.operatorType));
@@ -2187,6 +2190,21 @@ Local generateRelationalOperator(GeneratorState state, Operator operator)
     return temp;
 }
 
+Local generateLogicalOperator(GeneratorState state, Operator operator)
+{
+    switch (operator.operatorType)
+    {
+        case OperatorType.LogicalAnd:
+            return generateLogicalAndOperator(state, operator);
+        case OperatorType.LogicalOr:
+            return generateLogicalOrOperator(state, operator);
+        default:
+            throw new Exception(format(
+                    "Unrecognized logical operator %s",
+                    operator.operatorType));
+    }
+}
+
 Local generateLogicalAndOperator(GeneratorState state, Operator operator)
 {
     auto temp = state.addTemp(new PrimitiveType(Primitive.Bool));
@@ -2196,12 +2214,40 @@ Local generateLogicalAndOperator(GeneratorState state, Operator operator)
     auto endComparison = state.addLabel("end_comparison_");
 
     // Left operand
-    generateConditional(state, operator.left, endComparison);
+    generateConditional(state, operator.left, false, endComparison);
 
     // Right operand
-    generateConditional(state, operator.right, endComparison);
+    generateConditional(state, operator.right, false, endComparison);
 
     // Both were true
+    state.render(format("    mov %s, 1", tempRegister));
+
+    // Either were false
+    state.render(format("%s:", endComparison));
+
+    return temp;
+}
+
+Local generateLogicalOrOperator(GeneratorState state, Operator operator)
+{
+    auto temp = state.addTemp(new PrimitiveType(Primitive.Bool));
+    auto tempRegister = temp.expectSingleRegister();
+    state.render(format("    xor %s, %s", tempRegister, tempRegister));
+
+    auto eitherTrue = state.addLabel("either_true_");
+    auto endComparison = state.addLabel("end_comparison_");
+
+    // Left operand
+    generateConditional(state, operator.left, true, eitherTrue);
+
+    // Right operand
+    generateConditional(state, operator.right, true, eitherTrue);
+
+    // Neither was true
+    state.render(format("    jmp %s", endComparison));
+
+    // Either was true
+    state.render(format("%s:", eitherTrue));
     state.render(format("    mov %s, 1", tempRegister));
 
     // Either were false

@@ -38,6 +38,8 @@ OperatorType parseOperatorType(string input)
             return OperatorType.LessThanOrEqual;
         case "&&":
             return OperatorType.LogicalAnd;
+        case "||":
+            return OperatorType.LogicalOr;
         case ".":
             return OperatorType.DotAccessor;
         case "<<":
@@ -83,6 +85,8 @@ int operatorPrecedence(OperatorType t)
             return 9;
         case OperatorType.LogicalAnd:
             return 6;
+        case OperatorType.LogicalOr:
+            return 5;
         default:
             throw new Exception("We'll re-raise this later with more info.");
     }
@@ -106,6 +110,7 @@ int operatorInputCount(OperatorType t)
         case OperatorType.LessThan:
         case OperatorType.LessThanOrEqual:
         case OperatorType.LogicalAnd:
+        case OperatorType.LogicalOr:
         case OperatorType.DotAccessor:
         case OperatorType.LeftShift:
         case OperatorType.RightShift:
