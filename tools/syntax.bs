@@ -1,0 +1,45 @@
+// This file displays bshift syntax for help with syntax highlighting
+
+/* Here's a TODO: hi
+multiline comment */
+
+import heap;
+import unqualified memory;
+
+extern void f();
+
+export u64 f2(u8 x)
+{
+    return 0;
+}
+
+struct vector<T>
+{
+    T* data;
+    u64 size;
+}
+
+void vector::construct()
+{
+    this.data = sizeof(T);
+}
+
+void vector::destruct()
+{
+    defer f();
+}
+
+u64 main()
+{
+    auto x = syscall(0, 1, 2, 3);
+    auto y = variadic(0, 1);
+    u8* str = "greetings %s %u \n \" "" \"";
+    u8 chr = 'a';
+    if () {} else {}
+    while (true)
+    {
+        break;
+        continue;
+    }
+    bool z = false;
+}
