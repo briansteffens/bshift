@@ -257,7 +257,7 @@ export u8* reallocate(u8* ptr, u64 bytes)
 
     allocation* new_alloc = allocate(bytes);
 
-    memory::copy(ptr, new_alloc, original_alloc_size);
+    memory::copy(ptr, (u8*)new_alloc, original_alloc_size);
 
     free(ptr);
 

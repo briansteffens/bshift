@@ -44,7 +44,7 @@ u64 test_reallocate_larger()
 
     *a = 123;
 
-    a = heap::reallocate(a, 16);
+    a = heap::reallocate((u8*)a, 16);
 
     return *a == 123;
 }
@@ -55,7 +55,7 @@ u64 test_reallocate_smaller()
 
     *a = 123;
 
-    u64* b = heap::reallocate(a, 8);
+    u64* b = heap::reallocate((u8*)a, 8);
 
     return a == b;
 }
@@ -66,7 +66,7 @@ u64 test_free_same_size()
 
     *a = 13;
 
-    heap::free(a);
+    heap::free((u8*)a);
 
     u64* b = heap::allocate(8);
 
@@ -78,8 +78,8 @@ u64 test_free_previous()
     u64* a = heap::allocate(8);
     u64* b = heap::allocate(8);
 
-    heap::free(a);
-    heap::free(b);
+    heap::free((u8*)a);
+    heap::free((u8*)b);
 
     u64* c = heap::allocate(16);
 
@@ -91,8 +91,8 @@ u64 test_free_next()
     u64* a = heap::allocate(8);
     u64* b = heap::allocate(8);
 
-    heap::free(b);
-    heap::free(a);
+    heap::free((u8*)b);
+    heap::free((u8*)a);
 
     u64* c = heap::allocate(16);
 
@@ -103,7 +103,7 @@ u64 test_free_minimum_one_region()
 {
     u64* a = heap::allocate(8);
 
-    heap::free(a);
+    heap::free((u8*)a);
 
     return heap::__debug_region_count() == 1;
 }
@@ -118,7 +118,7 @@ u64 test_free_unmap()
         return 10;
     }
 
-    heap::free(b);
+    heap::free((u8*)b);
 
     return heap::__debug_region_count() == 1;
 }

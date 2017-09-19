@@ -21,7 +21,11 @@ void vector::add(T item)
     if (this.length >= this.allocated)
     {
         this.allocated = this.allocated * 2;
-        this.data = heap::reallocate(this.data, sizeof(T) * this.allocated);
+        // TODO: this is silly, fix the parser, it can't deal with casting a
+        // struct member
+        auto data = this.data;
+        this.data = heap::reallocate((u8*)data,
+                sizeof(T) * this.allocated);
     }
 
     this.data[this.length] = item;
@@ -35,5 +39,7 @@ T vector::get(u64 index)
 
 void vector::destruct()
 {
-    heap::free(this.data);
+    // TODO: more silly
+    auto data = this.data;
+    heap::free((u8*)data);
 }

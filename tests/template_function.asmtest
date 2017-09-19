@@ -18,7 +18,10 @@ u64 main()
         return 1;
     }
 
-    u8 y = max<u8>(8, 2);
+    u8 m = 8;
+    u8 n = 2;
+
+    u8 y = max<u8>(m, n);
     if (y != 8)
     {
         return 2;

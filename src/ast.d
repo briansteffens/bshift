@@ -580,9 +580,9 @@ class Binding : Node
 
 abstract class Literal : Node
 {
-    this(Primitive type)
+    this(PrimitiveType type)
     {
-        this.type = new PrimitiveType(type);
+        this.type = type;
     }
 }
 
@@ -592,7 +592,7 @@ class U64Literal : Literal
 
     this(ulong value)
     {
-        super(Primitive.U64);
+        super(new PrimitiveType(Primitive.U64));
         this.value = value;
     }
 
@@ -613,7 +613,7 @@ class U8Literal : Literal
 
     this(ubyte value)
     {
-        super(Primitive.U8);
+        super(new PrimitiveType(Primitive.U8));
         this.value = value;
     }
 
@@ -634,7 +634,7 @@ class BoolLiteral : Literal
 
     this(bool value)
     {
-        super(Primitive.Bool);
+        super(new PrimitiveType(Primitive.Bool));
         this.value = value;
     }
 
@@ -655,7 +655,9 @@ class StringLiteral : Literal
 
     this(string value)
     {
-        super(Primitive.U64);
+        auto type = new PrimitiveType(Primitive.U8);
+        type.pointerDepth = 1;
+        super(type);
         this.value = value;
     }
 
@@ -917,7 +919,17 @@ class Reference : Node
         }
 
         this.type = this.source.type.clone();
-        this.type.pointerDepth++;
+
+        // Array decays into pointer
+        if (this.type.elements !is null)
+        {
+            this.type.elements = null;
+        }
+        // Pointer becomes pointer to pointer
+        else
+        {
+            this.type.pointerDepth++;
+        }
 
         super.retype();
     }
@@ -1983,7 +1995,9 @@ Type replaceTypeParameter(Type type, TypeParameter[] params,
     {
         if (incomplete.name == params[i].name)
         {
-            return replacements[i].clone();
+            auto ret = replacements[i].clone();
+            ret.pointerDepth += type.pointerDepth;
+            return ret;
         }
     }
 
@@ -2222,6 +2236,14 @@ class Module
         foreach (imp; this.imports)
         {
             ret ~= imp.toString() ~ "\n";
+
+            foreach (st; imp.structTemplates)
+            {
+                foreach (r; st.renderings)
+                {
+                    ret ~= r.rendering.toString() ~ "\n";
+                }
+            }
         }
 
         foreach (ext; this.externs)
@@ -2242,6 +2264,11 @@ class Module
         foreach (s; this.structTemplates)
         {
             ret ~= s.toString() ~ "\n";
+
+            foreach (r; s.renderings)
+            {
+                ret ~= r.rendering.toString() ~ "\n";
+            }
         }
 
         foreach (func; this.functions)

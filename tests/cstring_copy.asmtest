@@ -1,6 +1,6 @@
 import cstring;
 
-u64 test_normal(u64 t0)
+u64 test_normal()
 {
     u8* source = "hi";
     u8[10] destination;
@@ -42,7 +42,7 @@ u64 test_empty()
 
 u64 main()
 {
-    return test_{{ test }}(0);
+    return test_{{ test }}();
 }
 
 -----

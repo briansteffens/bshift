@@ -3,6 +3,7 @@ import std.algorithm;
 import std.stdio;
 
 import ast;
+import lexer;
 
 void completeFunction(Module mod, FunctionSignature func)
 {
@@ -567,6 +568,32 @@ void validateMethodCall(Module mod, MethodCall call)
     }
 }
 
+string[] validateCallArguments(TypeSignature[] parameters, Node[] arguments)
+{
+    string[] ret;
+
+    if (parameters.length != arguments.length)
+    {
+        ret ~= format("Expected %d arguments but found %d", parameters.length,
+                arguments.length);
+    }
+
+    for (auto i = 0; i < min(parameters.length, arguments.length); i++)
+    {
+        auto p = parameters[i];
+        auto a = arguments[i];
+
+        if (!p.type.compare(a.type))
+        {
+            ret ~= format("For parameter #%d (named %s), expected a value " ~
+                    "of type %s, but instead got %s, which has type of %s",
+                    i, p.name, p.type, a, a.type);
+        }
+    }
+
+    return ret;
+}
+
 // TODO: this seems to be getting called multiple times for the same call
 void validateCall(Module mod, Call call)
 {
@@ -583,6 +610,8 @@ void validateCall(Module mod, Call call)
     {
         functionTemplates = mod.findImport(call.moduleName).functionTemplates;
     }
+
+    FunctionSignature target = null;
 
     templateLoop: foreach (ft; functionTemplates)
     {
@@ -613,7 +642,7 @@ void validateCall(Module mod, Call call)
             }
 
             // Found a matching rendering
-            call.targetSignature = r.rendering.signature;
+            target = r.rendering.signature;
             break templateLoop;
         }
 
@@ -621,17 +650,50 @@ void validateCall(Module mod, Call call)
         auto newRendering = ft.render(call.typeParameters);
         validateFunction(mod, newRendering.rendering);
         ft.renderings ~= newRendering;
-        call.targetSignature = newRendering.rendering.signature;
-
+        target = newRendering.rendering.signature;
         break;
     }
 
     // No template found? Normal function lookup
-    if (call.targetSignature is null)
+    if (target is null)
     {
-        call.targetSignature = mod.findFunction(call);
+        target = mod.findFunction(call);
     }
 
+    // Validate arguments
+    string[] errors;
+
+    // TODO: don't use string comparisons for these kinds of things
+    if (call.functionName != "syscall")
+    {
+        Node[] callParams;
+        foreach (p; call.parameters)
+        {
+            callParams ~= p;
+            if (target.variadic &&
+                callParams.length >= target.parameters.length)
+            {
+                break;
+            }
+        }
+
+        errors = validateCallArguments(target.parameters, callParams);
+    }
+
+    if (errors.length > 0)
+    {
+        writefln("Can't call %s with the given parameters:", target.name);
+
+        foreach (error; errors)
+        {
+            writefln("  - %s", error);
+        }
+
+        // TODO: use ProgrammerException
+        throw new Exception("Bad call arguments");
+    }
+
+    call.targetSignature = target;
     call.retype();
 }
 

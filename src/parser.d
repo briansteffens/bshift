@@ -1773,48 +1773,47 @@ class ExpressionParser
     // is set by a subsequent target (the thing to cast to that type).
     bool consumeCastStart()
     {
+        auto rewindTarget = this.input.index;
+        bool rewind()
+        {
+            this.input.index = rewindTarget;
+            return false;
+        }
+
         // Check for open parenthesis
         auto cur = this.input.current();
 
         if (!cur.match(TokenType.Symbol, "("))
         {
-            return false;
+            return rewind();
         }
 
         // Check for a valid type name
-        cur = this.input.peek(1);
-
-        if (cur.type != TokenType.Word)
+        if (!this.input.next() || this.input.current().type != TokenType.Word)
         {
-            return false;
+            return rewind();
         }
 
-        Primitive castType;
-        try
+        auto castType = parseType(this.input);
+        if (castType is null)
         {
-            castType = parsePrimitive(cur.value);
-        }
-        catch (Throwable)
-        {
-            return false;
+            return rewind();
         }
 
         // Check for close parenthesis
-        cur = this.input.peek(2);
-
-        if (!cur.match(TokenType.Symbol, ")"))
+        if (!this.input.next() ||
+            !this.input.current().match(TokenType.Symbol, ")"))
         {
-            return false;
+            return rewind();
         }
 
-        // Found a cast, rewrite these tokens as an incomplete cast
-        this.input.next();
-        this.input.next();
+        // TODO: shouldn't need this
+        if (this.input.peek(1).match(TokenType.Symbol, "{"))
+        {
+            return rewind();
+        }
 
-        // TODO: Allow casting to a complete type signature, not just a
-        // primtive
-        this.outputPush(new ParserItem(new Cast(new PrimitiveType(castType),
-                        null)));
+        this.outputPush(new ParserItem(new Cast(castType, null)));
 
         return true;
     }

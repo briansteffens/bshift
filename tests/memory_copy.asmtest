@@ -5,7 +5,11 @@ u64 test_u64()
     u64 a = 137;
     u64 b = 0;
 
-    memory::copy(&a, &b, sizeof(u64));
+    // TODO: fix cast parsing so this isn't needed
+    u64* pa = &a;
+    u64* pb = &b;
+
+    memory::copy((u8*)pa, (u8*)pb, sizeof(u64));
 
     return b;
 }

@@ -1925,6 +1925,12 @@ Local generateCast(GeneratorState state, Cast typeCast)
     auto unableToCast = new Exception(format("Unable to cast %s to %s",
             typeCast.target, typeCast.type));
 
+    if (typeCast.type.pointerDepth > 0 &&
+        typeCast.target.type.pointerDepth > 0)
+    {
+        return generateCastPointerToPointer(state, typeCast);
+    }
+
     if (typeCast.type.isPrimitive(Primitive.U64) &&
         typeCast.target.type.isPrimitive(Primitive.U8))
     {
@@ -1946,6 +1952,17 @@ Local generateCast(GeneratorState state, Cast typeCast)
     }
 
     throw unableToCast;
+}
+
+Local generateCastPointerToPointer(GeneratorState state, Cast typeCast)
+{
+    auto source = renderNode(state, generateNode(state, typeCast.target));
+    auto target = state.addTemp(typeCast.type.clone());
+    auto targetRegister = target.expectSingleRegister();
+
+    state.render(format("    mov %s, %s", targetRegister, source));
+
+    return target;
 }
 
 Local generateCastU8ToU64(GeneratorState state, Cast typeCast)
