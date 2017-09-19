@@ -1590,10 +1590,10 @@ class If : StatementBase
     ConditionalBlock[] elseIfBlocks;
     StatementBase elseBlock;
 
-    this(ConditionalBlock ifBlock, ConditionalBlock[] elseIfBlocks,
+    this(Line line, ConditionalBlock ifBlock, ConditionalBlock[] elseIfBlocks,
          StatementBase elseBlock)
     {
-        super(null);
+        super(line);
 
         this.ifBlock = ifBlock;
         this.elseIfBlocks = elseIfBlocks;
@@ -1634,7 +1634,7 @@ class If : StatementBase
         auto elseBlock = this.elseBlock !is null ? this.elseBlock.clone() :
                 this.elseBlock;
 
-        return new If(ifBlock, elseIfs, elseBlock);
+        return new If(this.line, ifBlock, elseIfs, elseBlock);
     }
 
     override string toString()

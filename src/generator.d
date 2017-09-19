@@ -3,6 +3,7 @@ import std.format;
 import std.conv;
 import std.array;
 import std.algorithm;
+import std.container.rbtree;
 
 import globals;
 import ast;
@@ -390,9 +391,16 @@ class GeneratorState
 
     int nextTempIndex = 0;
 
+    // Keeps track of source lines written to the output assembly in comments.
+    // Sometimes transformations in the validator can produce multiple
+    // statements with the same source Line (ex: return statements). So this
+    // helps to only show each line once.
+    RedBlackTree!(string) linesWritten;
+
     this(Module mod)
     {
         this.mod = mod;
+        this.linesWritten = new RedBlackTree!(string);
     }
 
     // Mark a register as used by some part of the currently generating
@@ -1037,6 +1045,34 @@ string renderStackLocation(int offset)
 
 void generateStatementBase(GeneratorState state, StatementBase st)
 {
+    auto block = cast(Block)st;
+    if (block !is null)
+    {
+        generateBlock(state, block);
+        return;
+    }
+
+    auto defer = cast(Defer)st;
+    if (defer !is null)
+    {
+        // Skip defer
+        return;
+    }
+
+    if (st.line is null)
+    {
+        state.render("; null statement");
+    }
+    else
+    {
+        auto output = format("; [%d] %s", st.line.number, st.line.source);
+        if (output !in state.linesWritten)
+        {
+            state.render(output);
+            state.linesWritten.insert(output);
+        }
+    }
+
     auto ignoreReturn = cast(Statement)st;
     if (ignoreReturn !is null)
     {
@@ -1065,13 +1101,6 @@ void generateStatementBase(GeneratorState state, StatementBase st)
         return;
     }
 
-    auto block = cast(Block)st;
-    if (block !is null)
-    {
-        generateBlock(state, block);
-        return;
-    }
-
     auto _if = cast(If)st;
     if (_if !is null)
     {
@@ -1083,13 +1112,6 @@ void generateStatementBase(GeneratorState state, StatementBase st)
     if (_while !is null)
     {
         generateWhile(state, _while);
-        return;
-    }
-
-    auto defer = cast(Defer)st;
-    if (defer !is null)
-    {
-        // Skip defer
         return;
     }
 

@@ -1263,6 +1263,8 @@ While parseWhile(TokenFeed tokens)
 
 If parseIf(TokenFeed tokens)
 {
+    auto startToken = tokens.current();
+
     auto ifBlock = parseConditionalBlock(tokens);
     ConditionalBlock[] elseIfBlocks;
     StatementBase elseBlock = null;
@@ -1295,7 +1297,7 @@ If parseIf(TokenFeed tokens)
         break;
     }
 
-    return new If(ifBlock, elseIfBlocks, elseBlock);
+    return new If(startToken.line, ifBlock, elseIfBlocks, elseBlock);
 }
 
 // Parse a conditional expression followed by a statement or block
