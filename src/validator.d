@@ -18,7 +18,7 @@ void completeFunction(Module mod, FunctionSignature func)
     if (method !is null)
     {
         auto thisType = method.containerType.clone();
-        thisType.pointer = true;
+        thisType.pointerDepth++;
         auto thisParam = new TypeSignature(thisType, "this");
         func.parameters = thisParam ~ func.parameters;
     }
@@ -485,7 +485,7 @@ Type completeType(Module mod, Type type)
         throw new Exception(format("Can't complete type %s", type));
     }
 
-    ret.pointer = incomplete.pointer;
+    ret.pointerDepth = incomplete.pointerDepth;
     ret.elements = incomplete.elements;
 
     return ret;

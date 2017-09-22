@@ -25,12 +25,16 @@ class NotFoundException : Exception
 
 abstract class Type
 {
-    bool pointer;
+    // The number of pointers this represents:
+    //   u64   a -> 0
+    //   u64*  a -> 1
+    //   u64** a -> 2
+    int pointerDepth;
     Node elements;
 
-    this(bool pointer=false, Node elements=null)
+    this(int pointerDepth=0, Node elements=null)
     {
-        this.pointer = pointer;
+        this.pointerDepth = pointerDepth;
         this.elements = elements;
     }
 
@@ -40,12 +44,14 @@ abstract class Type
     {
         auto ret = this.baseTypeToString();
 
-        if (this.pointer && this.elements is null)
+        if (this.elements is null)
         {
-            ret ~= "*";
+            for (int i = pointerDepth; i > 0; i--)
+            {
+                ret ~= "*";
+            }
         }
-
-        if (this.elements !is null)
+        else
         {
             ret ~= format("[%s]", this.elements);
         }
@@ -98,10 +104,10 @@ class IncompleteType : Type
     string name;
     Type[] typeParameters;
 
-    this(string name, Type[] typeParameters, bool pointer=false,
+    this(string name, Type[] typeParameters, int pointerDepth=0,
             Node elements=null, string moduleName=null)
     {
-        super(pointer=pointer, elements=elements);
+        super(pointerDepth=pointerDepth, elements=elements);
         this.name = name;
         this.typeParameters = typeParameters;
         this.moduleName = moduleName;
@@ -143,7 +149,7 @@ class IncompleteType : Type
     override Type clone()
     {
         return new IncompleteType(this.name, this.typeParameters,
-                pointer=this.pointer, elements=this.elements,
+                pointerDepth=this.pointerDepth, elements=this.elements,
                 moduleName=this.moduleName);
     }
 
@@ -169,9 +175,9 @@ class StructType : Type
 {
     Struct struct_;
 
-    this(Struct struct_, bool pointer=false, Node elements=null)
+    this(Struct struct_, int pointerDepth=0, Node elements=null)
     {
-        super(pointer=pointer, elements=elements);
+        super(pointerDepth=pointerDepth, elements=elements);
         this.struct_ = struct_;
     }
 
@@ -182,7 +188,7 @@ class StructType : Type
 
     override Type clone()
     {
-        return new StructType(this.struct_, pointer=this.pointer,
+        return new StructType(this.struct_, pointerDepth=this.pointerDepth,
                 elements=this.elements);
     }
 
@@ -198,7 +204,7 @@ class StructType : Type
 
     override int baseTypeSize()
     {
-        if (this.pointer)
+        if (this.pointerDepth > 0)
         {
             return 8;
         }
@@ -218,7 +224,7 @@ class VoidType : Type
 {
     this()
     {
-        super(pointer=false, elements=null);
+        super(pointerDepth=0, elements=null);
     }
 
     override string baseTypeToString()
@@ -251,9 +257,9 @@ class PrimitiveType : Type
 {
     Primitive primitive;
 
-    this(Primitive primitive, bool pointer=false, Node elements=null)
+    this(Primitive primitive, int pointerDepth=0, Node elements=null)
     {
-        super(pointer=pointer, elements=elements);
+        super(pointerDepth=pointerDepth, elements=elements);
         this.primitive = primitive;
     }
 
@@ -264,8 +270,8 @@ class PrimitiveType : Type
 
     override Type clone()
     {
-        return new PrimitiveType(this.primitive, pointer=this.pointer,
-                elements=this.elements);
+        return new PrimitiveType(this.primitive,
+                pointerDepth=this.pointerDepth, elements=this.elements);
     }
 
     override bool compare(Type other)
@@ -282,7 +288,7 @@ class PrimitiveType : Type
         }
 
         return this.primitive == otherPrimitive.primitive &&
-               this.pointer == otherPrimitive.pointer &&
+               this.pointerDepth == otherPrimitive.pointerDepth &&
                this.elements == otherPrimitive.elements; // TODO: value-compare
                                                          // node?
     }
@@ -303,15 +309,16 @@ class PrimitiveType : Type
         }
 
         return this.compare(other) ||
-               this.primitive == Primitive.U64 && other.pointer ||
+               this.primitive == Primitive.U64 && other.pointerDepth > 0 ||
                this.primitive == Primitive.Auto ||
                otherPrimitive.primitive == Primitive.Auto ||
-               this.pointer && otherPrimitive.primitive == Primitive.U64;
+               this.pointerDepth > 0 &&
+                    otherPrimitive.primitive == Primitive.U64;
     }
 
     override int baseTypeSize()
     {
-        if (this.pointer && this.elements is null)
+        if (this.pointerDepth > 0 && this.elements is null)
         {
             return 8;
         }
@@ -910,7 +917,7 @@ class Reference : Node
         }
 
         this.type = this.source.type.clone();
-        this.type.pointer = true;
+        this.type.pointerDepth++;
 
         super.retype();
     }
@@ -951,7 +958,7 @@ class Dereference : Node
         }
 
         this.type = this.source.type.clone();
-        this.type.pointer = false;
+        this.type.pointerDepth--;
 
         super.retype();
     }
@@ -1174,7 +1181,7 @@ class StructTemplate : Struct
         auto name = "template_" ~ this.name;
         foreach (t; types)
         {
-            name ~= "_" ~ t.toString();
+            name ~= "_" ~ templateTypeName(t);
         }
 
         // Replace type parameter names in members
@@ -1294,7 +1301,7 @@ class Indexer : Node
         }
 
         this.type = this.source.type.clone();
-        this.type.pointer = false;
+        this.type.pointerDepth--;
         this.type.elements = null;
 
         super.retype();
@@ -1983,13 +1990,26 @@ Type replaceTypeParameter(Type type, TypeParameter[] params,
     return type;
 }
 
+// Get the name of a type for use in function name mangling for templates
+string templateTypeName(Type t)
+{
+    string ret = t.baseTypeToString();
+
+    for (int i = 0; i < t.pointerDepth; i++)
+    {
+        ret ~= "p";
+    }
+
+    return ret;
+}
+
 string templateName(string name, Type[] types)
 {
     auto ret = "template_" ~ name;
 
     foreach (t; types)
     {
-        ret ~= "_" ~ t.toString();
+        ret ~= "_" ~ templateTypeName(t);
     }
 
     return ret;

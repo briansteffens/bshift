@@ -1,9 +1,9 @@
 import io;
 
-u64 main(u64 argc, u64* argv)
+u64 main(u64 argc, u8** argv)
 {
-    io::print(&argv[1]);
-    io::print(&argv[2]);
+    io::print(argv[1]);
+    io::print(argv[2]);
 
     return argc;
 }

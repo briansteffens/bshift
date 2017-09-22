@@ -174,7 +174,7 @@ OpSize primitiveToOpSize(Primitive t)
 
 OpSize typeToOpSize(Type t)
 {
-    if (t.isStruct() || t.pointer)
+    if (t.isStruct() || t.pointerDepth > 0)
     {
         return OpSize.Qword;
     }
@@ -205,7 +205,7 @@ int typeSize(Type t)
         return cast(int)arraySize.value * t.baseTypeSize();
     }
 
-    if (t.pointer)
+    if (t.pointerDepth > 0)
     {
         return 8;
     }
@@ -659,7 +659,7 @@ string renderGlobal(GeneratorState state, Global global)
 {
     string type = null;
 
-    if (global.signature.type.pointer)
+    if (global.signature.type.pointerDepth > 0)
     {
         type = "dq";
     }
@@ -867,7 +867,7 @@ string renderName(FunctionSignature sig)
     auto method = cast(MethodSignature)sig;
     if (method !is null)
     {
-        ret = format("%s_%s", method.containerType, ret);
+        ret = format("%s_%s", method.containerType.baseTypeToString(), ret);
     }
 
     return format("%s_%s", sig.mod.name, ret);
@@ -879,14 +879,16 @@ void generateFunction(GeneratorState state, Function func)
 
     int stackOffset = 0;
 
+    auto argvType = new PrimitiveType(Primitive.U8);
+    argvType.pointerDepth=2;
+
     // Detect main function with argc and argv
     bool mainWithArgs = false;
     if (func.signature.name == "main" &&
         func.signature.parameters.length == 2 &&
         func.signature.parameters[0].type.compare(
             new PrimitiveType(Primitive.U64)) &&
-        func.signature.parameters[1].type.compare(
-            new PrimitiveType(Primitive.U64, true)))
+        func.signature.parameters[1].type.compare(argvType))
     {
         mainWithArgs = true;
 
@@ -897,11 +899,11 @@ void generateFunction(GeneratorState state, Function func)
 
         state.locals ~= argc;
 
+        stackOffset = -8;
         auto argv = new Local(func.signature.parameters[1].type,
                               func.signature.parameters[1].name);
 
-        // TODO: better indication of unknown stack data size?
-        argv.data = [new StackLocation(24, -1)];
+        argv.data = [new StackLocation(stackOffset, 8)];
 
         state.locals ~= argv;
     }
@@ -998,6 +1000,16 @@ void generateFunction(GeneratorState state, Function func)
     if (stackOffset < 0)
     {
         state.render(format("    sub rsp, %s", stackOffset * -1));
+    }
+
+    // TODO: this shouldn't be necessary, there's something weird/off about
+    // indexing pointers vs arrays that I can't put my finger on. This
+    // basically makes "u8** argv" a local which points to the actual array
+    // of pointers to argument strings.
+    if (mainWithArgs)
+    {
+        state.render(format("    lea rcx, [rbp + 24]"));
+        state.render(format("    mov [rbp - 8], rcx"));
     }
 
     // Copy variadic parameters passed through registers into the stack
@@ -1391,7 +1403,7 @@ void generateAssignmentShared(GeneratorState state, Node target,
         indexerData = resolveIndexer(state, indexer);
         targetRendered = indexerData.address;
         targetType = indexerData.sourceRegister.type.clone();
-        targetType.pointer = false;
+        targetType.pointerDepth--;
     }
     // Assigning to a dot accessor
     else if (dot !is null)
@@ -1427,7 +1439,7 @@ void generateAssignmentShared(GeneratorState state, Node target,
             targetRendered = format("[%s]", tempTarget.expectSingleRegister());
 
             targetType = targetLocal.type.clone();
-            targetType.pointer = false;
+            targetType.pointerDepth--;
         }
 
         sizeHint = typeToOpSize(targetType);
@@ -1656,7 +1668,7 @@ bool isBindingInteger(GeneratorState state, Node node)
         return false;
     }
 
-    if (local.type.pointer)
+    if (local.type.pointerDepth > 0)
     {
         return false;
     }
@@ -1672,9 +1684,9 @@ Local requireCopyInRegister(GeneratorState state, Node node)
     register = convertRegisterSize(register, typeToOpSize(ret.type));
     ret.data = [new RegisterLocation(register)];
 
-    // Special handling for arrays and non-pointer structs
+    // Special handling for arrays, and non-pointer structs
     if (node.type.elements !is null ||
-        (node.type.isStruct() && !node.type.pointer))
+        (node.type.isStruct() && node.type.pointerDepth == 0))
     {
         state.render(format("    lea %s, %s", register,
                             renderNode(state, node)));
@@ -1742,10 +1754,10 @@ IndexerResolveData resolveIndexer(GeneratorState state, Indexer indexer)
     data.sourceRegister = requireLocalInRegister(state, sourceNode);
 
     auto scale = data.sourceRegister.type.baseTypeSize();
-    if (data.sourceRegister.type.pointer)
+    if (data.sourceRegister.type.pointerDepth > 0)
     {
         auto copy = data.sourceRegister.type.clone();
-        copy.pointer = false;
+        copy.pointerDepth--;
         scale = copy.baseTypeSize();
     }
 
@@ -1761,7 +1773,7 @@ Local generateIndexer(GeneratorState state, Indexer indexer)
     auto data = resolveIndexer(state, indexer);
 
     auto outputType = data.sourceRegister.type.clone();
-    outputType.pointer = false;
+    outputType.pointerDepth--;
 
     auto output = state.addTemp(outputType);
 
@@ -1846,7 +1858,7 @@ Local generateDereference(GeneratorState state, Dereference dereference)
     }
 
     auto outputType = sourceLocal.type.clone();
-    outputType.pointer = false;
+    outputType.pointerDepth--;
 
     auto outputLocal = state.addTemp(outputType);
     auto temp = state.addTemp(new PrimitiveType(Primitive.U64));
@@ -1898,7 +1910,7 @@ Local generateReference(GeneratorState state, Reference reference)
     }
 
     auto outputType = sourceLocal.type.clone();
-    outputType.pointer = true;
+    outputType.pointerDepth++;
 
     auto outputLocal = state.addTemp(outputType);
 
@@ -1919,7 +1931,7 @@ Local generateCast(GeneratorState state, Cast typeCast)
         return generateCastU8ToU64(state, typeCast);
     }
 
-    if (typeCast.type.pointer ||
+    if (typeCast.type.pointerDepth > 0 ||
         typeCast.type.isPrimitive(Primitive.Bool))
     {
         if (isLiteralInteger(state, typeCast.target))
@@ -2742,7 +2754,7 @@ string renderLocal(Local local)
     auto registerLocation = cast(RegisterLocation)local.data[0];
     if (registerLocation !is null)
     {
-        if (!local.type.pointer && local.type.baseTypeSize() == 1)
+        if (local.type.pointerDepth == 0 && local.type.baseTypeSize() == 1)
         {
             return format("%s", lowByte(registerLocation.register));
         }

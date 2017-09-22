@@ -1119,11 +1119,11 @@ Type parseType(TokenFeed tokens)
     // Read type parameters
     auto typeParams = parseConcreteTypeParams(tokens);
 
-    // Read pointer symbol
-    bool pointer = false;
-    if (tokens.peek(1).match(TokenType.Symbol, "*"))
+    // Read pointer symbols
+    int pointerDepth = 0;
+    while (tokens.peek(1).match(TokenType.Symbol, "*"))
     {
-        pointer = true;
+        pointerDepth++;
         if (!tokens.next())
         {
             return rewind();
@@ -1144,10 +1144,14 @@ Type parseType(TokenFeed tokens)
                 TokenType.Symbol, "]");
         elements = parser.run();
 
-        pointer = true;
+        // TODO: shouldn't need this imo
+        if (pointerDepth == 0)
+        {
+            pointerDepth = 1;
+        }
     }
 
-    return new IncompleteType(typeName, typeParams, pointer=pointer,
+    return new IncompleteType(typeName, typeParams, pointerDepth=pointerDepth,
             elements=elements, moduleName=moduleName);
 }
 
