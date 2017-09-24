@@ -170,17 +170,18 @@ region* allocate_region(u64 min_bytes)
     // Grow the super region if necessary
     if (super_region_size < super_region_min_size(new_region_count))
     {
-        super_region_size = super_region_size + super_region_size;
-
-        u8* new_super_region = map(super_region_size);
+        u64 new_super_region_size = super_region_size * 2;
+        u8* new_super_region = map(new_super_region_size);
 
         memory::copy(super_region, new_super_region,
                      super_region_min_size(*region_count));
 
+        // Free the previous super region
+        syscall(11, super_region, super_region_size);
+
         super_region = new_super_region;
         region_count = super_region;
-
-        // TODO: free previous super region
+        super_region_size = new_super_region_size;
     }
 
     *region_count = new_region_count;
