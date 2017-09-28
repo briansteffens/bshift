@@ -180,8 +180,6 @@ CompileResult compile(string sourceFilename)
     bool changed = !exists(asmFilename) ||
                    sourceModified > timeLastModified(asmFilename);
 
-    writefln("changed: %d", changed);
-
     // Source code
     auto source = readText(sourceFilename);
 
