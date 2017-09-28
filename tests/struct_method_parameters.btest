@@ -9,7 +9,7 @@ cases:
 
    status: 1
 
- - name: call a struct method that takes an argument; returns 1
+ - name: call a struct method that takes an argument; returns 0
    p2.x: 4
    p2.y: 7
 
