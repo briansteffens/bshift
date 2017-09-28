@@ -1,0 +1,22 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: make a function call
+
+   status: 7
+
+
+templates:
+ - test.bs: |
+
+    u64 f(u64 x)
+    {
+        return x + 1;
+    }
+
+    u64 main()
+    {
+        return f(6);
+    }

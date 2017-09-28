@@ -1,0 +1,19 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: import function template without qualification
+
+   status: 7
+
+
+templates:
+ - test.bs: |
+
+    import unqualified math;
+
+    u64 main()
+    {
+        return max<u64>(7, 3);
+    }

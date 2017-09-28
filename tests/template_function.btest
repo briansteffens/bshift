@@ -1,0 +1,44 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: call function template with explicit type parameter
+
+   status: 0
+
+
+templates:
+ - test.bs: |
+
+    T max<T>(T a, T b)
+    {
+        T ret = a;
+
+        if (b > a)
+        {
+            ret = b;
+        }
+
+        return ret;
+    }
+
+    u64 main()
+    {
+        u64 x = max<u64>(3, 5);
+        if (x != 5)
+        {
+            return 1;
+        }
+
+        u8 m = 8;
+        u8 n = 2;
+
+        u8 y = max<u8>(m, n);
+        if (y != 8)
+        {
+            return 2;
+        }
+
+        return 0;
+    }

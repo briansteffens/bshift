@@ -1,0 +1,23 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: "single-line comments"
+
+   status: 7
+
+
+templates:
+ - test.bs: |
+
+    // start of file
+
+    u64 main() // end of line
+    {
+        // here
+        return 7;//nospace
+        // after
+    }
+
+    // end of file

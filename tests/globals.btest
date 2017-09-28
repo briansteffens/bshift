@@ -1,0 +1,20 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: read and write to a u64 global
+
+   status: 7
+
+
+templates:
+ - test.bs: |
+
+    u64 a = 6;
+
+    u64 main()
+    {
+        a = a + 1;
+        return a;
+    }

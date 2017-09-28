@@ -1,0 +1,20 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: make an auto from a pointer
+
+   status: 3
+
+
+templates:
+ - test.bs: |
+
+    u64 main()
+    {
+        auto x = 3;
+        auto p = &x;
+        auto y = *p;
+        return y;
+    }

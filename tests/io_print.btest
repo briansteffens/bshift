@@ -1,0 +1,70 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: "empty string ''"
+   test: empty_string
+
+   status: 0
+   stdout: ""
+
+ - name: "plain string 'greetings'"
+   test: plain_string
+
+   status: 9
+   stdout: greetings
+
+ - name: "u64 'hi %u hey'"
+   test: u64
+
+   status: 9
+   stdout: hi 13 hey
+
+ - name: "two u64s 'first %u second %u'"
+   test: two_u64s
+
+   status: 16
+   stdout: first 3 second 7
+
+ - name: "just u64 '%u'"
+   test: just_u64
+
+   status: 3
+   stdout: 137
+
+
+templates:
+ - test.bs: |
+
+    import io;
+
+    u64 test_empty_string()
+    {
+        return io::print("");
+    }
+
+    u64 test_plain_string()
+    {
+        return io::print("greetings");
+    }
+
+    u64 test_u64()
+    {
+        return io::print("hi %u hey", 13);
+    }
+
+    u64 test_two_u64s()
+    {
+        return io::print("first %u second %u", 3, 7);
+    }
+
+    u64 test_just_u64()
+    {
+        return io::print("%u", 137);
+    }
+
+    u64 main()
+    {
+        return test_{{ test }}();
+    }

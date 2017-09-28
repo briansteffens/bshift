@@ -1,0 +1,22 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: cast u8 to u64
+   a_type: u8
+   a_value: 37
+   b_type: u64
+
+   status: 37
+
+
+templates:
+ - test.bs: |
+
+    u64 main()
+    {
+        {{ a_type }} a = {{ a_value }};
+
+        return ({{ b_type }})a;
+    }

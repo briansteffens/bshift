@@ -1,0 +1,24 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: import struct without qualification
+
+   status: 10
+
+
+templates:
+ - test.bs: |
+
+    import unqualified point;
+
+    u64 main()
+    {
+        point p;
+
+        p.x = 3;
+        p.y = 7;
+
+        return p.x + p.y;
+    }

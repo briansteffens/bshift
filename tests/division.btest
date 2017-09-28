@@ -1,0 +1,40 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: "10 / 5 = 2 (both variables)"
+   dividend: a
+   divisor: b
+
+   status: 2
+
+ - name: "10 / 2 = 5 (divisor is literal)"
+   dividend: a
+   divisor: 2
+
+   status: 5
+
+ - name: "15 / 5 = 3 (dividend is literal)"
+   dividend: 15
+   divisor: b
+
+   status: 3
+
+ - name: "20 / 4 = 5 (both are literal)"
+   dividend: 20
+   divisor: 4
+
+   status: 5
+
+
+templates:
+ - test.bs: |
+
+    u64 main()
+    {
+        u64 a = 10;
+        u64 b = 5;
+
+        return {{ dividend }} / {{ divisor }};
+    }

@@ -1,0 +1,30 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: basic struct template method usage
+
+   status: 124
+
+
+templates:
+ - test.bs: |
+
+    struct node<T>
+    {
+        T data;
+    }
+
+    T node::sum(T a)
+    {
+        return this.data + a;
+    }
+
+    u64 main()
+    {
+        node<u64> n;
+        n.data = 123;
+
+        return n.sum(1);
+    }

@@ -1,0 +1,49 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: copy u64
+   test: u64
+
+   status: 137
+
+ - name: copy a cstring
+   test: cstring
+
+   status: 1
+
+
+templates:
+ - test.bs: |
+
+    import memory;
+
+    u64 test_u64()
+    {
+        u64 a = 137;
+        u64 b = 0;
+
+        // TODO: fix cast parsing so this isn't needed
+        u64* pa = &a;
+        u64* pb = &b;
+
+        memory::copy((u8*)pa, (u8*)pb, sizeof(u64));
+
+        return b;
+    }
+
+    u64 test_cstring()
+    {
+        u8* a = "hi";
+        u8[3] b;
+
+        memory::copy(a, &b, 3);
+
+        return b[0] == 'h' && b[1] == 'i' && b[2] == 0;
+    }
+
+    u64 main()
+    {
+        return test_{{ test }}();
+    }

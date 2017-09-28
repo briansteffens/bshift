@@ -1,0 +1,18 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: 7
+   literal: 7
+
+   status: 7
+
+
+templates:
+ - test.bs: |
+
+    u64 main()
+    {
+        return {{ literal }};
+    }

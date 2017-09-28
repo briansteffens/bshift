@@ -1,0 +1,20 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: make an auto from a reference
+
+   status: 4
+
+
+templates:
+ - test.bs: |
+
+    u64 main()
+    {
+        auto x = 3;
+        auto p = &x;
+        *p = 4;
+        return x;
+    }

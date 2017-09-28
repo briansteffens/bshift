@@ -1,0 +1,53 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: if block
+   value: 2
+
+   status: 3
+
+ - name: first else if block
+   value: 3
+
+   status: 5
+
+ - name: second else if block
+   value: 4
+
+   status: 7
+
+ - name: else block
+   value: 5
+
+   status: 11
+
+
+templates:
+ - test.bs: |
+
+    u64 main()
+    {
+        u64 x = {{ value }};
+        u64 res = 0;
+
+        if (x == 2)
+        {
+            res = res + 3;
+        }
+        else if (x == 3)
+        {
+            res = res + 5;
+        }
+        else if (x == 4)
+        {
+            res = res + 7;
+        }
+        else
+        {
+            res = res + 11;
+        }
+
+        return res;
+    }

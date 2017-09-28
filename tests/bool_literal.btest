@@ -1,0 +1,23 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: bool literal true
+   value: true
+
+   status: 1
+
+ - name: bool literal false
+   value: false
+
+   status: 0
+
+
+templates:
+ - test.bs: |
+
+    u64 main()
+    {
+        return {{ value }};
+    }

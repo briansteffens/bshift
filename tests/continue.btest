@@ -1,0 +1,34 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: continue in while
+
+   status: 2
+
+
+templates:
+ - test.bs: |
+
+    import io;
+
+    u64 main()
+    {
+        u64 x = 5;
+        u64 ret = 0;
+
+        while (x > 0)
+        {
+            x = x - 1;
+
+            if (x < 3)
+            {
+                continue;
+            }
+
+            ret = ret + 1;
+        }
+
+        return ret;
+    }

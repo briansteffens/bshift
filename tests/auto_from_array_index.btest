@@ -1,0 +1,22 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: make an auto from an array index
+
+   status: 3
+
+
+templates:
+ - test.bs: |
+
+    u64 main()
+    {
+        u64[2] ar;
+        ar[0] = 3;
+        ar[1] = 7;
+
+        auto x = ar[0];
+        return x;
+    }

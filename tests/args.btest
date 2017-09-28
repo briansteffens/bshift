@@ -1,0 +1,24 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: pass args from command line
+   args: hi hey
+
+   status: 3
+   stdout: hihey
+
+
+templates:
+ - test.bs: |
+
+    import io;
+
+    u64 main(u64 argc, u8** argv)
+    {
+        io::print(argv[1]);
+        io::print(argv[2]);
+
+        return argc;
+    }

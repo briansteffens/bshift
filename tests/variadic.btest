@@ -1,0 +1,42 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: call a variadic function with args in the stack
+   arguments: "7, 1, 2, 3, 4, 5, 6, 7"
+
+   status: 28
+
+ - name: call a variadic function with only register args
+   arguments: "5, 1, 2, 3, 4, 5"
+
+   status: 15
+
+ - name: call a variadic function with no variadic args
+   arguments: 0
+
+   status: 0
+
+
+templates:
+ - test.bs: |
+
+    u64 sum(u64 count, ...)
+    {
+        u64 ret = 0;
+        u64 i = 0;
+
+        while (i < count)
+        {
+            ret = ret + variadic(i);
+            i = i + 1;
+        }
+
+        return ret;
+    }
+
+    u64 main()
+    {
+        return sum({{ arguments }});
+    }

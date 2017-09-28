@@ -1,0 +1,40 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: "10 * 5 = 50 (both variables)"
+   left: a
+   right: b
+
+   status: 50
+
+ - name: "10 * 2 = 20 (right is literal)"
+   left: a
+   right: 2
+
+   status: 20
+
+ - name: "15 * 5 = 75 (left is literal)"
+   left: 15
+   right: b
+
+   status: 75
+
+ - name: "20 * 4 = 80 (both are literal)"
+   left: 20
+   right: 4
+
+   status: 80
+
+
+templates:
+ - test.bs: |
+
+    u64 main()
+    {
+        u64 a = 10;
+        u64 b = 5;
+
+        return {{ left }} * {{ right }};
+    }

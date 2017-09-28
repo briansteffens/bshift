@@ -1,0 +1,23 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: "8 & 1 = 0"
+   expr: "8 & 1"
+
+   status: 0
+
+ - name: "9 & 1 = 1"
+   expr: "9 & 1"
+
+   status: 1
+
+
+templates:
+ - test.bs: |
+
+    u64 main()
+    {
+        return {{ expr }};
+    }

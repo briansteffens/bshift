@@ -1,0 +1,31 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: break from while early
+
+   status: 3
+
+
+templates:
+ - test.bs: |
+
+    import io;
+
+    u64 main()
+    {
+        u64 x = 5;
+
+        while (x > 0)
+        {
+            x = x - 1;
+
+            if (x == 3)
+            {
+                break;
+            }
+        }
+
+        return x;
+    }

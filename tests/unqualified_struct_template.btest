@@ -1,0 +1,23 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: import struct template without qualification
+
+   status: 3
+
+
+templates:
+ - test.bs: |
+
+    import unqualified vector;
+
+    u64 main()
+    {
+        vector<u64> v();
+
+        v.add(3);
+
+        return v.get(0);
+    }

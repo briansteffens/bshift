@@ -1,0 +1,24 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: while loop
+
+   status: 3
+
+
+templates:
+ - test.bs: |
+
+    u64 main()
+    {
+        u64 x = 0;
+
+        while (x != 3)
+        {
+            x = x + 1;
+        }
+
+        return x;
+    }

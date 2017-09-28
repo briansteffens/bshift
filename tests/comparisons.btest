@@ -1,0 +1,129 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: "equality (3 == 3)"
+   a: 3
+   b: 3
+   operator: "=="
+
+   status: 1
+
+ - name: "equality (3 == 7)"
+   a: 3
+   b: 7
+   operator: "=="
+
+   status: 0
+
+ - name: "inequality (3 != 7)"
+   a: 3
+   b: 7
+   operator: "!="
+
+   status: 1
+
+ - name: "inequality (3 != 7)"
+   a: 3
+   b: 7
+   operator: "!="
+
+   status: 1
+
+ - name: "greater than (3 > 7)"
+   a: 3
+   b: 7
+   operator: ">"
+
+   status: 0
+
+ - name: "greater than (7 > 3)"
+   a: 7
+   b: 3
+   operator: ">"
+
+   status: 1
+
+ - name: "greater than or equal (3 >= 7)"
+   a: 3
+   b: 7
+   operator: ">="
+
+   status: 0
+
+ - name: "greater than or equal (7 >= 3)"
+   a: 7
+   b: 3
+   operator: ">="
+
+   status: 1
+
+ - name: "greater than or equal (3 >= 3)"
+   a: 3
+   b: 3
+   operator: ">="
+
+   status: 1
+
+ - name: "greater than or equal (3 >= 7)"
+   a: 3
+   b: 7
+   operator: ">="
+
+   status: 0
+
+ - name: "less than (3 < 7)"
+   a: 3
+   b: 7
+   operator: "<"
+
+   status: 1
+
+ - name: "less than (7 < 3)"
+   a: 7
+   b: 3
+   operator: "<"
+
+   status: 0
+
+ - name: "less than or equal (3 <= 7)"
+   a: 3
+   b: 7
+   operator: "<="
+
+   status: 1
+
+ - name: "less than or equal (7 <= 3)"
+   a: 7
+   b: 3
+   operator: "<="
+
+   status: 0
+
+ - name: "less than or equal (3 <= 3)"
+   a: 3
+   b: 3
+   operator: "<="
+
+   status: 1
+
+ - name: "less than or equal (7 <= 3)"
+   a: 7
+   b: 3
+   operator: "<="
+
+   status: 0
+
+
+templates:
+ - test.bs: |
+
+    u64 main()
+    {
+        u64 a = {{ a }};
+        u64 b = {{ b }};
+
+        auto ret = a {{ operator }} b;
+        return ret;
+    }

@@ -1,0 +1,45 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: "convert '123' to 123"
+   input: 123
+
+   status: 1
+   stdout: 123
+
+ - name: "convert '0' to 0"
+   input: 0
+
+   status: 1
+   stdout: 0
+
+ - name: "fail converting '1hi3'"
+   input: 1hi3
+
+   status: 0
+   stdout: 0
+
+ - name: "fail converting ''"
+   input: ""
+
+   status: 0
+   stdout: 0
+
+
+templates:
+ - test.bs: |
+
+    import io;
+    import cstring;
+
+    u64 main()
+    {
+        u64 output = 0;
+        bool success = cstring::to_u64("{{ input }}", &output);
+
+        io::print("%u", output);
+
+        return success;
+    }

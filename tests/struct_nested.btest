@@ -1,0 +1,34 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: make and use a nested struct
+
+   status: 13
+
+
+templates:
+ - test.bs: |
+
+    struct point
+    {
+        u64 x;
+        u64 y;
+    }
+
+    struct rect
+    {
+        point pos;
+        point size;
+    }
+
+    u64 main()
+    {
+        rect r;
+
+        r.pos.y = 3;
+        r.size.x = 10;
+
+        return r.pos.y + r.size.x;
+    }

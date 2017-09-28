@@ -1,0 +1,24 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: "Return a boolean local 'true'"
+   ret: true
+
+   status: 1
+
+ - name: "Return a boolean local 'false'"
+   ret: false
+
+   status: 0
+
+
+templates:
+ - test.bs: |
+
+    u64 main()
+    {
+        auto ret = {{ ret }};
+        return ret;
+    }

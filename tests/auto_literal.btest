@@ -1,0 +1,29 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: u64 value
+   val: 7
+
+   status: 7
+
+ - name: bool value
+   val: true
+
+   status: 1
+
+ - name: u64 added to u64
+   val: 3 + 4
+
+   status: 7
+
+
+templates:
+ - test.bs: |
+
+    u64 main()
+    {
+        auto ret = {{ val }};
+        return ret;
+    }

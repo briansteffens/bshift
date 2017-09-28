@@ -1,0 +1,42 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: "'hi' == 'hi'"
+   a: hi
+   b: hi
+
+   status: 1
+
+ - name: "'' == ''"
+   a: ""
+   b: ""
+
+   status: 1
+
+ - name: "'hi' != 'hey'"
+   a: hi
+   b: hey
+
+   status: 0
+
+ - name: "'hi' != 'hii'"
+   a: hi
+   b: hii
+
+   status: 0
+
+
+templates:
+ - test.bs: |
+
+    import cstring;
+
+    u64 main()
+    {
+        u8* a = "{{ a }}";
+        u8* b = "{{ b }}";
+
+        return cstring::compare(a, b);
+    }

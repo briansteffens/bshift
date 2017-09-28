@@ -1,0 +1,47 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: "max<u64>(10, 5) -> 10"
+   function: max
+   type: u64
+   a: 10
+   b: 5
+
+   status: 10
+
+ - name: "max<u64>(6, 12) -> 12"
+   function: max
+   type: u64
+   a: 6
+   b: 12
+
+   status: 12
+
+ - name: "min<u64>(6, 12) -> 6"
+   function: min
+   type: u64
+   a: 6
+   b: 12
+
+   status: 6
+
+ - name: "min<u64>(5, 3) -> 3"
+   function: min
+   type: u64
+   a: 5
+   b: 3
+
+   status: 3
+
+
+templates:
+ - test.bs: |
+
+    import math;
+
+    u64 main()
+    {
+        return math::{{ function }}<{{ type }}>({{ a }}, {{ b }});
+    }

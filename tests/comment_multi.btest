@@ -1,0 +1,20 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: "multi-line comments"
+
+   status: 3
+
+
+templates:
+ - test.bs: |
+
+    /* start of file */
+
+    /* before function */ u64 /* inside signature */ main(u64 /* bad */ t0)
+    {  /* just bad form really */
+        /* next I will return */return/* awful */3/*wow*/;
+    }
+    /* end of file */

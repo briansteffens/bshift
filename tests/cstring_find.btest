@@ -1,0 +1,67 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: "find 'gr' in 'greetings' - start of string"
+   haystack: greetings
+   needle: gr
+
+   status: 0
+
+ - name: "find 'ee' in 'greetings' - middle of string"
+   haystack: greetings
+   needle: ee
+
+   status: 2
+
+ - name: "find 'ngs' in 'greetings' - end of string"
+   haystack: greetings
+   needle: ngs
+
+   status: 6
+
+ - name: "find 't' in 'greetings' - single char"
+   haystack: greetings
+   needle: t
+
+   status: 4
+
+ - name: "find 'tz' in 'greetings' - no match"
+   haystack: greetings
+   needle: tz
+
+   status: 255
+
+ - name: "find 'hi' in '' - empty haystack"
+   haystack: ""
+   needle: hi
+
+   status: 255
+
+ - name: "find '' in 'greetings' - empty needle"
+   haystack: greetings
+   needle: ""
+
+   status: 255
+
+
+templates:
+ - test.bs: |
+
+    import cstring;
+
+    u64 main()
+    {
+        u8* haystack = "{{ haystack }}";
+        u8* needle = "{{ needle }}";
+
+        u8* result = cstring::find(haystack, needle);
+
+        if (result == 0)
+        {
+            return 255;
+        }
+
+        return result - haystack;
+    }

@@ -1,0 +1,19 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: import normal function without qualification
+
+   status: 5
+
+
+templates:
+ - test.bs: |
+
+    import unqualified cstring;
+
+    u64 main()
+    {
+        return length("hello");
+    }

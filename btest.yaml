@@ -1,0 +1,12 @@
+test_path: tests
+
+runners:
+  - name: nasm
+    setup:
+     - bshift --nasm test.bs
+    run: ./a.out
+
+  - name: basm
+    setup:
+     - bshift test.bs
+    run: ./a.out

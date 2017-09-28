@@ -1,0 +1,28 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: make and use a simple struct
+
+   status: 10
+
+
+templates:
+ - test.bs: |
+
+    struct point
+    {
+        u64 x;
+        u64 y;
+    }
+
+    u64 main()
+    {
+        point p;
+
+        p.x = 3;
+        p.y = 7;
+
+        return p.x + p.y;
+    }

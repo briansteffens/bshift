@@ -1,0 +1,49 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: "3 == 3 || 7 == 7"
+   a: 3
+   b: 7
+   expression: "a == 3 || b == 7"
+
+   status: 1
+
+ - name: "3 == 3 || 7 == 6"
+   a: 3
+   b: 7
+   expression: "a == 3 || b == 6"
+
+   status: 1
+
+ - name: "3 == 4 || 7 == 7"
+   a: 3
+   b: 7
+   expression: "a == 4 || b == 7"
+
+   status: 1
+
+ - name: "3 == 4 || 7 == 6"
+   a: 3
+   b: 7
+   expression: "a == 4 || b == 6"
+
+   status: 0
+
+
+templates:
+ - test.bs: |
+
+    u64 main()
+    {
+        auto a = {{ a }};
+        auto b = {{ b }};
+
+        if ({{ expression }})
+        {
+            return 1;
+        }
+
+        return 0;
+    }

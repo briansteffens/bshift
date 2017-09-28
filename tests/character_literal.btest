@@ -1,0 +1,17 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: character literals become ASCII codes
+
+   status: 97
+
+
+templates:
+ - test.bs: |
+
+    u64 main()
+    {
+        return 'a';
+    }
