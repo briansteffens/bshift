@@ -53,18 +53,26 @@ int main(string[] args)
     string[] asmFiles;
     foreach (result; results)
     {
-        asmFiles ~= result.asmFile;
+        if (result.changed)
+        {
+            asmFiles ~= result.asmFile;
+        }
     }
 
-    string[] objectFiles;
     try
     {
-        objectFiles = assemble(assembler, asmFiles);
+        assemble(assembler, asmFiles);
     }
     catch (Exception ex)
     {
         writeln(ex);
         return 2;
+    }
+
+    string[] objectFiles;
+    foreach (result; results)
+    {
+        objectFiles ~= result.objectFile;
     }
 
     // [.o] -> a.out
@@ -94,7 +102,7 @@ void link(string[] objectFiles)
     }
 }
 
-string[] assemble(Assembler assembler, string[] sources)
+void assemble(Assembler assembler, string[] sources)
 {
     string assemblerTemplate = null;
 
@@ -128,8 +136,6 @@ string[] assemble(Assembler assembler, string[] sources)
                     format("Unrecognized assembler %s", assembler));
     }
 
-    string[] ret;
-
     foreach (source; sources)
     {
         auto asmOut = executeShell(format(assemblerTemplate, source));
@@ -144,28 +150,38 @@ string[] assemble(Assembler assembler, string[] sources)
             throw new Exception(format("Failed to assemble %s: %d", source,
                                        asmOut.status));
         }
-
-        ret ~= source[0..$-4] ~ ".o";
     }
-
-    return ret;
 }
 
 class CompileResult
 {
     Module mod;
     string asmFile;
+    string objectFile;
+    bool changed;
 
-    this(Module mod, string asmFile)
+    this(Module mod, string asmFile, string objectFile, bool changed)
     {
         this.mod = mod;
         this.asmFile = asmFile;
+        this.objectFile = objectFile;
+        this.changed = changed;
     }
 }
 
 // Compile a module
 CompileResult compile(string sourceFilename)
 {
+    auto asmFilename = replace(sourceFilename, ".bs", ".asm");
+    auto objectFilename = replace(sourceFilename, ".bs", ".o");
+
+    auto sourceModified = timeLastModified(sourceFilename);
+
+    bool changed = !exists(asmFilename) ||
+                   sourceModified > timeLastModified(asmFilename);
+
+    writefln("changed: %d", changed);
+
     // Source code
     auto source = readText(sourceFilename);
 
@@ -193,31 +209,33 @@ CompileResult compile(string sourceFilename)
     auto moduleName = replace(sourceFilename, ".bs", "").split("/")[$-1];
     auto mod = parse(moduleName, tokens);
 
-    if (verbose)
+    if (changed)
     {
-        writeln("bshift ast ----------------------------------------------\n");
-        writeln(mod);
+        if (verbose)
+        {
+            writeln("bshift ast ------------------------------------------\n");
+            writeln(mod);
+        }
+
+        // Generator
+        auto output = generate(mod);
+
+        // Write assembly output
+        auto contents = renderAsmFile(output);
+
+        if (verbose)
+        {
+            writeln("bshift output ---------------------------------------\n");
+            writeln(contents);
+        }
+
+        auto bytes = cast(ubyte[])contents;
+
+        auto file = File(asmFilename, "w");
+        file.rawWrite(bytes);
     }
 
-    // Generator
-    auto output = generate(mod);
-
-    // Write assembly output
-    auto contents = renderAsmFile(output);
-
-    if (verbose)
-    {
-        writeln("bshift output -------------------------------------------\n");
-        writeln(contents);
-    }
-
-    auto bytes = cast(ubyte[])contents;
-
-    auto outputFilename = replace(sourceFilename, ".bs", ".asm");
-    auto file = File(outputFilename, "w");
-    file.rawWrite(bytes);
-
-    return new CompileResult(mod, outputFilename);
+    return new CompileResult(mod, asmFilename, objectFilename, changed);
 }
 
 // Compile a module and any imported modules
