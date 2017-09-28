@@ -710,7 +710,7 @@ string renderStringLiteral(GeneratorState state, ulong index)
                      .replace("\n", "\\n")
                      .replace("\t", "\\t");
 
-        value = format("\"%s\", 0", value);
+        value = format("`%s`, 0", value);
     }
 
     return format("    %s: db %s", renderStringLiteralName(index), value);
