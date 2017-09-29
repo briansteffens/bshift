@@ -6,10 +6,29 @@ d:
     - ldc
 
 script:
+    # ldc gets installed as other names sometimes
+    - sudo ln -s `which $DC` /usr/local/bin/ldc
+
+    # bshift
+    - make
+    - sudo ln -s $PWD/bin/bshift /usr/local/bin/bshift
+    - sudo ln -s $PWD/lib /usr/local/lib/bshift
+
+    # nasm
     - sudo apt-get install -y nasm
+
+    # basm
     - git clone https://github.com/briansteffens/basm
     - cd basm && cabal build && cd ..
     - sudo ln -s $PWD/basm/dist/build/basm/basm /usr/local/bin/basm
-    - git clone https://github.com/briansteffens/asmtest
-    - sudo ln -s `which $DC` /usr/local/bin/ldc
-    - asmtest/asmtest.py
+
+    # crystal
+    - curl https://dist.crystal-lang.org/apt/setup.sh | sudo bash
+    - sudo apt-get update && sudo apt-get install -y crystal
+
+    # btest
+    - git clone https://github.com/briansteffens/btest
+    - cd btest && make && sudo make install && cd ..
+
+    # run the tests
+    - btest
