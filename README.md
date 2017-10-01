@@ -46,12 +46,12 @@ bin/bshift examples/hello.bs
 
 Additional dependencies for running the tests:
 
-* [asmtest](https://github.com/briansteffens/asmtest)
+* [btest](https://github.com/briansteffens/btest)
 
 From the bshift repository root directory:
 
 ```bash
-asmtest
+btest
 ```
 
 

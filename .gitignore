@@ -2,7 +2,7 @@ a.out
 main
 *.o
 *.asm
-.asmtest
+.btest
 test
 bin/bshift
 bin/bshift.o
