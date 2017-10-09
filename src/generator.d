@@ -786,13 +786,14 @@ string[] generate(Module mod)
     }
 
     // Bootstrap the main function if there is one
-    if (mod.functionExists("main"))
+    auto mainFuncs = mod.findFunctions(null, "main");
+    if (mainFuncs.length == 1)
     {
-        auto mainFunc = mod.findFunction("main");
+        auto mainFunc = mainFuncs[0];
 
         state.render("global _start");
         state.render("_start:");
-        state.render(format("    call %s", mainFunc.signature.name));
+        state.render(format("    call %s", mainFunc.name));
         state.render(format("    mov rdi, rax"));
         version (OSX)
         {
@@ -868,6 +869,14 @@ string renderName(FunctionSignature sig)
     if (method !is null)
     {
         ret = format("%s_%s", method.containerType.baseTypeToString(), ret);
+    }
+
+    if (sig.overloaded)
+    {
+        foreach (p; sig.parameters)
+        {
+            ret ~= "_" ~ p.type.baseTypeToString();
+        }
     }
 
     return format("%s_%s", sig.mod.name, ret);

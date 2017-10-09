@@ -1,0 +1,32 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: call overloaded function with a u64
+   arg: 3
+
+   status: 3
+
+ - name: call overloaded function with a u8*
+   arg: '"hi"'
+
+   status: 7
+
+templates:
+ - test.bs: |
+
+    u64 func(u64 x)
+    {
+        return 3;
+    }
+
+    u64 func(u8* s)
+    {
+        return 7;
+    }
+
+    u64 main()
+    {
+        return func({{ arg }});
+    }

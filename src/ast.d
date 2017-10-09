@@ -1125,13 +1125,24 @@ class Struct
         return format("struct %s {\n%s\n}\n%s", this.name, members, methods);
     }
 
+    // TODO: pretty copypasta, unify methods with functions
     MethodSignature findMethod(MethodCall call)
     {
+        MethodSignature[] candidates;
+
         foreach (method; this.methods)
         {
             if (method.methodSignature.name == call.functionName)
             {
-                return method.methodSignature;
+                candidates ~= method.methodSignature;
+            }
+        }
+
+        foreach (c; candidates)
+        {
+            if (matchFunctionToCall(c, call))
+            {
+                return c;
             }
         }
 
@@ -1833,6 +1844,9 @@ class FunctionSignature
     // a function.
     int nextGeneratedIndex;
 
+    // Whether this function is overloaded elsewhere
+    bool overloaded;
+
     this(Type returnType, string name, TypeSignature[] parameters,
          bool variadic, bool exported=false)
     {
@@ -1842,6 +1856,7 @@ class FunctionSignature
         this.variadic = variadic;
         this.exported = exported;
         this.nextGeneratedIndex = 0;
+        this.overloaded = false;
     }
 
     FunctionSignature clone()
@@ -2168,17 +2183,19 @@ class Import
         return ret;
     }
 
-    FunctionSignature findFunction(string name)
+    FunctionSignature[] findFunctions(string name)
     {
+        FunctionSignature[] ret;
+
         foreach (func; this.functions)
         {
             if (func.name == name)
             {
-                return func;
+                ret ~= func;
             }
         }
 
-        throw new Exception(format("Function %s not found", name));
+        return ret;
     }
 }
 
@@ -2204,6 +2221,56 @@ class Global
             return format("%s = %s", this.signature, this.value);
         }
     }
+}
+
+bool matchFunctionToCall(FunctionSignature func, Call call)
+{
+    if (func.name != call.functionName)
+    {
+        return false;
+    }
+
+    bool isMethod = cast(MethodSignature)func !is null;
+
+    // Validate arguments
+    TypeSignature[] funcParams;
+    for (auto i = 0; i < func.parameters.length; i++)
+    {
+        // Skip the first parameter if this is a method call and this has been
+        // injected
+        if (isMethod && i == 0 && func.parameters[i].name == "this")
+        {
+            continue;
+        }
+
+        funcParams ~= func.parameters[i];
+    }
+
+    Node[] callArgs;
+    foreach (p; call.parameters)
+    {
+        callArgs ~= p;
+
+        if (func.variadic && callArgs.length >= func.parameters.length)
+        {
+            break;
+        }
+    }
+
+    if (funcParams.length != callArgs.length)
+    {
+        return false;
+    }
+
+    for (auto i = 0; i < callArgs.length; i++)
+    {
+        if (!funcParams[i].type.compare(callArgs[i].type))
+        {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 class Module
@@ -2345,30 +2412,48 @@ class Module
         return ret;
     }
 
-    bool functionExists(string name)
+    FunctionSignature[] findFunctions(string moduleName, string functionName)
     {
+        // Search imported modules
+        if (moduleName !is null)
+        {
+            auto imp = this.findImport(moduleName);
+            return imp.findFunctions(functionName);
+        }
+
+        FunctionSignature[] ret;
+
+        // Search functions
         foreach (func; this.justFunctions())
         {
-            if (func.signature.name == name)
+            if (func.signature.name == functionName)
             {
-                return true;
+                ret ~= func.signature;
             }
         }
 
-        return false;
-    }
-
-    Function findFunction(string name)
-    {
-        foreach (func; this.justFunctions())
+        // Search for externs defined in the current module
+        foreach (ext; this.externs)
         {
-            if (func.signature.name == name)
+            if (ext.name == functionName)
             {
-                return func;
+                ret ~= ext;
             }
         }
 
-        throw new Exception(format("Function %s not found", name));
+        // Search unqualified imports
+        foreach (imp; this.imports)
+        {
+            foreach (f; imp.functions)
+            {
+                if (f.name == functionName)
+                {
+                    ret ~= f;
+                }
+            }
+        }
+
+        return ret;
     }
 
     FunctionSignature findFunction(Call call)
@@ -2391,46 +2476,19 @@ class Module
                     false);
         }
 
-        // Search the current module
-        if (call.moduleName is null)
+        auto candidates = this.findFunctions(call.moduleName,
+                call.functionName);
+
+        foreach (c; candidates)
         {
-            // Search functions
-            foreach (func; this.justFunctions())
+            if (matchFunctionToCall(c, call))
             {
-                if (func.signature.name == call.functionName)
-                {
-                    return func.signature;
-                }
+                return c;
             }
-
-            // Search for externs defined in the current module
-            foreach (ext; this.externs)
-            {
-                if (ext.name == call.functionName)
-                {
-                    return ext;
-                }
-            }
-
-            // Search unqualified imports
-            foreach (imp; this.imports)
-            {
-                foreach (f; imp.functions)
-                {
-                    if (f.name == call.functionName)
-                    {
-                        return f;
-                    }
-                }
-            }
-
-            throw new Exception(format("Function %s not found",
-                    call.functionName));
         }
 
-        // Search imported modules
-        auto imp = this.findImport(call.moduleName);
-        return imp.findFunction(call.functionName);
+        throw new Exception(format("Function %s not found",
+                call.functionName));
     }
 
     Import findImport(string name)

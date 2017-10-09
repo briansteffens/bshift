@@ -62,6 +62,47 @@ void validate(Module mod)
     {
         validateFunction(mod, func);
     }
+
+    // Mark overloaded functions
+    FunctionSignature[] signatures;
+    foreach (func; mod.justFunctions())
+    {
+        signatures ~= func.signature;
+    }
+    markOverloadedFunctions(signatures);
+
+    // Mark overloaded methods
+    foreach (struct_; mod.structs)
+    {
+        FunctionSignature[] signatures2;
+        foreach (method; struct_.methods)
+        {
+            signatures2 ~= method.signature;
+        }
+        markOverloadedFunctions(signatures2);
+    }
+}
+
+void markOverloadedFunctions(FunctionSignature[] functions)
+{
+    int[string] counts;
+    foreach (func; functions)
+    {
+        if ((func.name in counts) is null)
+        {
+            counts[func.name] = 0;
+        }
+
+        counts[func.name]++;
+    }
+
+    foreach (func; functions)
+    {
+        if (counts[func.name] > 1)
+        {
+            func.overloaded = true;
+        }
+    }
 }
 
 void validateStruct(Module mod, Struct struct_)

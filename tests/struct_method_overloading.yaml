@@ -1,0 +1,39 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: call overloaded method with a u64
+   arg: 3
+
+   status: 3
+
+ - name: call overloaded method with a u8*
+   arg: '"hi"'
+
+   status: 7
+
+templates:
+ - test.bs: |
+
+    struct point
+    {
+        u64 x;
+        u64 y;
+    }
+
+    u64 point::func(u64 x)
+    {
+        return 3;
+    }
+
+    u64 point::func(u8* s)
+    {
+        return 7;
+    }
+
+    u64 main()
+    {
+        point p;
+        return p.func({{ arg }});
+    }
