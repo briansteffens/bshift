@@ -36,6 +36,12 @@ int main(string[] args)
             continue;
         }
 
+        if (arg == "-f")
+        {
+            force = true;
+            continue;
+        }
+
         sourceFilename = arg;
     }
 
@@ -53,7 +59,7 @@ int main(string[] args)
     string[] asmFiles;
     foreach (result; results)
     {
-        if (result.changed)
+        if (result.changed || force)
         {
             asmFiles ~= result.asmFile;
         }
@@ -207,7 +213,7 @@ CompileResult compile(string sourceFilename)
     auto moduleName = replace(sourceFilename, ".bs", "").split("/")[$-1];
     auto mod = parse(moduleName, tokens);
 
-    if (changed)
+    if (changed || force)
     {
         if (verbose)
         {
