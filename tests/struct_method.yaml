@@ -4,8 +4,14 @@ runners:
 
 cases:
  - name: call a struct method
+   function: sum
 
    status: 10
+
+ - name: call a struct method from within a struct method
+   function: sum2
+
+   status: 11
 
 
 templates:
@@ -22,6 +28,11 @@ templates:
         return this.x + this.y;
     }
 
+    u64 point::sum2()
+    {
+        return this.sum() + 1;
+    }
+
     u64 main()
     {
         point p;
@@ -29,5 +40,5 @@ templates:
         p.x = 3;
         p.y = 7;
 
-        return p.sum();
+        return p.{{ function }}();
     }

@@ -560,7 +560,14 @@ void validateMethodCall(Module mod, MethodCall call)
     // times
     if (call.parameters.length == 0 || call.parameters[0].tag != "this")
     {
-        auto thisArg = new Reference(call.container);
+        Node thisArg = call.container.clone();
+
+        // If the container isn't already a pointer, reference it
+        if (call.container.type.pointerDepth == 0)
+        {
+            thisArg = new Reference(thisArg);
+        }
+
         thisArg.tag = "this";
         thisArg.retype();
         call.parameters = thisArg ~ call.parameters;
