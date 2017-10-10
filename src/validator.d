@@ -267,6 +267,7 @@ ValidationResult validateStatement(Module mod, StatementBase st)
     if (constructorCall !is null)
     {
         auto constructorSt = new Statement(local.line, constructorCall);
+        constructorSt.parent = st.parent;
 
         auto binding = cast(Binding)constructorCall.container;
         if (binding is null)

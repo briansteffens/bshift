@@ -451,6 +451,12 @@ Module parse(string name, Token[] tokenArray)
         }
     }
 
+    if (verbose)
+    {
+        writeln("bshift unvalidated ast ----------------------------------\n");
+        writeln(ret);
+    }
+
     //try
     //{
         validate(ret);
