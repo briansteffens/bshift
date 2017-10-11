@@ -72,10 +72,6 @@ u64 main()
 }
 ```
 
-There are no header files like in C. When you import a module, such as *io*
-from the standard library, the definitions are parsed from the module, it's
-compiled to an object file, and bshift passes both object files to the linker
-for linking.
 
 
 
@@ -97,7 +93,8 @@ A pointer is always a u64 under the hood.
 
 ### Type inference
 
-There is also an *auto* keyword which attempts to do some type inference:
+There is also an *auto* keyword (thanks @eatonphil) which attempts to do some
+type inference:
 
 ```c
 import io;
@@ -116,6 +113,112 @@ u64 main()
     return 0;
 }
 ```
+
+
+
+### Import
+
+A module can be imported into another module using the import keyword:
+
+```c
+import io;
+
+u64 main()
+{
+    io::print("hello\n");
+
+    return 0;
+}
+```
+
+In the above example, the compiler will look for an `io.bs` file in the
+following locations, in order:
+
+- ./io.bs
+- ./lib/io.bs
+- /usr/local/lib/bshift/io.bs
+
+If it finds a match, any exported functions/structs will become available
+by using the module name and the scope operator. So `io::print` refers to a
+function called *print* which is exported by the module *io*.
+
+
+
+
+
+### Import unqualified
+
+A module can be imported without requiring the module and the scope operator
+using the unqualified keyword:
+
+```c
+import unqualified io;
+
+u64 main()
+{
+    print("hello\n");
+
+    return 0;
+}
+```
+
+
+
+
+### Export
+
+By default, all definitions in a module are private to that module. In order
+to make them available to other modules, they have to be exported:
+
+```c
+// example.bs
+
+export u64 increment(u64 a)
+{
+    return a + 1;
+}
+
+export struct point
+{
+    u64 x;
+    u64 y;
+}
+
+void not_exported()
+{
+}
+```
+
+The above module can be imported by another module:
+
+```c
+import io;
+import example;
+
+u64 main()
+{
+    example::point p;
+    p.x = 3;
+
+    u64 a = example::increment(p.x);
+
+    io::print("%u\n", a);
+
+    return 0;
+}
+```
+
+The exported struct `point` and the exported function `increment` are available
+to the importing module. However, trying to access the `not_exported` function
+would result in an error.
+
+When run, the output will be:
+
+```
+4
+```
+
+
 
 
 
@@ -163,10 +266,51 @@ u64 main()
 
 
 
+
+### Constructors
+
+Structs can have constructors, which are used to initialize struct instances.
+A constructor is defined by making a struct method called *construct* which
+returns void:
+
+```c
+import io;
+
+struct point
+{
+    u64 x;
+    u64 y;
+}
+
+void point::construct(u64 x, u64 y)
+{
+    this.x = x;
+    this.y = y;
+}
+
+u64 main()
+{
+    point p(3, 7);
+
+    io::print("%u, %u\n", p.x, p.y);
+
+    return 0;
+}
+```
+
+When run, the output will be:
+
+```
+3, 7
+```
+
+
+
+
 ### Destructors
 
 Structs can have destructors, which are called automatically when they leave
-scope. A destructor is defined by making a member function called *destruct*
+scope. A destructor is defined by making a struct method called *destruct*
 which takes no arguments and returns void:
 
 ```c
@@ -229,6 +373,211 @@ deferred
 ```
 
 
+
+
+# Function overloading
+
+Functions can be defined which have the same name but differ based on the types
+of their arguments:
+
+```c
+import io;
+
+void show(u64 x)
+{
+    io::print("%u\n", x);
+}
+
+void show(u8* s)
+{
+    io::print("%s\n", s);
+}
+
+u64 main()
+{
+    show(3);
+    show("hello");
+
+    return 0;
+}
+```
+
+When run, the output will be:
+
+```
+3
+hello
+```
+
+
+
+
+# Method overloading
+
+Struct methods can also be overloaded. One example use-case is to provide
+multiple ways of initializing a struct instance:
+
+```c
+import io;
+
+struct point
+{
+    u64 x;
+    u64 y;
+}
+
+// Initialize a point with the given values
+void point::construct(u64 x, u64 y)
+{
+    this.x = x;
+    this.y = y;
+}
+
+// Initialize a point with default values
+void point::construct()
+{
+    this.construct(0, 0);
+}
+
+u64 main()
+{
+    point p1();
+    io::print("%u, %u\n", p1.x, p1.y);
+
+    point p2(3, 7);
+    io::print("%u, %u\n", p2.x, p2.y);
+}
+```
+
+When run, the output will be:
+
+```
+0, 0
+3, 7
+```
+
+
+
+
+### Function templates
+
+Generic programming of functions is possible by using templates. After a
+function name, put type parameters in angled brackets. When the function is
+called with a new list of concrete types, a new version of the template will
+be rendered:
+
+```c
+import io;
+
+T max<T>(T a, T b)
+{
+    if (a > b)
+    {
+        return a;
+    }
+
+    return b;
+}
+
+u64 main()
+{
+    io::print("%u\n", max<u64>(3, 7));
+
+    return 0;
+}
+```
+
+When run, the output will be:
+
+```
+7
+```
+
+When `max<u64>(3, 7)` is called the first time, the compiler will notice that
+the template has not been called yet with T set to u64. So it will convert the
+following:
+
+```c
+T max<T>(T a, T b)
+{
+    if (a > b)
+    {
+        return a;
+    }
+
+    return b;
+}
+```
+
+To this:
+
+```c
+u64 max(u64 a, u64 b)
+{
+    if (a > b)
+    {
+        return a;
+    }
+
+    return b;
+}
+```
+
+
+
+
+# Struct templates
+
+Generic structs are also possible using a similar syntax:
+
+```c
+import io;
+
+struct container<T>
+{
+    T a;
+    T b;
+}
+
+u64 main()
+{
+    container<u64> c;
+
+    c.a = 3;
+    c.b = 7;
+
+    io::print("%u, %u\n", c.a, c.b);
+
+    return 0;
+}
+```
+
+When run, the output will be:
+
+```
+3, 7
+```
+
+When an instance of `container<u64>` is created, the compiler will convert the
+following template:
+
+```c
+struct container<T>
+{
+    T a;
+    T b;
+}
+```
+
+To:
+
+```c
+struct container
+{
+    u64 a;
+    u64 b;
+}
+```
 
 
 
