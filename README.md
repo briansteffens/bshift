@@ -942,3 +942,42 @@ Output:
 ```
 16
 ```
+
+
+
+
+
+## vector
+
+The *vector* module contains an implementation of a dynamically-sized array.
+
+Here's an example which creates a new vector of u64 integers, adds two
+elements, then prints those elements out as well as the total length of the
+vector:
+
+```c
+import io;
+import unqualified vector;
+
+u64 main()
+{
+    vector<u64> v;
+
+    v.add(3);
+    v.add(7);
+
+    io::print("%u\n", v.get(0));
+    io::print("%u\n", v.get(1));
+    io::print("%u\n", v.length);
+
+    return 0;
+}
+```
+
+When run, the output will be:
+
+```
+3
+7
+2
+```
