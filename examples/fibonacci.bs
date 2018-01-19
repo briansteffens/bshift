@@ -1,0 +1,28 @@
+import io;
+
+void fibonacci()
+{
+    // Bootstrap the recursion
+    fibonacci(0, 1);
+}
+
+void fibonacci(u64 previous, u64 current)
+{
+    io::print("%u\n", current);
+
+    u64 next = previous + current;
+
+    if (next > 10000)
+    {
+        return;
+    }
+
+    fibonacci(current, next);
+}
+
+u64 main()
+{
+    fibonacci();
+
+    return 0;
+}

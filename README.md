@@ -2,22 +2,43 @@
 
 [![Build Status](https://travis-ci.org/briansteffens/bshift.svg?branch=master)](https://travis-ci.org/briansteffens/bshift)
 
-This is a toy compiler for a vaguely C-style language with a couple of hints
-from Go.
+```c
+import io;
 
-*Note: don't use this for anything, it's super unstable.*
+u64 factorial(u64 n)
+{
+    if (n == 0)
+    {
+        return 1;
+    }
 
-For an example of a trivial bshift program, take a look at
-[show](https://github.com/briansteffens/show). This is the first actual bshift
-program.
+    return n * factorial(n - 1);
+}
 
-Some random notes on various peculiarities of the compiler:
+u64 main()
+{
+    io::print("%u\n", factorial(5));
 
-- Compiles straight to Intel-style x86-64 assembly, rather than a proper
-  compiler backend intermediate representation
-- No 32-bit support
-- bshift programs don't link to libc by default. bshift has its own interface
-  to syscalls and its own (extremely naive) memory manager
+    return 0;
+}
+```
+
+This is a toy compiler for a C-style language with a few other features:
+
+- Structs can have methods, including optional constructors and destructors
+- Function overloading based on argument types
+- Templates
+- No header files
+
+These come with some drawbacks, including:
+
+- Symbol name mangling
+- All the other drawbacks
+
+For an example of a bshift program, take a look at
+[show](https://github.com/briansteffens/show/blob/master/main.bs).
+
+*Hint: don't use this for anything, it's super unstable.*
 
 
 
@@ -981,3 +1002,18 @@ When run, the output will be:
 7
 2
 ```
+
+
+
+
+
+
+# Notes
+
+Some notes on various peculiarities of the compiler:
+
+- Compiles straight to Intel-style x86-64 assembly. Adding an LLVM mode would
+  be really cool but there are no immediate plans.
+- No 32-bit support.
+- bshift programs don't link to libc by default. bshift has its own interface
+  to syscalls and its own (extremely naive) memory manager.

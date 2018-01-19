@@ -1,0 +1,18 @@
+import io;
+
+u64 factorial(u64 n)
+{
+    if (n == 0)
+    {
+        return 1;
+    }
+
+    return n * factorial(n - 1);
+}
+
+u64 main()
+{
+    io::print("%u\n", factorial(5));
+
+    return 0;
+}
