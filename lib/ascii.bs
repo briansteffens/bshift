@@ -1,0 +1,98 @@
+import heap;
+import cstring;
+
+export struct ascii
+{
+    u8* data;
+    u64 length;
+    u64 allocated;
+}
+
+void ascii::construct(u8* source)
+{
+    this.length = cstring::length(source);
+    this.allocated = this.length + 1;
+    this.data = heap::allocate(sizeof(u8) * this.allocated);
+
+    cstring::copy(source, this.data);
+}
+
+void ascii::construct()
+{
+    this.construct("");
+}
+
+void ascii::construct(ascii* source)
+{
+    this.construct(source.data);
+}
+
+void ascii::destruct()
+{
+    heap::free(this.data);
+}
+
+void ascii::copy_to(ascii* destination)
+{
+    destination.destruct();
+
+    destination.length = this.length;
+    destination.allocated = this.allocated;
+    destination.data = heap::allocate(sizeof(u8) * (destination.length + 1));
+
+    cstring::copy(this.data, destination.data);
+}
+
+void ascii::reverse()
+{
+    u64 l = 0;
+    u64 r = this.length - 1;
+
+    while (l < r)
+    {
+        u8 temp = this.data[l];
+        this.data[l] = this.data[r];
+        this.data[r] = temp;
+
+        l = l + 1;
+        r = r - 1;
+    }
+}
+
+bool ascii::decimal_to_u64(u64* output)
+{
+    if (this.length == 0)
+    {
+        return false;
+    }
+
+    u64 ret = 0;
+    u64 i = 0;
+
+    while (i < this.length)
+    {
+        if (ret != 0)
+        {
+            ret = ret * 10;
+        }
+
+        u8 character = this.data[i];
+        character = character - '0';
+
+        if (character < 0)
+        {
+            return false;
+        }
+
+        if (character > 9)
+        {
+            return false;
+        }
+
+        ret = ret + (u64)character;
+        i = i + 1;
+    }
+
+    *output = ret;
+    return true;
+}
