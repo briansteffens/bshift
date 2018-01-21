@@ -212,29 +212,75 @@ Import[] parseImport(TokenFeed tokens)
         return rewind();
     }
 
+    // The word after import - not sure yet if it's the name of a module to
+    // import or the first in a list of symbols to import from a module.
+    auto moduleOrSymbol = tokens.current().value;
+
+    if (!tokens.next())
+    {
+       return rewind();
+    }
+
+    string moduleName;
+    string[] symbols;
     bool unqualified = false;
-    if (tokens.current().value == "unqualified")
+
+    // import a;
+    if (tokens.current().match(TokenType.Symbol, ";"))
+    {
+        moduleName = moduleOrSymbol;
+    }
+    // import x, y, z from a;
+    else
     {
         unqualified = true;
+        symbols ~= moduleOrSymbol;
 
-        if (!tokens.next())
+        // Read symbols separated by commas until the 'from' keyword
+        while (!tokens.current().match(TokenType.Word, "from"))
+        {
+            // Expect another symbol from the import list
+            if (!tokens.current().match(TokenType.Symbol, ","))
+            {
+                return rewind();
+            }
+
+            // Expect a word after the comma
+            if (!tokens.next() || tokens.current().type != TokenType.Word)
+            {
+                return rewind();
+            }
+
+            symbols ~= tokens.current().value;
+
+            if (!tokens.next())
+            {
+                return rewind();
+            }
+        }
+
+        // Expect a module name to import from
+        if (!tokens.next() || tokens.current().type != TokenType.Word)
+        {
+            return rewind();
+        }
+
+        moduleName = tokens.current().value;
+
+        // Expect a semi-colon
+        if (!tokens.next() || !tokens.current().match(TokenType.Symbol, ";"))
         {
             return rewind();
         }
     }
 
-    if (current.type != TokenType.Word)
+    bool included(string symbol)
     {
-        throw new ProgrammerException("Expected a module name to import near",
-            current.value, current.line, current.lineOffset);
+        return symbols.length == 0 || symbols.canFind(symbol);
     }
 
-    current = tokens.current();
-    auto name = current.value;
-    tokens.next();
-
     // Resolve import
-    string[] possibilities = possibleImportPaths(name);
+    string[] possibilities = possibleImportPaths(moduleName);
     string filename = null;
     foreach (possible; possibilities)
     {
@@ -255,13 +301,13 @@ Import[] parseImport(TokenFeed tokens)
     }
 
     // Parse the import
-    auto parsed = parse(name, lex(readText(filename), filename));
+    auto parsed = parse(moduleName, lex(readText(filename), filename));
 
     FunctionTemplate[] functionTemplates;
     FunctionSignature[] signatures;
     foreach (func; parsed.functions)
     {
-        if (!func.signature.exported)
+        if (!func.signature.exported || !included(func.signature.name))
         {
             continue;
         }
@@ -282,7 +328,7 @@ Import[] parseImport(TokenFeed tokens)
     Struct[] structs;
     foreach (s; parsed.structs)
     {
-        if (s.exported)
+        if (s.exported && included(s.name))
         {
             structs ~= s;
         }
@@ -291,13 +337,13 @@ Import[] parseImport(TokenFeed tokens)
     StructTemplate[] structTemplates;
     foreach (st; parsed.structTemplates)
     {
-        if (st.exported)
+        if (st.exported && included(st.name))
         {
             structTemplates ~= st;
         }
     }
 
-    return [new Import(filename, name, signatures, functionTemplates,
+    return [new Import(filename, moduleName, signatures, functionTemplates,
             structs, structTemplates, unqualified=unqualified)]
            ~ parsed.imports;
 }

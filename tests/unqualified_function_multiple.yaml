@@ -1,0 +1,29 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: import multiple functions without qualification
+
+   status: 123
+
+
+templates:
+ - test.bs: |
+
+    import reverse, to_u64 from cstring;
+
+    u64 main()
+    {
+        u8* s = "321";
+
+        reverse(s);
+
+        u64 ret;
+        if (to_u64(s, &ret) == false)
+        {
+            return 1;
+        }
+
+        return ret;
+    }

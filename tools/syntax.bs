@@ -4,7 +4,7 @@
 multiline comment */
 
 import heap;
-import unqualified memory;
+import copy from memory;
 
 extern void f();
 

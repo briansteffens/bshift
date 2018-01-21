@@ -167,13 +167,13 @@ function called *print* which is exported by the module *io*.
 
 
 
-### Import unqualified
+### Unqualified imports
 
-A module can be imported without requiring the module and the scope operator
-using the unqualified keyword:
+Specific functions or structs can be imported without requiring the module
+scope operator by naming them directly:
 
 ```c
-import unqualified io;
+import print from io;
 
 u64 main()
 {
@@ -181,6 +181,12 @@ u64 main()
 
     return 0;
 }
+```
+
+You can also import multiple functions or structs from a module:
+
+```c
+import length, reverse from cstring;
 ```
 
 
@@ -978,7 +984,7 @@ vector:
 
 ```c
 import io;
-import unqualified vector;
+import vector from vector;
 
 u64 main()
 {

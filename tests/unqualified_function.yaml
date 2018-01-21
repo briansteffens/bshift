@@ -11,7 +11,7 @@ cases:
 templates:
  - test.bs: |
 
-    import unqualified cstring;
+    import length from cstring;
 
     u64 main()
     {

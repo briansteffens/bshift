@@ -11,7 +11,7 @@ cases:
 templates:
  - test.bs: |
 
-    import unqualified point;
+    import point from point;
 
     u64 main()
     {

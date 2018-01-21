@@ -15,7 +15,7 @@ let s:ft = matchstr(&ft, '^\([^.]\)\+')
 
 
 " A bunch of useful C keywords
-syn keyword cStatement    return break continue defer import unqualified
+syn keyword cStatement    return break continue defer import from
 syn keyword cStatement    export
 syn keyword cConditional  if else
 syn keyword cRepeat       while

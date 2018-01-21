@@ -11,7 +11,7 @@ cases:
 templates:
  - test.bs: |
 
-    import unqualified vector;
+    import vector from vector;
 
     u64 main()
     {

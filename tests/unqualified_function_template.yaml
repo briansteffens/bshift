@@ -11,7 +11,7 @@ cases:
 templates:
  - test.bs: |
 
-    import unqualified math;
+    import max from math;
 
     u64 main()
     {
