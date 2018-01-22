@@ -2487,6 +2487,7 @@ class Module
             }
         }
 
+        // TODO: this can be misleading when the problem is a type mismatch
         throw new Exception(format("Function %s not found",
                 call.functionName));
     }

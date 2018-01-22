@@ -3,6 +3,8 @@ import std.stdio;
 import std.conv;
 import std.ascii;
 
+import terminal;
+
 enum TokenType
 {
     Integer,
@@ -27,14 +29,38 @@ class Token
         this.value = value;
     }
 
-    pure override string toString()
+    override string toString()
     {
-        return format("%s\t%s", this.type, this.value);
+        switch (this.type)
+        {
+            case TokenType.Integer:
+                return colorRed(this.value);
+            case TokenType.Word:
+                return colorBlue(this.value);
+            case TokenType.Symbol:
+                return colorYellow(this.value);
+            case TokenType.SingleQuote:
+                return "'" ~ colorBlue(this.value) ~ "'";
+            case TokenType.DoubleQuote:
+                return "\"" ~ colorBlue(this.value) ~ "\"";
+            default:
+                throw new Exception("Unrecognized TokenType");
+        }
     }
 
-    pure bool match(TokenType type, string value)
+    pure bool match(TokenType type, string value = null)
     {
-        return this.type == type && this.value == value;
+        if (this.type != type)
+        {
+            return false;
+        }
+
+        if (value !is null)
+        {
+            return this.value == value;
+        }
+
+        return true;
     }
 
     pure bool match(Token other)
@@ -48,7 +74,7 @@ class Token
     }
 }
 
-class ProgrammerException : Exception
+class SyntaxError : Exception
 {
     this(string msg, string item, Line line, int lineOffset,
          string efile = __FILE__, size_t eline = __LINE__)
@@ -57,6 +83,12 @@ class ProgrammerException : Exception
                               line.file, line.number + 1, lineOffset,
                               msg, item, line.source);
         super(fullMsg, efile, eline);
+    }
+
+    this(string msg, Token token, string efile = __FILE__,
+         size_t eline = __LINE__)
+    {
+        this(msg, token.value, token.line, token.lineOffset, efile, eline);
     }
 }
 
@@ -311,7 +343,7 @@ Token read(Reader r)
     }
 
     auto line = r.currentLine();
-    throw new ProgrammerException("Can't lex token", format("%c", r.current()),
+    throw new SyntaxError("Can't lex token", format("%c", r.current()),
                                   line, r.currentLineOffset());
 }
 
@@ -425,12 +457,8 @@ Token readQuote(Reader r, char quote, TokenType type)
             }
             catch (Exception)
             {
-                throw new ProgrammerException(
-                    "Unrecognized escape sequence",
-                    format("%c", r.current()),
-                    line,
-                    r.currentLineOffset()
-                );
+                throw new SyntaxError("Unrecognized escape sequence",
+                    format("%c", r.current()), line, r.currentLineOffset());
             }
 
             continue;

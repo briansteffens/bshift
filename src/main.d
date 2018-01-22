@@ -8,8 +8,8 @@ import std.process;
 import globals;
 import ast;
 import lexer;
-import parser;
 import generator;
+import parser;
 
 enum Assembler
 {
