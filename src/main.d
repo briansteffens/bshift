@@ -9,7 +9,7 @@ import globals;
 import ast;
 import lexer;
 import generator;
-import parser;
+import grammar;
 
 enum Assembler
 {
