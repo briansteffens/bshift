@@ -76,11 +76,19 @@ class Token
 
 class SyntaxError : Exception
 {
+    string originalMessage;
+    Line line;
+    int lineOffset;
+
     this(string msg, string item, Line line, int lineOffset,
          string efile = __FILE__, size_t eline = __LINE__)
     {
+        this.originalMessage = msg;
+        this.line = line;
+        this.lineOffset = lineOffset;
+
         auto fullMsg = format("[%s:%d,%d] %s \"%s\":\n%s",
-                              line.file, line.number + 1, lineOffset,
+                              line.file, line.number, lineOffset,
                               msg, item, line.source);
         super(fullMsg, efile, eline);
     }
@@ -163,11 +171,15 @@ class Line
     int number;
     string source;
     string file;
+    Line previous;
+    Line next;
 
-    this(int number, string file)
+    this(int number, string file, Line previous, Line next)
     {
         this.number = number;
         this.file = file;
+        this.previous = previous;
+        this.next = next;
     }
 }
 
@@ -186,13 +198,15 @@ class Char
 Char[] breakLines(string input, string file)
 {
     Char[] ret;
-    Line line = new Line(0, file);
+    Line line = new Line(1, file, null, null);
 
     foreach (c; input)
     {
         if (c == '\n')
         {
-            line = new Line(line.number + 1, file);
+            Line previous = line;
+            line = new Line(previous.number + 1, file, previous, null);
+            previous.next = line;
         }
         else
         {

@@ -4,12 +4,15 @@ import std.typecons;
 import std.file;
 import std.array;
 import std.process;
+import std.conv;
+import core.sys.posix.stdlib;
 
 import globals;
 import ast;
 import lexer;
 import generator;
 import grammar;
+import terminal;
 
 enum Assembler
 {
@@ -175,6 +178,68 @@ class CompileResult
     }
 }
 
+string padRight(string source, ulong maxLength)
+{
+    while (source.length < maxLength)
+    {
+        source ~= " ";
+    }
+
+    return source;
+}
+
+void printSyntaxError(SyntaxError e)
+{
+    writeln("\n" ~ colorRed("error: ") ~ e.originalMessage);
+
+    // Filename
+    writeln(format(" %s %s:%d:%d", colorBlue("-->"), e.line.file,
+            e.line.number, e.lineOffset));
+
+    // Source code
+    auto center = e.line;
+    auto current = center;
+    Line[] lines = [];
+
+    // Rewind up to 2 lines
+    for (int i = 0; i < 2 && current.previous !is null; i++)
+    {
+        current = current.previous;
+    }
+
+    // Take up to 5 lines
+    for (int i = 0; i < 5 && current.next !is null; i++)
+    {
+        lines ~= current;
+        current = current.next;
+    }
+
+    // Padding for line numbers
+    auto padding = to!string(center.number).length;
+
+    // Output source code
+    foreach (line; lines)
+    {
+        string left = "";
+
+        if (line == center)
+        {
+            left = to!string(line.number);
+        }
+
+        left = padRight(left, padding);
+
+        writeln(format("%s | %s", left, line.source));
+
+        if (line == center)
+        {
+            writeln(padRight("", padding + 2 + e.lineOffset),
+                    colorRed("^ somewhere around here"));
+        }
+    }
+    writeln();
+}
+
 // Compile a module
 CompileResult compile(string sourceFilename)
 {
@@ -211,7 +276,17 @@ CompileResult compile(string sourceFilename)
 
     // Parser
     auto moduleName = replace(sourceFilename, ".bs", "").split("/")[$-1];
-    auto mod = parse(moduleName, tokens);
+    Module mod;
+
+    try
+    {
+        mod = parse(moduleName, tokens);
+    }
+    catch (SyntaxError e)
+    {
+        printSyntaxError(e);
+        exit(7);
+    }
 
     if (changed || force)
     {
