@@ -266,9 +266,35 @@ CompileResult compile(string sourceFilename)
     if (verbose)
     {
         writeln("bshift tokens -------------------------------------------\n");
+
+        string buffer = "";
+
+        Line line = null;
+
         for (int i = 0; i < tokens.length; i++)
         {
-            writeln(tokens[i]);
+            if (buffer != "")
+            {
+                buffer ~= " ";
+            }
+
+            if (line != tokens[i].line)
+            {
+                if (line !is null)
+                {
+                    writeln(buffer);
+                }
+
+                buffer = "";
+                line = tokens[i].line;
+            }
+
+            buffer ~= tokens[i].toString();
+        }
+
+        if (buffer != "")
+        {
+            writeln(buffer);
         }
 
         writeln();
