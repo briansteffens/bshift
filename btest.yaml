@@ -10,3 +10,6 @@ runners:
     setup:
      - bshift test.bs
     run: ./a.out
+
+  - name: bshift
+    run: bshift test.bs

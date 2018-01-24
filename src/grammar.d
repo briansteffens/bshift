@@ -136,12 +136,17 @@ class TokenFeed
     Token require(TokenType type, string value = null,
             string errorMessage = null)
     {
+        if (eof)
+        {
+            throw new SyntaxError("Unexpected end-of-file reached", peek(-1));
+        }
+
         if (!match(type, value))
         {
             if (errorMessage is null)
             {
-                errorMessage = format("At [%s], expected a %s of '%s'.",
-                        current, type, value);
+                errorMessage = format("At [%s], expected '%s'", current,
+                        value);
             }
 
             throw new SyntaxError(errorMessage, current);
@@ -159,6 +164,11 @@ class TokenFeed
         return require(TokenType.Word, value, errorMessage);
     }
 
+    Token requireAnyWord(string errorMessage = null)
+    {
+        return requireWord(null, errorMessage);
+    }
+
     Token requireSymbol(string value = null, string errorMessage = null)
     {
         return require(TokenType.Symbol, value, errorMessage);
@@ -167,7 +177,7 @@ class TokenFeed
     // Checks if the current token matches the criteria
     bool match(TokenType type, string value = null)
     {
-        return current.match(type, value);
+        return inBounds(index) && current.match(type, value);
     }
 
     bool matchWord(string value = null)
@@ -334,6 +344,17 @@ Import[] processImport(Token start, string moduleName, string[] symbols = [])
            ~ parsed.imports;
 }
 
+// Parse qualified import: import io;
+Import[] parseImport(TokenFeed tokens)
+{
+    auto start = tokens.expectWord("import");
+    auto moduleName = tokens.requireAnyWord(
+            "Expected module or symbol name to import").value;
+    tokens.expectSymbol(";");
+
+    return processImport(start, moduleName);
+}
+
 // Parse unqualified import: import length, reverse from cstring;
 Import[] parseImportFrom(TokenFeed tokens)
 {
@@ -341,27 +362,30 @@ Import[] parseImportFrom(TokenFeed tokens)
 
     string[] symbols;
 
-    while (!tokens.matchWord("from"))
+    while (true)
     {
-        symbols ~= tokens.expectWord().value;
-        tokens.nextIfSymbol(",");
+        symbols ~= tokens.requireAnyWord(
+                "Expected symbol name to import").value;
+
+        if (tokens.nextIfWord("from"))
+        {
+            break;
+        }
+
+        tokens.requireSymbol(",", "Expected ',' or 'from'");
     }
 
-    tokens.expectWord("from");
-    auto moduleName = tokens.expectWord().value;
-    tokens.expectSymbol(";");
+    auto moduleName = tokens.requireAnyWord(
+            "Expected module to import from").value;
+
+    tokens.requireSymbol(";");
 
     return processImport(start, moduleName, symbols);
 }
 
-// Parse qualified import: import io;
-Import[] parseImport(TokenFeed tokens)
+Module parse(string name, string source)
 {
-    auto start = tokens.expectWord("import");
-    auto moduleName = tokens.expectWord().value;
-    tokens.expectSymbol(";");
-
-    return processImport(start, moduleName);
+    return parse(name, lex(source, name));
 }
 
 Module parse(string name, Token[] tokenArray)

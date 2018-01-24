@@ -621,7 +621,6 @@ class ExpressionParser
         // Check for an incomplete cast
         auto maybeCast = this.output.peek(0);
 
-        writeln("maybeCast: ", maybeCast);
         if (maybeCast is null || !maybeCast.isNode())
         {
             return false;

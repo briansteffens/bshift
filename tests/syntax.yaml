@@ -1,0 +1,54 @@
+runners:
+ - bshift
+
+cases:
+
+ # assorted
+ - name: unexpected end of file
+   code: import length from
+   stdout_contains: Unexpected end-of-file reached
+
+
+ # import
+ - name: import - valid
+   code: import io;
+   status: 0
+
+ - name: import - no module name
+   code: import;
+   stdout_contains: Expected module or symbol name to import
+
+ - name: import - no semi-colon
+   code: import io oops
+   stdout_contains: Expected ',' or 'from'
+
+
+ # import from
+ - name: import from - one symbol
+   code: import length from cstring;
+   status: 0
+
+ - name: import from - two symbols
+   code: import length, reverse from cstring;
+   status: 0
+
+ - name: import from - extra comma
+   code: import length ,, from cstring;
+   stdout_contains: Expected symbol name to import
+
+ - name: import from - missing comma
+   code: import length reverse from cstring;
+   stdout_contains: Expected ',' or 'from'
+
+ - name: import from - no module name
+   code: import length from 123
+   stdout_contains: Expected module to import from
+
+ - name: import from - no semi-colon
+   code: import length, reverse from cstring oops
+   stdout_contains: expected ';'
+
+
+templates:
+ - test.bs: |
+     {{ code }}
