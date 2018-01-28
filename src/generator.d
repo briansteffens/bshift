@@ -1080,13 +1080,14 @@ void generateStatementBase(GeneratorState state, StatementBase st)
         return;
     }
 
-    if (st.line is null)
+    if (st.token is null)
     {
         state.render("; null statement");
     }
     else
     {
-        auto output = format("; [%d] %s", st.line.number, st.line.source);
+        auto output = format("; [%d] %s", st.token.location.line.number,
+                st.token.location.line.source);
         if (output !in state.linesWritten)
         {
             state.render(output);

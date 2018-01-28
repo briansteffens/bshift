@@ -7,26 +7,10 @@ import std.algorithm;
 
 import globals;
 import terminal;
-import ast;
 import lexer;
+import ast;
 import expressions;
 import validator;
-
-// This is raised when, say, parseStruct is called on an if statement: the
-// grammar doesn't match but it doesn't necessarily mean the tokens are
-// invalid syntax.
-class GrammarMismatch : Exception
-{
-    Token token;
-
-    this(Token token, string efile = __FILE__, size_t eline = __LINE__)
-    {
-        super("The tokens could not be parsed as the given grammar rule",
-                efile, eline);
-
-        this.token = token;
-    }
-}
 
 class SyntaxError : Exception
 {
@@ -47,12 +31,28 @@ class UnexpectedEOF : SyntaxError
     }
 }
 
+// This is raised when, say, parseStruct is called on an if statement: the
+// grammar doesn't match but it doesn't necessarily mean the tokens are
+// invalid syntax.
+class GrammarMismatch : Exception
+{
+    Token token;
+
+    this(Token token, string efile = __FILE__, size_t eline = __LINE__)
+    {
+        super("The tokens could not be parsed as the given grammar rule",
+                efile, eline);
+
+        this.token = token;
+    }
+}
+
 // This is raised when the parser malfunctions.
 class ParserException : Exception
 {
-    this(string s, string efile = __FILE__, size_t eline = __LINE__)
+    this(string s)
     {
-        super(s, efile, eline);
+        super(s);
     }
 }
 
@@ -916,7 +916,7 @@ LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
 
     tokens.requireSymbol(";");
 
-    return new LocalDeclaration(start.line, typeSignature, expression);
+    return new LocalDeclaration(start, typeSignature, expression);
 }
 
 Type parseType(TokenFeed tokens)
@@ -950,8 +950,8 @@ Type parseType(TokenFeed tokens)
         // TODO
         tokens.seek(-1);
         auto parser = new ExpressionParser(tokens);
-        parser.until ~= new Token(tokens.current.line,
-                tokens.current.lineOffset, TokenType.Symbol, "]");
+        parser.until ~= new Token(tokens.current.location, TokenType.Symbol,
+                "]");
 
         elements = parser.run();
 
@@ -983,36 +983,36 @@ TypeSignature parseTypeSignature(TokenFeed tokens)
 
 Break parseBreak(TokenFeed tokens)
 {
-    auto line = tokens.current.line;
+    auto start = tokens.current;
 
     tokens.expectWord("break");
     tokens.requireSymbol(";");
 
-    return new Break(line);
+    return new Break(start);
 }
 
 Continue parseContinue(TokenFeed tokens)
 {
-    auto line = tokens.current.line;
+    auto start = tokens.current;
 
     tokens.expectWord("continue");
     tokens.requireSymbol(";");
 
-    return new Continue(line);
+    return new Continue(start);
 }
 
 Defer parseDefer(TokenFeed tokens)
 {
-    auto line = tokens.current.line;
+    auto start = tokens.current;
 
     tokens.expectWord("defer");
 
-    return new Defer(line, parseStatementBase(tokens));
+    return new Defer(start, parseStatementBase(tokens));
 }
 
 Assignment parseAssignment(TokenFeed tokens)
 {
-    auto line = tokens.current.line;
+    auto start = tokens.current;
 
     // The expression parser always starts by calling .next()
     Node lvalue;
@@ -1040,18 +1040,18 @@ Assignment parseAssignment(TokenFeed tokens)
 
     tokens.requireSymbol(";");
 
-    return new Assignment(line, lvalue, expression);
+    return new Assignment(start, lvalue, expression);
 }
 
 Statement parseStatement(TokenFeed tokens)
 {
-    auto line = tokens.current.line;
+    auto start = tokens.current;
 
     auto expression = parseExpression(tokens);
 
     tokens.requireSymbol(";");
 
-    return new Statement(line, expression);
+    return new Statement(start, expression);
 }
 
 Return parseReturn(TokenFeed tokens)
@@ -1065,7 +1065,7 @@ Return parseReturn(TokenFeed tokens)
         return new Return(null, null);
     }
 
-    auto ret = new Return(start.line, parseExpression(tokens));
+    auto ret = new Return(start, parseExpression(tokens));
     tokens.requireSymbol(";");
     return ret;
 }
@@ -1077,7 +1077,7 @@ While parseWhile(TokenFeed tokens)
     tokens.expectWord("while");
     auto block = parseConditionalBlock(tokens);
 
-    return new While(start.line, block.conditional, block.block);
+    return new While(start, block.conditional, block.block);
 }
 
 If parseIf(TokenFeed tokens)
@@ -1103,13 +1103,13 @@ If parseIf(TokenFeed tokens)
         break;
     }
 
-    return new If(startToken.line, ifBlock, elseIfBlocks, elseBlock);
+    return new If(startToken, ifBlock, elseIfBlocks, elseBlock);
 }
 
 // Parse a conditional expression followed by a statement or block
 ConditionalBlock parseConditionalBlock(TokenFeed tokens)
 {
-    auto line = tokens.current.line;
+    auto start = tokens.current;
 
     if (!tokens.matchSymbol("("))
     {
@@ -1120,5 +1120,5 @@ ConditionalBlock parseConditionalBlock(TokenFeed tokens)
     auto conditional = parseExpressionParenthesis(tokens);
     auto block = parseStatementBase(tokens);
 
-    return new ConditionalBlock(line, conditional, block);
+    return new ConditionalBlock(start, conditional, block);
 }

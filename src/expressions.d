@@ -280,8 +280,8 @@ class ExpressionParser
         this.output = new ParserItemStack();
         this.operators = new ParserItemStack();
 
-        this.until ~= new Token(null, 0, TokenType.Symbol, ";");
-        this.until ~= new Token(null, 0, TokenType.Symbol, "=");
+        this.until ~= new Token(null, TokenType.Symbol, ";");
+        this.until ~= new Token(null, TokenType.Symbol, "=");
     }
 
     void printState()

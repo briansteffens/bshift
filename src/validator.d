@@ -267,7 +267,7 @@ ValidationResult validateStatement(Module mod, StatementBase st)
     // TODO: use a tag or something instead of string checking?
     if (constructorCall !is null)
     {
-        auto constructorSt = new Statement(local.line, constructorCall);
+        auto constructorSt = new Statement(local.token, constructorCall);
         constructorSt.parent = st.parent;
 
         auto binding = cast(Binding)constructorCall.container;
@@ -298,7 +298,7 @@ ValidationResult validateStatement(Module mod, StatementBase st)
                     retSt.containingFunction().nextGeneratedIndex++);
             auto type = retSt.containingFunction().returnType;
             sig = new TypeSignature(type, name);
-            auto retVar = new LocalDeclaration(retSt.line, sig,
+            auto retVar = new LocalDeclaration(retSt.token, sig,
                     retSt.expression);
             retVar.parent = retSt.parent;
             validateStatement(mod, retVar);

@@ -389,8 +389,8 @@ interface InsideFunction
 
 abstract class Node : InsideFunction
 {
-    Line           line;
-    Type           type;
+    Token token;
+    Type type;
     InsideFunction parent;
 
     // TODO: this sucks, shouldn't need this.
@@ -1246,13 +1246,13 @@ class StructTemplate : Struct
 
 abstract class StatementBase : InsideFunction
 {
-    Line           line;
+    Token token;
     InsideFunction parent;
-    int            id;
+    int id;
 
-    this(Line line)
+    this(Token token)
     {
-        this.line = line;
+        this.token = token;
         this.id = nextId++;
     }
 
@@ -1366,9 +1366,9 @@ class Statement : StatementBase
 {
     Node expression;
 
-    this(Line line, Node expression)
+    this(Token token, Node expression)
     {
-        super(line);
+        super(token);
 
         this.expression = expression;
 
@@ -1380,7 +1380,7 @@ class Statement : StatementBase
 
     override StatementBase clone()
     {
-        return new Statement(this.line, this.expression.clone());
+        return new Statement(this.token, this.expression.clone());
     }
 
     override string toString()
@@ -1406,9 +1406,9 @@ class LocalDeclaration : StatementBase
     TypeSignature signature;
     Node value;
 
-    this(Line line, TypeSignature signature, Node value)
+    this(Token token, TypeSignature signature, Node value)
     {
-        super(line);
+        super(token);
 
         this.signature = signature;
         this.value = value;
@@ -1421,7 +1421,7 @@ class LocalDeclaration : StatementBase
 
     override StatementBase clone()
     {
-        return new LocalDeclaration(this.line, this.signature.clone(),
+        return new LocalDeclaration(this.token, this.signature.clone(),
                 this.value is null ? null : this.value.clone());
     }
 
@@ -1470,9 +1470,9 @@ class Assignment : StatementBase
     Node lvalue;
     Node value;
 
-    this(Line line, Node lvalue, Node value)
+    this(Token token, Node lvalue, Node value)
     {
-        super(line);
+        super(token);
 
         this.lvalue = lvalue;
         this.value = value;
@@ -1483,7 +1483,7 @@ class Assignment : StatementBase
 
     override StatementBase clone()
     {
-        return new Assignment(this.line, this.lvalue.clone(),
+        return new Assignment(this.token, this.lvalue.clone(),
                 this.value.clone());
     }
 
@@ -1500,14 +1500,14 @@ class Assignment : StatementBase
 
 class Break : StatementBase
 {
-    this(Line line)
+    this(Token token)
     {
-        super(line);
+        super(token);
     }
 
     override StatementBase clone()
     {
-        return new Break(this.line);
+        return new Break(this.token);
     }
 
     override string toString()
@@ -1518,14 +1518,14 @@ class Break : StatementBase
 
 class Continue : StatementBase
 {
-    this(Line line)
+    this(Token token)
     {
-        super(line);
+        super(token);
     }
 
     override StatementBase clone()
     {
-        return new Continue(this.line);
+        return new Continue(this.token);
     }
 
     override string toString()
@@ -1538,9 +1538,9 @@ class Defer : StatementBase
 {
     StatementBase statement;
 
-    this(Line line, StatementBase statement)
+    this(Token token, StatementBase statement)
     {
-        super(line);
+        super(token);
 
         this.statement = statement;
 
@@ -1549,7 +1549,7 @@ class Defer : StatementBase
 
     override StatementBase clone()
     {
-        return new Defer(this.line, this.statement.clone());
+        return new Defer(this.token, this.statement.clone());
     }
 
     override string toString()
@@ -1568,9 +1568,9 @@ class ConditionalBlock : StatementBase
     Node conditional;
     StatementBase block;
 
-    this(Line line, Node conditional, StatementBase block)
+    this(Token token, Node conditional, StatementBase block)
     {
-        super(line);
+        super(token);
 
         this.conditional = conditional;
         this.block = block;
@@ -1581,7 +1581,7 @@ class ConditionalBlock : StatementBase
 
     override StatementBase clone()
     {
-        return new ConditionalBlock(this.line, this.conditional.clone(),
+        return new ConditionalBlock(this.token, this.conditional.clone(),
                 this.block.clone());
     }
 
@@ -1608,14 +1608,14 @@ class ConditionalBlock : StatementBase
 
 class While : ConditionalBlock
 {
-    this(Line line, Node conditional, StatementBase block)
+    this(Token token, Node conditional, StatementBase block)
     {
-        super(line, conditional, block);
+        super(token, conditional, block);
     }
 
     override StatementBase clone()
     {
-        return new While(this.line, this.conditional.clone(),
+        return new While(this.token, this.conditional.clone(),
                 this.block.clone());
     }
 
@@ -1641,10 +1641,10 @@ class If : StatementBase
     ConditionalBlock[] elseIfBlocks;
     StatementBase elseBlock;
 
-    this(Line line, ConditionalBlock ifBlock, ConditionalBlock[] elseIfBlocks,
-         StatementBase elseBlock)
+    this(Token token, ConditionalBlock ifBlock,
+            ConditionalBlock[] elseIfBlocks, StatementBase elseBlock)
     {
-        super(line);
+        super(token);
 
         this.ifBlock = ifBlock;
         this.elseIfBlocks = elseIfBlocks;
@@ -1685,7 +1685,7 @@ class If : StatementBase
         auto elseBlock = this.elseBlock !is null ? this.elseBlock.clone() :
                 this.elseBlock;
 
-        return new If(this.line, ifBlock, elseIfs, elseBlock);
+        return new If(this.token, ifBlock, elseIfs, elseBlock);
     }
 
     override string toString()
@@ -1743,9 +1743,9 @@ class Return : StatementBase
 {
     Node expression;
 
-    this(Line line, Node expression)
+    this(Token token, Node expression)
     {
-        super(line);
+        super(token);
 
         this.expression = expression;
 
@@ -1757,7 +1757,7 @@ class Return : StatementBase
 
     override StatementBase clone()
     {
-        return new Return(this.line, this.expression.clone());
+        return new Return(this.token, this.expression.clone());
     }
 
     override string toString()

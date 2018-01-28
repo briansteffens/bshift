@@ -20,8 +20,6 @@ enum Assembler
     NASM,
 }
 
-import std.algorithm;
-
 int main(string[] args)
 {
     string sourceFilename = null;
@@ -195,11 +193,12 @@ void printSyntaxError(SyntaxError e)
     writeln("\n" ~ colorRed("error: ") ~ e.message);
 
     // Filename
-    writeln(format(" %s %s:%d:%d", colorBlue("-->"), e.token.line.file,
-            e.token.line.number, e.token.lineOffset));
+    auto loc = e.token.location;
+    writeln(format(" %s %s:%d:%d", colorBlue("-->"), loc.line.file,
+            loc.line.number, loc.lineOffset));
 
     // Source code
-    auto center = e.token.line;
+    auto center = loc.line;
     auto current = center;
     Line[] lines = [];
 
@@ -235,7 +234,7 @@ void printSyntaxError(SyntaxError e)
 
         if (line == center)
         {
-            writeln(padRight("", padding + 2 + e.token.lineOffset),
+            writeln(padRight("", padding + 2 + loc.lineOffset),
                     colorRed("^ somewhere around here"));
         }
     }
@@ -280,7 +279,7 @@ CompileResult compile(string sourceFilename)
                 buffer ~= " ";
             }
 
-            if (line != tokens[i].line)
+            if (line != tokens[i].location.line)
             {
                 if (line !is null)
                 {
@@ -288,7 +287,7 @@ CompileResult compile(string sourceFilename)
                 }
 
                 buffer = "";
-                line = tokens[i].line;
+                line = tokens[i].location.line;
             }
 
             buffer ~= tokens[i].toString();
