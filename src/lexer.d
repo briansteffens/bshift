@@ -62,14 +62,14 @@ class Token
     TokenType type;
     string value;
 
-    pure this(Char location, TokenType type, string value)
+    this(Char location, TokenType type, string value)
     {
         this.location = location;
         this.type = type;
         this.value = value;
     }
 
-    pure bool match(TokenType type, string value = null)
+    bool match(TokenType type, string value = null)
     {
         if (this.type != type)
         {
@@ -84,12 +84,12 @@ class Token
         return true;
     }
 
-    pure bool match(Token other)
+    bool match(Token other)
     {
         return this.match(other.type, other.value);
     }
 
-    pure Token clone()
+    Token clone()
     {
         return new Token(this.location, this.type, this.value);
     }
@@ -121,23 +121,23 @@ class Reader
     string source;
     int index = -1;
 
-    pure this(Char[] input, string source)
+    this(Char[] input, string source)
     {
         this.input = input;
         this.source = source;
     }
 
-    pure bool isFirst()
+    bool isFirst()
     {
         return this.index == 0;
     }
 
-    pure bool isLast()
+    bool isLast()
     {
         return this.index == this.input.length - 1;
     }
 
-    @property pure bool eof()
+    @property bool eof()
     {
         return this.index >= this.input.length;
     }
@@ -146,31 +146,40 @@ class Reader
     {
         if (eof)
         {
-            //throw new UnexpectedEOF(
+            auto location = input[$-1];
+
+            // Deal with case where there's no newline at the end of the file
+            if (location.line.source == "")
+            {
+                location = input[$-2];
+            }
+
+            throw new LexerError("Unexpected end-of-file found", location);
         }
     }
 
-    pure void advance()
+    void advance()
     {
         this.index++;
     }
 
-    @property pure Char current()
+    @property Char current()
     {
+        requireNotEOF();
         return this.input[this.index];
     }
 
-    pure dchar peek(int distance)
+    dchar peek(int distance)
     {
         return this.input[this.index + distance].value;
     }
 
-    pure dchar next()
+    dchar next()
     {
         return this.peek(1);
     }
 
-    pure Reader clone()
+    Reader clone()
     {
         auto ret = new Reader(this.input, this.source);
 
@@ -199,7 +208,7 @@ immutable string[] symbols =
     "...",
 ];
 
-pure bool isSymbol(string s)
+bool isSymbol(string s)
 {
     foreach (sym; symbols)
     {
@@ -212,22 +221,22 @@ pure bool isSymbol(string s)
     return false;
 }
 
-pure bool isSymbol(dchar c)
+bool isSymbol(dchar c)
 {
     return isSymbol(to!string(c));
 }
 
-pure bool isWhiteSpace(dchar c)
+bool isWhiteSpace(dchar c)
 {
     return c == ' ' || c == '\t' || c == '\n';
 }
 
-pure bool isDelimiter(dchar c)
+bool isDelimiter(dchar c)
 {
     return isWhiteSpace(c) || isSymbol(c) || c == ':';
 }
 
-pure string resolveEscapeSequence(dchar second)
+string resolveEscapeSequence(dchar second)
 {
     switch (second)
     {

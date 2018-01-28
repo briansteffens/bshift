@@ -188,17 +188,16 @@ string padRight(string source, ulong maxLength)
     return source;
 }
 
-void printSyntaxError(SyntaxError e)
+void printSyntaxError(string message, Char location)
 {
-    writeln("\n" ~ colorRed("error: ") ~ e.message);
+    writeln("\n" ~ colorRed("error: ") ~ message);
 
     // Filename
-    auto loc = e.token.location;
-    writeln(format(" %s %s:%d:%d", colorBlue("-->"), loc.line.file,
-            loc.line.number, loc.lineOffset));
+    writeln(format(" %s %s:%d:%d", colorBlue("-->"), location.line.file,
+            location.line.number, location.lineOffset));
 
     // Source code
-    auto center = loc.line;
+    auto center = location.line;
     auto current = center;
     Line[] lines = [];
 
@@ -234,7 +233,7 @@ void printSyntaxError(SyntaxError e)
 
         if (line == center)
         {
-            writeln(padRight("", padding + 2 + loc.lineOffset),
+            writeln(padRight("", padding + 2 + location.lineOffset),
                     colorRed("^ somewhere around here"));
         }
     }
@@ -262,7 +261,16 @@ CompileResult compile(string sourceFilename)
     }
 
     // Lexer
-    auto tokens = lex(source, sourceFilename);
+    Token[] tokens;
+    try
+    {
+        tokens = lex(source, sourceFilename);
+    }
+    catch (LexerError e)
+    {
+        printSyntaxError(e.msg, e.location);
+        exit(6);
+    }
 
     if (verbose)
     {
@@ -311,7 +319,7 @@ CompileResult compile(string sourceFilename)
     }
     catch (SyntaxError e)
     {
-        printSyntaxError(e);
+        printSyntaxError(e.msg, e.token.location);
         exit(7);
     }
 

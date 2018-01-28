@@ -1,0 +1,13 @@
+runners:
+ - bshift
+
+cases:
+
+ # assorted
+ - name: unexpected end of file
+   code: 'u64 main() { u8* str = "Greetings'
+   stdout_contains: Unexpected end-of-file found
+
+templates:
+ - test.bs: |
+     {{ code }}
