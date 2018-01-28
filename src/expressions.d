@@ -49,7 +49,7 @@ OperatorType operatorType(string input)
         case "dereference":
             return OperatorType.Dereference;
         default:
-            throw new Exception("We will re-raise this with more info later.");
+            throw new Exception(format("Unrecognized operator: %s", input));
     }
 }
 
@@ -348,9 +348,10 @@ class ExpressionParser
         {
             operator = operatorType(this.operators.peek(0).token.value);
         }
-        catch (Exception)
+        catch (Exception e)
         {
-            throw new SyntaxError("Unrecognized operator", current);
+            //throw new SyntaxError("Unrecognized operator", current);
+            throw e;
         }
 
         int inputCount;

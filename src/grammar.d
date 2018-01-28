@@ -317,7 +317,7 @@ Import[] processImport(Token start, string moduleName, string[] symbols = [])
     string filename = resolveImportFilename(start, moduleName);
 
     // Parse the import
-    auto parsed = parse(moduleName, lex(readText(filename), filename));
+    auto parsed = parse(moduleName, lex(filename, readText(filename)));
 
     bool included(string symbol)
     {
@@ -412,7 +412,7 @@ Import[] parseImportFrom(TokenFeed tokens)
 
 Module parse(string name, string source)
 {
-    return parse(name, lex(source, name));
+    return parse(name, lex(name, source));
 }
 
 Module parse(string name, Token[] tokenArray)

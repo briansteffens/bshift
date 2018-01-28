@@ -5,6 +5,7 @@ import std.file;
 import std.array;
 import std.process;
 import std.conv;
+import std.algorithm.comparison;
 import core.sys.posix.stdlib;
 
 import globals;
@@ -18,6 +19,11 @@ enum Assembler
 {
     BASM,
     NASM,
+}
+
+int f(int function(int) cb)
+{
+    return cb(3);
 }
 
 int main(string[] args)
@@ -197,32 +203,23 @@ void printSyntaxError(string message, Char location)
             location.line.number, location.lineOffset));
 
     // Source code
-    auto center = location.line;
-    auto current = center;
-    Line[] lines = [];
+    auto middleLine = location.line;
+    auto file = middleLine.file;
 
-    // Rewind up to 2 lines
-    for (int i = 0; i < 2 && current.previous !is null; i++)
-    {
-        current = current.previous;
-    }
+    int start = max(0, middleLine.number - 5);
+    int stop = min(file.lines.length - 1, middleLine.number + 4);
 
-    // Take up to 5 lines
-    for (int i = 0; i < 5 && current.next !is null; i++)
-    {
-        lines ~= current;
-        current = current.next;
-    }
+    Line[] lines = file.lines[start..stop + 1];
 
     // Padding for line numbers
-    auto padding = to!string(center.number).length;
+    auto padding = to!string(middleLine.number).length;
 
     // Output source code
     foreach (line; lines)
     {
         string left = "";
 
-        if (line == center)
+        if (line == middleLine)
         {
             left = to!string(line.number);
         }
@@ -231,12 +228,13 @@ void printSyntaxError(string message, Char location)
 
         writeln(format("%s | %s", left, line.source));
 
-        if (line == center)
+        if (line == middleLine)
         {
             writeln(padRight("", padding + 2 + location.lineOffset),
                     colorRed("^ somewhere around here"));
         }
     }
+
     writeln();
 }
 
@@ -264,7 +262,7 @@ CompileResult compile(string sourceFilename)
     Token[] tokens;
     try
     {
-        tokens = lex(source, sourceFilename);
+        tokens = lex(sourceFilename, source);
     }
     catch (LexerError e)
     {
