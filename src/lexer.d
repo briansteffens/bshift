@@ -74,29 +74,16 @@ class Token
     }
 }
 
-class SyntaxError : Exception
+class LexerError : Exception
 {
-    string originalMessage;
     Line line;
     int lineOffset;
 
-    this(string msg, string item, Line line, int lineOffset,
-         string efile = __FILE__, size_t eline = __LINE__)
+    this(string message, Line line, int lineOffset)
     {
-        this.originalMessage = msg;
         this.line = line;
         this.lineOffset = lineOffset;
-
-        auto fullMsg = format("[%s:%d,%d] %s \"%s\":\n%s",
-                              line.file, line.number, lineOffset,
-                              msg, item, line.source);
-        super(fullMsg, efile, eline);
-    }
-
-    this(string msg, Token token, string efile = __FILE__,
-         size_t eline = __LINE__)
-    {
-        this(msg, token.value, token.line, token.lineOffset, efile, eline);
+        super(message);
     }
 }
 
@@ -357,8 +344,8 @@ Token read(Reader r)
     }
 
     auto line = r.currentLine();
-    throw new SyntaxError("Can't lex token", format("%c", r.current()),
-                                  line, r.currentLineOffset());
+    throw new LexerError(format("Can't lex token %c", r.current()), line,
+            r.currentLineOffset());
 }
 
 // Run the function f and advance the reader only if f successfully read a
@@ -471,8 +458,8 @@ Token readQuote(Reader r, char quote, TokenType type)
             }
             catch (Exception)
             {
-                throw new SyntaxError("Unrecognized escape sequence",
-                    format("%c", r.current()), line, r.currentLineOffset());
+                throw new LexerError(format("Unrecognized escape sequence %c",
+                    r.current()), line, r.currentLineOffset());
             }
 
             continue;

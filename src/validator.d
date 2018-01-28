@@ -4,6 +4,7 @@ import std.stdio;
 
 import ast;
 import lexer;
+import grammar;
 
 void completeFunction(Module mod, FunctionSignature func)
 {
@@ -525,11 +526,13 @@ Type completeType(Module mod, Type type)
 
     if (ret is null)
     {
-        throw new Exception(format("Can't complete type %s", type));
+        throw new SyntaxError(format("Unrecognized type %s",
+                incomplete.token.value), incomplete.token);
     }
 
     ret.pointerDepth = incomplete.pointerDepth;
     ret.elements = incomplete.elements;
+    ret.token = incomplete.token;
 
     return ret;
 }

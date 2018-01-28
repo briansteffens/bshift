@@ -17,10 +17,33 @@ import validator;
 // invalid syntax.
 class GrammarMismatch : Exception
 {
-    this(string efile = __FILE__, size_t eline = __LINE__)
+    Token token;
+
+    this(Token token, string efile = __FILE__, size_t eline = __LINE__)
     {
         super("The tokens could not be parsed as the given grammar rule",
                 efile, eline);
+
+        this.token = token;
+    }
+}
+
+class SyntaxError : Exception
+{
+    public Token token;
+
+    this(string message, Token token)
+    {
+        this.token = token;
+        super(message);
+    }
+}
+
+class UnexpectedEOF : SyntaxError
+{
+    this(Token token)
+    {
+        super("The end of the file was reached unexpectedly.", token);
     }
 }
 
@@ -58,15 +81,18 @@ class TokenFeed
         return index == tokens.length;
     }
 
-    bool next()
+    private void requireNotEOF()
     {
         if (eof)
         {
-            throw new ParserException("Attempt to read beyond end of tokens");
+            throw new UnexpectedEOF(tokens[$-1]);
         }
+    }
 
+    bool next()
+    {
+        requireNotEOF();
         this.index++;
-
         return !eof;
     }
 
@@ -102,6 +128,7 @@ class TokenFeed
 
     @property Token current()
     {
+        requireNotEOF();
         return this.tokens[this.index];
     }
 
@@ -113,7 +140,7 @@ class TokenFeed
 
         if (!ret.match(type, value))
         {
-            throw new GrammarMismatch();
+            throw new GrammarMismatch(ret);
         }
 
         this.next();
@@ -439,17 +466,18 @@ Module parse(string name, Token[] tokenArray)
             continue;
         }
 
-        auto structTemplate = tryParse(tokens, &parseStructTemplate);
-        if (structTemplate !is null)
-        {
-            structTemplates ~= structTemplate;
-            continue;
-        }
-
         auto struct_ = tryParse(tokens, &parseStruct);
         if (struct_ !is null)
         {
-            structs ~= struct_;
+            auto structTemplate = cast(StructTemplate)struct_;
+            if (structTemplate !is null)
+            {
+                structTemplates ~= structTemplate;
+            }
+            else
+            {
+                structs ~= struct_;
+            }
             continue;
         }
 
@@ -514,9 +542,7 @@ Module parse(string name, Token[] tokenArray)
             continue;
         }
 
-        throw new SyntaxError(
-            "Can't parse grammar near",
-            current.value, current.line, current.lineOffset);
+        throw new SyntaxError("Can't parse grammar near", current);
     }
 
     auto ret = new Module(name, imports, structs, functions, globals,
@@ -571,15 +597,31 @@ Global parseGlobal(TokenFeed tokens)
 
 TypeSignature[] parseStructMembers(TokenFeed tokens)
 {
-    tokens.expectSymbol("{");
+    tokens.requireSymbol("{");
 
     TypeSignature[] members;
 
     while (!tokens.nextIfSymbol("}"))
     {
-        members ~= parseTypeSignature(tokens);
+        void raise(Token t)
+        {
+            throw new SyntaxError("Expected a struct member", t);
+        }
 
-        tokens.expectSymbol(";");
+        try
+        {
+            members ~= parseTypeSignature(tokens);
+        }
+        catch (GrammarMismatch e)
+        {
+            raise(e.token);
+        }
+        catch (UnexpectedEOF e)
+        {
+            raise(e.token);
+        }
+
+        tokens.requireSymbol(";");
     }
 
     return members;
@@ -591,29 +633,29 @@ Struct parseStruct(TokenFeed tokens)
 
     tokens.expectWord("struct");
 
-    auto name = tokens.requireWord().value;
+    auto name = tokens.requireAnyWord("Expected struct name").value;
+
+    TypeParameter[] typeParams;
+    try
+    {
+        typeParams = parseTypeParams(tokens);
+    }
+    catch (GrammarMismatch)
+    {
+    }
 
     // Parse struct members
     auto members = parseStructMembers(tokens);
 
-    return new Struct(name, members, exported=exported);
-}
-
-StructTemplate parseStructTemplate(TokenFeed tokens)
-{
-    bool exported = tokens.nextIfWord("export");
-
-    tokens.expectWord("struct");
-
-    auto name = tokens.requireWord().value;
-
-    // Template type parameters
-    auto typeParams = parseTypeParams(tokens);
-
-    // Parse struct members
-    auto members = parseStructMembers(tokens);
-
-    return new StructTemplate(name, typeParams, members, exported=exported);
+    if (typeParams.length == 0)
+    {
+        return new Struct(name, members, exported=exported);
+    }
+    else
+    {
+        return new StructTemplate(name, typeParams, members,
+                exported=exported);
+    }
 }
 
 FunctionSignature parseExtern(TokenFeed tokens)
@@ -665,8 +707,9 @@ MethodSignature parseMethodSignature(TokenFeed tokens)
     auto returnType = parseType(tokens);
 
     // Container type
-    auto containerName = tokens.expectWord().value;
-    auto containerType = new IncompleteType(containerName, []);
+    auto containerName = tokens.expectWord();
+    auto containerType = new IncompleteType(containerName.value, []);
+    containerType.token = containerName;
 
     // Member operator ::
     tokens.expectSymbol("::");
@@ -879,6 +922,7 @@ LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
 Type parseType(TokenFeed tokens)
 {
     // Read either the module or type name
+    auto start = tokens.current;
     string typeName = tokens.expectWord().value;
     string moduleName = null;
 
@@ -920,8 +964,11 @@ Type parseType(TokenFeed tokens)
         }
     }
 
-    return new IncompleteType(typeName, typeParams, pointerDepth=pointerDepth,
-            elements=elements, moduleName=moduleName);
+    auto ret = new IncompleteType(typeName, typeParams,
+            pointerDepth=pointerDepth, elements=elements,
+            moduleName=moduleName);
+    ret.token = start;
+    return ret;
 }
 
 // Try to parse a type signature (like "u64* x"), returning null if it can't
@@ -975,7 +1022,7 @@ Assignment parseAssignment(TokenFeed tokens)
     }
     catch (Throwable ex)
     {
-        throw new GrammarMismatch();
+        throw new GrammarMismatch(tokens.current);
     }
 
     tokens.expectSymbol("=");
@@ -988,7 +1035,7 @@ Assignment parseAssignment(TokenFeed tokens)
     }
     catch (Throwable ex)
     {
-        throw new GrammarMismatch();
+        throw new GrammarMismatch(tokens.current);
     }
 
     tokens.requireSymbol(";");

@@ -20,6 +20,8 @@ enum Assembler
     NASM,
 }
 
+import std.algorithm;
+
 int main(string[] args)
 {
     string sourceFilename = null;
@@ -190,14 +192,14 @@ string padRight(string source, ulong maxLength)
 
 void printSyntaxError(SyntaxError e)
 {
-    writeln("\n" ~ colorRed("error: ") ~ e.originalMessage);
+    writeln("\n" ~ colorRed("error: ") ~ e.message);
 
     // Filename
-    writeln(format(" %s %s:%d:%d", colorBlue("-->"), e.line.file,
-            e.line.number, e.lineOffset));
+    writeln(format(" %s %s:%d:%d", colorBlue("-->"), e.token.line.file,
+            e.token.line.number, e.token.lineOffset));
 
     // Source code
-    auto center = e.line;
+    auto center = e.token.line;
     auto current = center;
     Line[] lines = [];
 
@@ -233,7 +235,7 @@ void printSyntaxError(SyntaxError e)
 
         if (line == center)
         {
-            writeln(padRight("", padding + 2 + e.lineOffset),
+            writeln(padRight("", padding + 2 + e.token.lineOffset),
                     colorRed("^ somewhere around here"));
         }
     }

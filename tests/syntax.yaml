@@ -48,6 +48,35 @@ cases:
    code: import length, reverse from cstring oops
    stdout_contains: expected ';'
 
+ # struct
+ - name: struct - missing name
+   code: struct { u64 x; }
+   stdout_contains: Expected struct name
+
+ - name: struct - missing left bracket
+   code: struct point u64 x; }
+   stdout_contains: expected '{'
+
+ #- name: struct - missing right bracket
+ #  code: struct point { u64 x; struct sdf
+ #  stdout_contains: expected '}'
+
+ # struct member
+ - name: struct member - no semi-colon
+   code: struct point { u64 x }
+   stdout_contains: expected ';'
+
+ - name: struct member - unrecognized type
+   code: struct point { u63 x; }
+   stdout_contains: Unrecognized type u63
+
+ - name: struct member - wrong grammar in place of type
+   code: struct point { u64 x; struct
+   stdout_contains: Expected a struct member
+
+ - name: struct member - number in place of name
+   code: struct point { u64 x; u64 7; }
+   stdout_contains: Expected a struct member
 
 templates:
  - test.bs: |

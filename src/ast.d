@@ -23,8 +23,25 @@ class NotFoundException : Exception
     }
 }
 
-abstract class Type
+interface HasToken
 {
+    Token getToken();
+}
+
+mixin template HasTokenDefault()
+{
+    Token token;
+
+    override Token getToken()
+    {
+        return token;
+    }
+}
+
+abstract class Type : HasToken
+{
+    mixin HasTokenDefault;
+
     // The number of pointers this represents:
     //   u64   a -> 0
     //   u64*  a -> 1
@@ -32,8 +49,9 @@ abstract class Type
     int pointerDepth;
     Node elements;
 
-    this(int pointerDepth=0, Node elements=null)
+    this(int pointerDepth=0, Node elements=null, Token token=null)
     {
+        this.token = token;
         this.pointerDepth = pointerDepth;
         this.elements = elements;
     }
@@ -105,9 +123,9 @@ class IncompleteType : Type
     Type[] typeParameters;
 
     this(string name, Type[] typeParameters, int pointerDepth=0,
-            Node elements=null, string moduleName=null)
+            Node elements=null, string moduleName=null, Token token=null)
     {
-        super(pointerDepth=pointerDepth, elements=elements);
+        super(pointerDepth=pointerDepth, elements=elements, token=token);
         this.name = name;
         this.typeParameters = typeParameters;
         this.moduleName = moduleName;
@@ -150,7 +168,7 @@ class IncompleteType : Type
     {
         return new IncompleteType(this.name, this.typeParameters,
                 pointerDepth=this.pointerDepth, elements=this.elements,
-                moduleName=this.moduleName);
+                moduleName=this.moduleName, token=this.token);
     }
 
     override bool compare(Type other)
@@ -175,9 +193,10 @@ class StructType : Type
 {
     Struct struct_;
 
-    this(Struct struct_, int pointerDepth=0, Node elements=null)
+    this(Struct struct_, int pointerDepth=0, Node elements=null,
+            Token token=null)
     {
-        super(pointerDepth=pointerDepth, elements=elements);
+        super(pointerDepth=pointerDepth, elements=elements, token=token);
         this.struct_ = struct_;
     }
 
@@ -189,7 +208,7 @@ class StructType : Type
     override Type clone()
     {
         return new StructType(this.struct_, pointerDepth=this.pointerDepth,
-                elements=this.elements);
+                elements=this.elements, token=this.token);
     }
 
     override bool compare(Type other)
@@ -222,9 +241,9 @@ class StructType : Type
 
 class VoidType : Type
 {
-    this()
+    this(Token token = null)
     {
-        super(pointerDepth=0, elements=null);
+        super(pointerDepth=0, elements=null, token=token);
     }
 
     override string baseTypeToString()
@@ -257,9 +276,10 @@ class PrimitiveType : Type
 {
     Primitive primitive;
 
-    this(Primitive primitive, int pointerDepth=0, Node elements=null)
+    this(Primitive primitive, int pointerDepth=0, Node elements=null,
+            Token token=null)
     {
-        super(pointerDepth=pointerDepth, elements=elements);
+        super(pointerDepth=pointerDepth, elements=elements, token=token);
         this.primitive = primitive;
     }
 
@@ -271,7 +291,8 @@ class PrimitiveType : Type
     override Type clone()
     {
         return new PrimitiveType(this.primitive,
-                pointerDepth=this.pointerDepth, elements=this.elements);
+                pointerDepth=this.pointerDepth, elements=this.elements,
+                token=this.token);
     }
 
     override bool compare(Type other)

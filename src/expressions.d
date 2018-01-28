@@ -350,9 +350,7 @@ class ExpressionParser
         }
         catch (Exception)
         {
-            throw new SyntaxError(
-                "Unrecognized operator",
-                current.value, current.line, current.lineOffset);
+            throw new SyntaxError("Unrecognized operator", current);
         }
 
         int inputCount;
@@ -362,18 +360,15 @@ class ExpressionParser
         }
         catch (Exception)
         {
-            throw new SyntaxError(
-                "Unknown number of operands for operator",
-                current.value, current.line, current.lineOffset);
+            throw new SyntaxError("Unknown number of operands for operator",
+                    current);
         }
 
         if (this.output.len() < inputCount)
         {
-            throw new SyntaxError(
-                format(
+            throw new SyntaxError(format(
                     "Unexpected number of operands (got %d, expected %d) near",
-                    this.output.len(), inputCount),
-                current.value, current.line, current.lineOffset);
+                    this.output.len(), inputCount), current);
         }
 
         this.operators.pop();
@@ -417,8 +412,7 @@ class ExpressionParser
                     op = new Dereference(right);
                     break;
                 default:
-                    throw new SyntaxError("Unrecognized operator",
-                        current.value, current.line, current.lineOffset);
+                    throw new SyntaxError("Unrecognized operator", current);
             }
         }
         else
@@ -693,9 +687,7 @@ class ExpressionParser
             }
             catch (Exception)
             {
-                auto current = this.current;
-                throw new SyntaxError("Unknown precedence for",
-                    current.value, current.line, current.lineOffset);
+                throw new SyntaxError("Unknown precedence for", this.current);
             }
 
             if (prev >= cur)
@@ -717,8 +709,8 @@ class ExpressionParser
         auto previous = this.input.current;
         if (!this.input.next())
         {
-            throw new SyntaxError("Unexpected",
-                "EOF", current.line, current.lineOffset);
+            writefln("expression: %s", current);
+            throw new UnexpectedEOF(current);
         }
 
         this.current = this.input.current;
@@ -922,9 +914,9 @@ class ExpressionParser
         if (len != 1)
         {
             // TODO: clarify what this implies.
-            throw new SyntaxError(
-                format("Expected one (got %d) token to be left near", len),
-                current.value, current.line, current.lineOffset);
+            throw new SyntaxError(format(
+                    "Expected one (got %d) token to be left near", len),
+                    current);
         }
 
         return getOrParseNode(this.output.pop());
@@ -968,16 +960,13 @@ Node parseExpressionParenthesis(TokenFeed tokens)
 
             if (parser.output.len() != 1)
             {
-                throw new SyntaxError(
-                    "Expected one token to be left near",
-                    current.value, current.line, current.lineOffset);
+                throw new SyntaxError("Expected one token to be left near",
+                        current);
             }
 
             return getOrParseNode(parser.output.pop());
         }
     }
 
-    throw new SyntaxError(
-        "Expected a closing parenthesis near",
-        current.value, current.line, current.lineOffset);
+    throw new SyntaxError("Expected a closing parenthesis near", current);
 }
