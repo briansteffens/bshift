@@ -21,11 +21,6 @@ enum Assembler
     NASM,
 }
 
-int f(int function(int) cb)
-{
-    return cb(3);
-}
-
 int main(string[] args)
 {
     string sourceFilename = null;
@@ -199,8 +194,9 @@ void printSyntaxError(string message, Char location)
     writeln("\n" ~ colorRed("error: ") ~ message);
 
     // Filename
-    writeln(format(" %s %s:%d:%d", colorBlue("-->"), location.line.file,
-            location.line.number, location.lineOffset));
+    writeln(format(" %s %s:%d:%d", colorBlue("-->"),
+            location.line.file.filename, location.line.number,
+            location.lineOffset));
 
     // Source code
     auto middleLine = location.line;
