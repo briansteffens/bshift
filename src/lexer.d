@@ -131,8 +131,8 @@ class SourceFile
 
     this(string filename, string source)
     {
-        filename = filename;
-        lines = [];
+        this.filename = filename;
+        this.lines = [];
         load(source);
     }
 
@@ -263,6 +263,11 @@ class Reader
     // upcoming characters in the reader.
     bool matchSequence(dchar[] match)
     {
+        if (index + match.length >= input.length)
+        {
+            return false;
+        }
+
         for (int i = 0; i < match.length; i++)
         {
             if (peek(i) != match[i])
@@ -272,6 +277,13 @@ class Reader
         }
 
         return true;
+    }
+
+    // Return true if the given string matches the current and upcoming
+    // characters in the reader.
+    bool matchString(string match)
+    {
+        return matchSequence(to!(dchar[])(match));
     }
 
     // Advance the reader until it gets to 'end', returning the string read in
@@ -301,9 +313,15 @@ class Reader
     }
 }
 
-// Only these symbols are allowed by the lexer.
+// Only these symbols are allowed by the lexer. These must be in descending
+// order length-wise.
 immutable string[] symbols =
 [
+    "...",
+
+    "==", "!=", "&&", "||", "::", ">=", "<=",
+    "<<", ">>",
+
     "=",
     "+", "-", "*", "/", "%",
     "!", "&",
@@ -313,12 +331,6 @@ immutable string[] symbols =
     "<", ">",
     "[", "]",
     "{", "}",
-
-    "==", "!=", "&&", "||", "::", ">=", "<=",
-
-    "<<", ">>",
-
-    "...",
 ];
 
 bool isSymbol(string s)
@@ -348,23 +360,16 @@ Token[] lex(string filename, string source)
     source = ensureTrailingNewline(source);
     auto file = new SourceFile(filename, source);
     auto reader = new Reader(file.chars);
+
     Token[] tokens;
+    Token token;
 
-    while (!reader.isLast())
+    while ((token = read(reader)) !is null)
     {
-        auto token = read(reader);
-
-        if (token is null)
+        if (token.type != TokenType.Comment)
         {
-            break;
+            tokens ~= token;
         }
-
-        if (token.type == TokenType.Comment)
-        {
-            continue;
-        }
-
-        tokens ~= token;
     }
 
     return tokens;
@@ -378,8 +383,6 @@ void skipWhiteSpace(Reader r)
         r.advance();
     }
 }
-
-int count = 0;
 
 // Read the next token from the reader.
 Token read(Reader r)
@@ -455,14 +458,23 @@ Token readSingleQuote(Reader r)
     return r.token(TokenType.SingleQuote, readQuote(r, '\''));
 }
 
-// Read an escape sequence from a string if one is present: "\n" or "\""
-string readEscapeSequence(Reader r)
+Token readSymbol(Reader r)
 {
-    if (r.current != '\\')
+    foreach (symbol; symbols)
     {
-        return "";
+        if (r.matchSequence(to!(dchar[])(symbol)))
+        {
+            r.seek(cast(int)symbol.length);
+            return new Token(r.currentChar, TokenType.Symbol, symbol);
+        }
     }
 
+    throw new LexerError("Unrecognized symbol", r.currentChar);
+}
+
+// Read an escape sequence from a string or throws LexerError
+dchar readEscapeSequence(Reader r)
+{
     r.seek(2);
 
     try
@@ -478,97 +490,60 @@ string readEscapeSequence(Reader r)
 
 // Decode an escape sequence, given the second character.
 //   Example '\n': expandEscapeSequence('n') returns "\n"
-string expandEscapeSequence(Char second)
+dchar expandEscapeSequence(Char second)
 {
     switch (second.value)
     {
         case '\\':
-            return "\\";
+            return '\\';
         case 'n':
-            return "\n";
+            return '\n';
         case 't':
-            return "\t";
+            return '\t';
         case '"':
-            return "\"";
+            return '"';
         case '\'':
-            return "'";
+            return '\'';
         default:
             throw new LexerError(format("Invalid escape sequence: \\%c",
                     second.value), second);
     }
 }
 
-// Read a double-escape quote if one is present: "a""b" or 'a''a'
-string readEscapedQuote(Reader r, dchar quote)
+// Read a character or escape sequence from a single or double quote
+dchar readElementFromQuote(Reader r, dchar quote)
 {
-    if (!r.matchSequence([quote, quote]))
+    // Slash escaped sequences: \n, \t
+    if (r.current == '\\')
     {
-        return "";
+        return readEscapeSequence(r);
     }
 
-    r.seek(2);
-    return to!string(quote);
+    // Quote escaped sequences: "", ''
+    if (r.matchSequence([quote, quote]))
+    {
+        r.seek(2);
+        return quote;
+    }
+
+    // Regular character: a, b
+    r.advance();
+    return r.peek(-1);
 }
 
 // Read a single or double quote
-string readQuote(Reader r, char quote)
+string readQuote(Reader r, dchar quote)
 {
-    auto start = r.currentChar;
     auto value = "";
 
-    while (true)
+    r.advance();
+
+    while (r.current != quote)
     {
-        r.advance();
-
-        value ~= readEscapeSequence(r);
-        value ~= readEscapedQuote(r, quote);
-
-        // Detect end of quote
-        if (r.current == quote)
-        {
-            break;
-        }
-
-        value ~= r.current;
+        value ~= readElementFromQuote(r, quote);
     }
 
     r.advance();
 
     return value;
-}
-
-Token readSymbol(Reader r)
-{
-    auto start = r.currentChar;
-    string[] possibilities;
-
-    if (r.input.length - r.index >= 3)
-    {
-        possibilities ~= (to!string(r.current) ~
-                          to!string(r.peek(1)) ~
-                          to!string(r.peek(2)));
-    }
-
-    if (!r.isLast())
-    {
-        possibilities ~= (to!string(r.current) ~
-                          to!string(r.peek(1)));
-    }
-
-    possibilities ~= to!string(r.current);
-
-    foreach (possibility; possibilities)
-    {
-        if (isSymbol(possibility))
-        {
-            for (int i = 0; i < possibility.length; i++)
-            {
-                r.advance();
-            }
-
-            return new Token(start, TokenType.Symbol, possibility);
-        }
-    }
-
-    return null;
 }
