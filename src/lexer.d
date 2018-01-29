@@ -173,7 +173,7 @@ class SourceFile
 class Reader
 {
     Char[] input;
-    int index = -1;
+    int index = 0;
 
     this(Char[] input)
     {
@@ -244,7 +244,7 @@ class Reader
         return currentChar.value;
     }
 
-    string readUntil(bool function(Reader) predicate)
+    string readUntil(bool delegate(Reader) predicate)
     {
         auto ret = to!string(current);
 
@@ -254,33 +254,31 @@ class Reader
             ret ~= current;
         }
 
+        advance();
+
         return ret;
+    }
+
+    // Return true if the given array of dchars matches the current and
+    // upcoming characters in the reader.
+    bool matchSequence(dchar[] match)
+    {
+        for (int i = 0; i < match.length; i++)
+        {
+            if (peek(i) != match[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     // Advance the reader until it gets to 'end', returning the string read in
     // the process.
     string readUntilSequence(dchar[] end)
     {
-        bool done()
-        {
-            for (int i = 0; i < end.length; i++)
-            {
-                if (peek(i) != end[i])
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        auto ret = "";
-
-        while (!done())
-        {
-            ret ~= current;
-            advance();
-        }
+        auto ret = readUntil(r => r.matchSequence(end));
 
         seek(cast(int)end.length - 1);
 
@@ -296,6 +294,7 @@ class Reader
         return ret;
     }
 
+    // Create a new Token at the Reader's current location
     Token token(TokenType type, string value)
     {
         return new Token(currentChar, type, value);
@@ -380,11 +379,11 @@ void skipWhiteSpace(Reader r)
     }
 }
 
+int count = 0;
+
 // Read the next token from the reader.
 Token read(Reader r)
 {
-    r.advance();
-
     skipWhiteSpace(r);
 
     if (r.eof)
@@ -405,11 +404,11 @@ Token read(Reader r)
     {
         return readNumeric(r);
     }
-    else if (r.current == '/' && r.peek(1) == '*')
+    else if (r.matchSequence(['/', '*']))
     {
         return readMultiLineComment(r);
     }
-    else if (r.current == '/' && r.peek(1) == '/')
+    else if (r.matchSequence(['/', '/']))
     {
         return readSingleLineComment(r);
     }
@@ -502,7 +501,7 @@ string expandEscapeSequence(Char second)
 // Read a double-escape quote if one is present: "a""b" or 'a''a'
 string readEscapedQuote(Reader r, dchar quote)
 {
-    if (r.current != quote || r.peek(1) != quote)
+    if (!r.matchSequence([quote, quote]))
     {
         return "";
     }
@@ -533,6 +532,8 @@ string readQuote(Reader r, char quote)
         value ~= r.current;
     }
 
+    r.advance();
+
     return value;
 }
 
@@ -560,7 +561,7 @@ Token readSymbol(Reader r)
     {
         if (isSymbol(possibility))
         {
-            for (int i = 0; i < possibility.length - 1; i++)
+            for (int i = 0; i < possibility.length; i++)
             {
                 r.advance();
             }
