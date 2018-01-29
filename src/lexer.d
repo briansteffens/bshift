@@ -175,9 +175,10 @@ class Reader
     Char[] input;
     int index = 0;
 
-    this(Char[] input)
+    this(string filename, string source)
     {
-        this.input = input;
+        source = source[$-1] == '\n' ? source : source ~ "\n";
+        this.input = new SourceFile(filename, source).chars;
     }
 
     bool isLast()
@@ -297,15 +298,6 @@ class Reader
         return ret;
     }
 
-    Reader clone()
-    {
-        auto ret = new Reader(this.input);
-
-        ret.index = this.index;
-
-        return ret;
-    }
-
     // Create a new Token at the Reader's current location
     Token token(TokenType type, string value)
     {
@@ -333,33 +325,10 @@ immutable string[] symbols =
     "{", "}",
 ];
 
-bool isSymbol(string s)
-{
-    return symbols.canFind(s);
-}
-
-bool isWhiteSpace(dchar c)
-{
-    return [' ', '\t', '\n'].canFind(c);
-}
-
-// Delimiters mark the end of a token
-bool isDelimiter(dchar c)
-{
-    return isWhiteSpace(c) || isSymbol(to!string(c)) || c == ':';
-}
-
-string ensureTrailingNewline(string source)
-{
-    return source[$-1] == '\n' ? source : source ~ "\n";
-}
-
 // Convert source code into a list of tokens
 Token[] lex(string filename, string source)
 {
-    source = ensureTrailingNewline(source);
-    auto file = new SourceFile(filename, source);
-    auto reader = new Reader(file.chars);
+    auto reader = new Reader(filename, source);
 
     Token[] tokens;
     Token token;
@@ -373,15 +342,6 @@ Token[] lex(string filename, string source)
     }
 
     return tokens;
-}
-
-// Advance the reader until the next non-whitespace character.
-void skipWhiteSpace(Reader r)
-{
-    while (!r.eof && isWhiteSpace(r.current))
-    {
-        r.advance();
-    }
 }
 
 // Read the next token from the reader.
@@ -428,6 +388,31 @@ Token read(Reader r)
             r.currentChar);
 }
 
+// Advance the reader until the next non-whitespace character.
+void skipWhiteSpace(Reader r)
+{
+    while (!r.eof && isWhiteSpace(r.current))
+    {
+        r.advance();
+    }
+}
+
+bool isWhiteSpace(dchar c)
+{
+    return [' ', '\t', '\n'].canFind(c);
+}
+
+bool isSymbol(string s)
+{
+    return symbols.canFind(s);
+}
+
+// Delimiters mark the end of a token
+bool isDelimiter(dchar c)
+{
+    return isWhiteSpace(c) || isSymbol(to!string(c)) || c == ':';
+}
+
 Token readNumeric(Reader r)
 {
     return r.token(TokenType.Integer, r.readUntil(r => !isDigit(r.peek(1))));
@@ -448,16 +433,6 @@ Token readSingleLineComment(Reader r)
     return r.token(TokenType.Comment, r.readUntilSequence(['\n']));
 }
 
-Token readDoubleQuote(Reader r)
-{
-    return r.token(TokenType.DoubleQuote, readQuote(r, '"'));
-}
-
-Token readSingleQuote(Reader r)
-{
-    return r.token(TokenType.SingleQuote, readQuote(r, '\''));
-}
-
 Token readSymbol(Reader r)
 {
     foreach (symbol; symbols)
@@ -472,42 +447,31 @@ Token readSymbol(Reader r)
     throw new LexerError("Unrecognized symbol", r.currentChar);
 }
 
-// Read an escape sequence from a string or throws LexerError
-dchar readEscapeSequence(Reader r)
+Token readDoubleQuote(Reader r)
 {
-    r.seek(2);
-
-    try
-    {
-        return expandEscapeSequence(r.peekChar(-1));
-    }
-    catch (Exception)
-    {
-        throw new LexerError(format("Unrecognized escape sequence %c",
-            r.current), r.currentChar);
-    }
+    return r.token(TokenType.DoubleQuote, readQuote(r, '"'));
 }
 
-// Decode an escape sequence, given the second character.
-//   Example '\n': expandEscapeSequence('n') returns "\n"
-dchar expandEscapeSequence(Char second)
+Token readSingleQuote(Reader r)
 {
-    switch (second.value)
+    return r.token(TokenType.SingleQuote, readQuote(r, '\''));
+}
+
+// Read a single or double quote
+string readQuote(Reader r, dchar quote)
+{
+    auto value = "";
+
+    r.advance();
+
+    while (r.current != quote)
     {
-        case '\\':
-            return '\\';
-        case 'n':
-            return '\n';
-        case 't':
-            return '\t';
-        case '"':
-            return '"';
-        case '\'':
-            return '\'';
-        default:
-            throw new LexerError(format("Invalid escape sequence: \\%c",
-                    second.value), second);
+        value ~= readElementFromQuote(r, quote);
     }
+
+    r.advance();
+
+    return value;
 }
 
 // Read a character or escape sequence from a single or double quote
@@ -531,19 +495,25 @@ dchar readElementFromQuote(Reader r, dchar quote)
     return r.peek(-1);
 }
 
-// Read a single or double quote
-string readQuote(Reader r, dchar quote)
+// Read an escape sequence from a string or throw LexerError
+dchar readEscapeSequence(Reader r)
 {
-    auto value = "";
+    r.seek(2);
 
-    r.advance();
-
-    while (r.current != quote)
+    switch (r.peek(-1))
     {
-        value ~= readElementFromQuote(r, quote);
+        case '\\':
+            return '\\';
+        case 'n':
+            return '\n';
+        case 't':
+            return '\t';
+        case '"':
+            return '"';
+        case '\'':
+            return '\'';
+        default:
+            throw new LexerError(format("Invalid escape sequence: \\%c",
+                    r.peekChar(-1).value), r.peekChar(-2));
     }
-
-    r.advance();
-
-    return value;
 }
