@@ -402,7 +402,7 @@ deferred
 
 
 
-# Function overloading
+### Function overloading
 
 Functions can be defined which have the same name but differ based on the types
 of their arguments:
@@ -439,7 +439,7 @@ hello
 
 
 
-# Method overloading
+### Method overloading
 
 Struct methods can also be overloaded. One example use-case is to provide
 multiple ways of initializing a struct instance:
@@ -553,7 +553,7 @@ u64 max(u64 a, u64 b)
 
 
 
-# Struct templates
+### Struct templates
 
 Generic structs are also possible using a similar syntax:
 
@@ -605,6 +605,129 @@ struct container
     u64 b;
 }
 ```
+
+
+
+
+
+
+### Sizeof
+
+The `sizeof` built-in can be used to get the size (in bytes) of a type.
+Examples:
+
+```c
+struct point
+{
+    u64 x;
+    u64 y;
+}
+
+u64 main()
+{
+    u64 result0 = sizeof(u64);      // Returns 8
+    u64 result1 = sizeof(point);    // Returns 16
+    u64 result2 = sizeof(point*);   // Returns 8
+    u64 result3 = sizeof(u8);       // Returns 1
+    u64 result4 = sizeof(u8*);      // Returns 8
+
+    return 0;
+}
+```
+
+
+
+
+
+
+
+### Variadic functions
+
+Functions can accept an arbitrary number of arguments, with a couple of
+limitations:
+
+1. Variadic arguments must come after any fixed positional arguments.
+2. Variadic arguments are always type u64.
+
+To make a function variadic, use the `...` operator:
+
+```c
+u64 sum(u64 total, ...)
+{
+    u64 ret = 0;
+
+    for (u64 i = 0; i < total; i++)
+    {
+        ret = ret + variadic(i);
+    }
+
+    return ret;
+}
+```
+
+This function can be called like this:
+
+```c
+    u64 result1 = sum(1, 15);         // Returns 15
+    u64 result2 = sum(3, 50, 20, 80); // Returns 150
+    u64 result3 = sum(0);             // Returns 0
+```
+
+You can access a variadic argument by position using the `variadic` built-in.
+The `variadic` built-in takes a u64 index and returns the value of the
+variadic argument at that index.
+
+To retreive the first variadic argument, use `variadic(0)`. To retreive the
+third, use `variadic(4)`.
+
+*Notice that the total number of variadic arguments provided is not inherently
+available. Variadic functions must provide some other way of communicating
+this information, like the parameter `total` above.*
+
+
+
+
+
+
+
+### System calls
+
+You can make system calls using the built-in `syscall` function. It takes a
+variable number of arguments. Each argument must be of the type `u64`. Only
+the first argument is required. The position of the argument determines which
+register the data will be copied into before the `syscall` instruction:
+
+| Argument position | Target register |
+|-------------------|-----------------|
+| 0                 | rax             |
+| 1                 | rdi             |
+| 2                 | rsi             |
+| 3                 | rdx             |
+| 4                 | r10             |
+| 5                 | r8              |
+| 6                 | r9              |
+
+So to make an `exit` system call with a status code of `0`:
+
+```c
+    syscall(60, 0);
+```
+
+This will result in the following approximate assembly:
+
+```asm
+    mov rax, 60
+    mov rdi, 0
+    syscall
+```
+
+The `syscall` function returns whatever value is left in `rax` after the
+system call completes.
+
+
+
+
+
 
 
 
