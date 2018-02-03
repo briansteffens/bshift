@@ -2,7 +2,10 @@ import std.stdio;
 import std.format;
 import std.conv;
 import std.algorithm;
+import std.array;
+import std.string;
 
+import terminal;
 import lexer;
 
 int nextId = 0;
@@ -36,6 +39,13 @@ mixin template HasTokenDefault()
     {
         return token;
     }
+}
+
+string indent(string s)
+{
+    auto lines = map!(l => "    " ~ l)(s.splitLines());
+
+    return join(lines, "\n");
 }
 
 abstract class Type : HasToken
@@ -72,6 +82,12 @@ abstract class Type : HasToken
         else
         {
             ret ~= format("[%s]", this.elements);
+        }
+
+        // TODO: crappy cast hack
+        if (cast(IncompleteType)this is null)
+        {
+            ret = colorGreen(ret);
         }
 
         return ret;
@@ -161,7 +177,8 @@ class IncompleteType : Type
             mod = moduleName ~ "::";
         }
 
-        return format("Incomplete(%s%s%s)", mod, super.toString(), typeParams);
+        return colorYellow(
+                format("%s%s%s", mod, super.toString(), typeParams));
     }
 
     override Type clone()
@@ -285,7 +302,7 @@ class PrimitiveType : Type
 
     override string baseTypeToString()
     {
-        return to!string(this.primitive);
+        return primitiveToString(this.primitive);
     }
 
     override Type clone()
@@ -379,6 +396,23 @@ Primitive parsePrimitive(string s)
             return Primitive.Auto;
         default:
             throw new Exception(format("Unrecognized type: %s", s));
+    }
+}
+
+string primitiveToString(Primitive p)
+{
+    switch (p)
+    {
+        case Primitive.U64:
+            return "u64";
+        case Primitive.Bool:
+            return "bool";
+        case Primitive.U8:
+            return "u8";
+        case Primitive.Auto:
+            return "auto";
+        default:
+            throw new Exception(format("Unrecognized primitive: %s", p));
     }
 }
 
@@ -495,6 +529,51 @@ OperatorClass operatorTypeToClass(OperatorType t)
     }
 }
 
+string operatorTypeToString(OperatorType t)
+{
+    switch (t)
+    {
+        case OperatorType.Plus:
+            return "+";
+        case OperatorType.Minus:
+            return "-";
+        case OperatorType.Divide:
+            return "/";
+        case OperatorType.Multiply:
+            return "*";
+        case OperatorType.Modulo:
+            return "%";
+        case OperatorType.Equality:
+            return "==";
+        case OperatorType.Inequality:
+            return "!=";
+        case OperatorType.GreaterThan:
+            return ">";
+        case OperatorType.GreaterThanOrEqual:
+            return ">=";
+        case OperatorType.LessThan:
+            return "<";
+        case OperatorType.LessThanOrEqual:
+            return "<=";
+        case OperatorType.LogicalAnd:
+            return "&&";
+        case OperatorType.LogicalOr:
+            return "||";
+        case OperatorType.DotAccessor:
+            return ".";
+        case OperatorType.LeftShift:
+            return "<<";
+        case OperatorType.RightShift:
+            return ">>";
+        case OperatorType.BitwiseAnd:
+            return "&";
+        case OperatorType.Dereference:
+            return "*";
+        default:
+            throw new Exception(format("Unrecognized OperatorType: %s", t));
+    }
+}
+
 class Operator : Node
 {
     OperatorType operatorType;
@@ -553,7 +632,8 @@ class Operator : Node
 
     override string toString()
     {
-        return format("(%s %s %s)", left, operatorType, right);
+        return format("(%s %s %s)", left, operatorTypeToString(operatorType),
+                right);
     }
 
     override Node[] childNodes()
@@ -689,7 +769,7 @@ class StringLiteral : Literal
 
     override string toString()
     {
-        return format("\"%s\"", this.value);
+        return format("\"%s\"", this.value.replace("\n", "\\n"));
     }
 }
 
@@ -798,8 +878,14 @@ class Call : Node
             typeParams = "<" ~ typeParams ~ ">";
         }
 
+        string[] params;
+        foreach (p; parameters)
+        {
+            params ~= p.toString();
+        }
+
         return format("%s%s%s(%s)", moduleName, this.functionName,
-                typeParams, this.parameters);
+                typeParams, join(params, ", "));
     }
 
     override Node[] childNodes()
@@ -1121,29 +1207,23 @@ class Struct
 
     override string toString()
     {
-        auto methods = "";
-        foreach (method; this.methods)
-        {
-            if (methods != "")
-            {
-                methods ~= "\n";
-            }
+        string ret = exported ? "export " : "";
+        ret ~= "struct " ~ this.name ~ "\n";
+        ret ~= "{\n";
 
-            methods ~= method.toString();
-        }
-
-        auto members = "";
         foreach (member; this.members)
         {
-            if (members != "")
-            {
-                members ~= "\n";
-            }
-
-            members ~= format("    %s;", member);
+            ret ~= indent(member.toString()) ~ ";\n";
         }
 
-        return format("struct %s {\n%s\n}\n%s", this.name, members, methods);
+        ret ~= "}\n";
+
+        foreach (method; this.methods)
+        {
+            ret ~= method.toString();
+        }
+
+        return ret;
     }
 
     // TODO: pretty copypasta, unify methods with functions
@@ -1385,7 +1465,7 @@ class Statement : StatementBase
 
     override string toString()
     {
-        return format("Statement %s", this.expression);
+        return expression.toString();
     }
 
     override Node[] childNodes()
@@ -1427,14 +1507,10 @@ class LocalDeclaration : StatementBase
 
     override string toString()
     {
-        auto ret = format("Local %s", this.signature);
+        const string assignment =
+                this.value !is null ? " = " ~ this.value.toString() : "";
 
-        if (this.value !is null)
-        {
-            ret ~= format(" = %s", this.value);
-        }
-
-        return ret;
+        return format("%s%s;", signature, assignment);
     }
 
     override LocalDeclaration[] declarations()
@@ -1489,7 +1565,7 @@ class Assignment : StatementBase
 
     override string toString()
     {
-        return format("%s = %s", this.lvalue, this.value);
+        return format("%s = %s;", this.lvalue, this.value);
     }
 
     override Node[] childNodes()
@@ -1587,7 +1663,7 @@ class ConditionalBlock : StatementBase
 
     override string toString()
     {
-        return format("(%s)\n%s", this.conditional, this.block);
+        return format("%s\n%s", this.conditional, this.block);
     }
 
     override LocalDeclaration[] declarations()
@@ -1621,7 +1697,7 @@ class While : ConditionalBlock
 
     override string toString()
     {
-        return format("while\n%s", super.toString());
+        return format("while %s", super.toString());
     }
 
     string startLabel()
@@ -1690,18 +1766,17 @@ class If : StatementBase
 
     override string toString()
     {
-        auto ret = format("if (%s)\n%s\n", this.ifBlock.conditional,
+        auto ret = format("if %s\n%s", this.ifBlock.conditional,
                           this.ifBlock.block);
 
         foreach (elseIf; this.elseIfBlocks)
         {
-            ret ~= format("else if (%s)\n%s\n", elseIf.conditional,
-                    elseIf.block);
+            ret ~= format("else if %s\n%s", elseIf.conditional, elseIf.block);
         }
 
         if (this.elseBlock !is null)
         {
-            ret ~= format("else\n%s\n", this.elseBlock);
+            ret ~= format("else\n%s", this.elseBlock);
         }
 
         return ret;
@@ -1762,7 +1837,7 @@ class Return : StatementBase
 
     override string toString()
     {
-        return format("return %s", this.expression);
+        return format("return %s;", this.expression);
     }
 
     override Node[] childNodes()
@@ -1811,7 +1886,7 @@ class Block : StatementBase
 
         foreach (statement; this.statements)
         {
-            ret ~= format("    %s\n", statement);
+            ret ~= indent(statement.toString()) ~ "\n";
         }
 
         return ret ~ "}\n";
@@ -1903,30 +1978,21 @@ class FunctionSignature
 
     override string toString()
     {
-        auto params = "";
+        string ret = returnType.toString() ~ " " ~ this.fullName();
 
-        foreach (param; this.parameters)
+        // Parameters
+        string[] params;
+        foreach (p; parameters)
         {
-            if (params != "")
-            {
-                params ~= ", ";
-            }
-
-            params ~= param.toString();
+            params ~= p.toString();
         }
 
-        if (this.variadic)
+        if (variadic)
         {
-            if (params != "")
-            {
-                params ~= ", ";
-            }
-
             params ~= "...";
         }
 
-        return format("%s %s(%s)", this.returnType, this.fullName(),
-                params);
+        return ret ~ "(" ~ join(params, ", ") ~ ")";
     }
 }
 
@@ -2105,11 +2171,6 @@ class FunctionTemplate : Function
         this.renderings = [];
     }
 
-    override string toString()
-    {
-        return "template " ~ super.toString();
-    }
-
     FunctionRendering render(Type[] types)
     {
         FunctionSignature signature;
@@ -2179,29 +2240,7 @@ class Import
 
     override string toString()
     {
-        auto ret = format("import %s", this.name);
-
-        foreach (func; this.functions)
-        {
-            ret ~= format("    %s", func);
-        }
-
-        foreach (ft; this.functionTemplates)
-        {
-            ret ~= format("    %s", ft);
-        }
-
-        foreach (s; this.structs)
-        {
-            ret ~= format("    %s", s);
-        }
-
-        foreach (st; this.structTemplates)
-        {
-            ret ~= format("    %s", st);
-        }
-
-        return ret;
+        return format("import %s;", this.name);
     }
 
     FunctionSignature[] findFunctions(string name)

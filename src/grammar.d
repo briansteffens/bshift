@@ -584,6 +584,12 @@ Module parse(string name, Token[] tokenArray)
 
     validate(ret);
 
+    if (verbose)
+    {
+        writeln("bshift validated ast ------------------------------------\n");
+        writeln(ret);
+    }
+
     return ret;
 }
 
