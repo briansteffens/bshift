@@ -57,7 +57,7 @@ int main(string[] args)
 
     // [.bs] -> [.asm]
     Import[] imported;
-    auto results = recursiveCompile(imported, sourceFilename);
+    auto results = recursiveCompile(imported, sourceFilename, true);
 
     // [.asm] -> [.o]
     string[] asmFiles;
@@ -114,41 +114,38 @@ void link(string[] objectFiles)
 
 void assemble(Assembler assembler, string[] sources)
 {
-    string assemblerTemplate = null;
-
-    switch (assembler)
+    for (int i = 0; i < sources.length; i++)
     {
-        case Assembler.BASM:
-            if (verbose)
-            {
-                assemblerTemplate = "basm -v %s";
-            }
-            else
-            {
-                assemblerTemplate = "basm %s";
-            }
+        string source = sources[i];
+        bool isFirst = i == 0;
 
-            break;
+        string command;
 
-        case Assembler.NASM:
-            version (OSX)
-            {
-                assemblerTemplate = "nasm -f macho64 %s";
-            }
-            else
-            {
-                assemblerTemplate = "nasm -f elf64 %s";
-            }
-            break;
+        switch (assembler)
+        {
+            case Assembler.BASM:
+                string _verbose = verbose && isFirst ? "-v" : "";
 
-        default:
-            throw new Exception(
-                    format("Unrecognized assembler %s", assembler));
-    }
+                command = format("basm %s %s", _verbose, source);
+                break;
 
-    foreach (source; sources)
-    {
-        auto asmOut = executeShell(format(assemblerTemplate, source));
+            case Assembler.NASM:
+                version (OSX)
+                {
+                    command = format("nasm -f macho64 %s", source);
+                }
+                else
+                {
+                    command = format("nasm -f elf64 %s", source);
+                }
+                break;
+
+            default:
+                throw new Exception(
+                        format("Unrecognized assembler %s", assembler));
+        }
+
+        auto asmOut = executeShell(command);
 
         if (verbose)
         {
@@ -235,8 +232,10 @@ void printSyntaxError(string message, Char location)
 }
 
 // Compile a module
-CompileResult compile(string sourceFilename)
+CompileResult compile(string sourceFilename, bool isPrimarySource)
 {
+    bool _verbose = verbose && isPrimarySource;
+
     auto asmFilename = replace(sourceFilename, ".bs", ".asm");
     auto objectFilename = replace(sourceFilename, ".bs", ".o");
 
@@ -248,7 +247,7 @@ CompileResult compile(string sourceFilename)
     // Source code
     auto source = readText(sourceFilename);
 
-    if (verbose)
+    if (_verbose)
     {
         writeln("bshift source code --------------------------------------\n");
         writeln(source);
@@ -266,7 +265,7 @@ CompileResult compile(string sourceFilename)
         exit(6);
     }
 
-    if (verbose)
+    if (_verbose)
     {
         writeln("bshift tokens -------------------------------------------\n");
 
@@ -319,7 +318,7 @@ CompileResult compile(string sourceFilename)
 
     if (changed || force)
     {
-        if (verbose)
+        if (_verbose)
         {
             writeln("bshift ast ------------------------------------------\n");
             writeln(mod);
@@ -331,7 +330,7 @@ CompileResult compile(string sourceFilename)
         // Write assembly output
         auto contents = renderAsmFile(output);
 
-        if (verbose)
+        if (_verbose)
         {
             writeln("bshift output ---------------------------------------\n");
             writeln(contents);
@@ -347,12 +346,18 @@ CompileResult compile(string sourceFilename)
 }
 
 // Compile a module and any imported modules
-CompileResult[] recursiveCompile(ref Import[] imported, string sourceFilename)
+CompileResult[] recursiveCompile(ref Import[] imported, string sourceFilename,
+        bool isPrimarySource)
 {
     CompileResult[] ret;
 
-    auto result = compile(sourceFilename);
+    auto result = compile(sourceFilename, isPrimarySource);
     ret ~= result;
+
+    // Turn off verbose mode for imports, it's a ton of extra noise for little
+    // benefit. Restore it afterward.
+    bool verboseOld = verbose;
+    verbose = false;
 
     foreach (imp; result.mod.imports)
     {
@@ -371,10 +376,12 @@ CompileResult[] recursiveCompile(ref Import[] imported, string sourceFilename)
             continue;
         }
 
-        ret ~= recursiveCompile(imported, imp.filename);
+        ret ~= recursiveCompile(imported, imp.filename, false);
 
         imported ~= imp;
     }
+
+    verbose = verboseOld;
 
     return ret;
 }

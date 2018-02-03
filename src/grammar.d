@@ -316,8 +316,15 @@ Import[] processImport(Token start, string moduleName, string[] symbols = [])
 {
     string filename = resolveImportFilename(start, moduleName);
 
+    // Turn off verbose mode for imports, it's a ton of extra noise for little
+    // benefit. Restore it afterward.
+    bool verboseOld = verbose;
+    verbose = false;
+
     // Parse the import
     auto parsed = parse(moduleName, lex(filename, readText(filename)));
+
+    verbose = verboseOld;
 
     bool included(string symbol)
     {
