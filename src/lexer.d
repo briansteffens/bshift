@@ -99,6 +99,17 @@ class Token
         return this.match(other.type, other.value);
     }
 
+    bool matchAny(TokenType type, string[] values = null)
+    {
+        return this.type == type && values !is null &&
+               values.canFind(this.value);
+    }
+
+    bool matchAnySymbol(string[] values = null)
+    {
+        return matchAny(TokenType.Symbol, values);
+    }
+
     Token clone()
     {
         return new Token(this.location, this.type, this.value);

@@ -491,7 +491,8 @@ enum OperatorType
     LeftShift,
     RightShift,
     BitwiseAnd,
-    Dereference
+    Reference,
+    Dereference,
 }
 
 enum OperatorClass
@@ -810,13 +811,13 @@ class Call : Node
     FunctionSignature targetSignature;
     Type[] typeParameters;
 
-    this(string moduleName, string functionName, Node[] parameters,
-            Type[] typeParameters)
+    this(string moduleName, string functionName, Type[] typeParameters,
+            Node[] parameters)
     {
         this.moduleName = moduleName;
         this.functionName = functionName;
-        this.parameters = parameters;
         this.typeParameters = typeParameters;
+        this.parameters = parameters;
 
         foreach (param; this.parameters)
         {
@@ -838,8 +839,7 @@ class Call : Node
             typeParams ~= t.clone();
         }
 
-        return new Call(this.moduleName, this.functionName, params,
-                typeParams);
+        return new Call(moduleName, functionName, typeParams, params);
     }
 
     override void retype()
@@ -900,7 +900,7 @@ class MethodCall : Call
 
     this(Node container, string functionName, Node[] parameters)
     {
-        super(null, functionName, parameters, []);
+        super(null, functionName, [], parameters);
 
         this.container = container;
 

@@ -3,8 +3,10 @@ import std.conv;
 import std.format;
 import std.algorithm.comparison;
 
+import globals;
 import terminal;
 import lexer;
+import expressions;
 
 void debugTokens(Token[] tokens)
 {
@@ -136,4 +138,27 @@ void printSyntaxError(string message, Char location)
     }
 
     writeln();
+}
+
+void printExpressionParserState(ExpressionParser ep)
+{
+    if (!verbose)
+    {
+        return;
+    }
+
+    writefln("----------------------------------------------");
+    writefln("current: %s", ep.current);
+
+    writefln("output:");
+    for (int i = 0; i < ep.output.len(); i++)
+    {
+        writefln("\t%s", ep.output.peek(i));
+    }
+
+    writefln("operators:");
+    for (int i = 0; i < ep.operators.len(); i++)
+    {
+        writefln("\t%s", ep.operators.peek(i));
+    }
 }

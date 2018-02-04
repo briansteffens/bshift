@@ -2,8 +2,10 @@ import std.format;
 import std.stdio;
 import std.array;
 import std.conv;
+import std.variant;
 
 import globals;
+import debugging;
 import lexer;
 import ast;
 import grammar;
@@ -46,19 +48,23 @@ OperatorType operatorType(string input)
             return OperatorType.RightShift;
         case "&":
             return OperatorType.BitwiseAnd;
+        case "reference":
+            return OperatorType.Reference;
         case "dereference":
             return OperatorType.Dereference;
         default:
-            throw new Exception(format("Unrecognized operator: %s", input));
+            throw new ParserException(format("Unrecognized operator: %s",
+                    input));
     }
 }
 
-int operatorPrecedence(OperatorType t)
+int precedence(OperatorType t)
 {
     switch (t)
     {
         case OperatorType.DotAccessor:
             return 19;
+        case OperatorType.Reference:
         case OperatorType.Dereference:
             return 18;
         case OperatorType.Multiply:
@@ -86,14 +92,20 @@ int operatorPrecedence(OperatorType t)
         case OperatorType.LogicalOr:
             return 5;
         default:
-            throw new Exception("We'll re-raise this later with more info.");
+            throw new ParserException("Operator precedence unknown");
     }
+}
+
+int precedence(string o)
+{
+    return precedence(operatorType(o));
 }
 
 int operatorInputCount(OperatorType t)
 {
     switch (t)
     {
+        case OperatorType.Reference:
         case OperatorType.Dereference:
             return 1;
         case OperatorType.Plus:
@@ -115,57 +127,12 @@ int operatorInputCount(OperatorType t)
         case OperatorType.BitwiseAnd:
             return 2;
         default:
-            throw new Exception("We'll re-raise this later with more info.");
+            throw new ParserException("OperatorType input count unknown");
     }
 }
 
 // This represents either an unparsed lexer Token or a parsed AST Node
-class ParserItem
-{
-    Token token;
-    Node node;
-
-    // Represents the function name in a call
-    bool functionName;
-
-    // Stores the module name in a qualified function call
-    string moduleName;
-
-    // Represents the first open parenthesis in a call
-    bool parameterListStart;
-
-    Type[] typeParameters;
-
-    this(Token token)
-    {
-        this.token = token;
-    }
-
-    this(Node node)
-    {
-        this.node = node;
-    }
-
-    bool isToken()
-    {
-        return this.token !is null;
-    }
-
-    bool isNode()
-    {
-        return !this.isToken();
-    }
-
-    override string toString()
-    {
-        if (this.isToken())
-        {
-            return format("Token(%s)", this.token);
-        }
-
-        return format("Node(%s)", this.node);
-    }
-}
+alias ParserItem = Algebraic!(Token, Node);
 
 class ParserItemStack
 {
@@ -178,12 +145,12 @@ class ParserItemStack
 
     void push(Token t)
     {
-        this.push(new ParserItem(t));
+        this.push(ParserItem(t));
     }
 
     void push(Node n)
     {
-        this.push(new ParserItem(n));
+        this.push(ParserItem(n));
     }
 
     int len()
@@ -253,57 +220,166 @@ Node parseToken(Token t)
 // If a ParserItem is a Node, return it. If it's a Token, parse it into a Node.
 Node getOrParseNode(ParserItem i)
 {
-    if (i.isNode())
+    if (i.peek!(Node))
     {
-        return i.node;
+        return i.get!(Node);
     }
 
-    return parseToken(i.token);
+    return parseToken(i.get!(Token));
 }
 
 class ExpressionParser
 {
     TokenFeed input;
 
+    Token start;
+    Token previous;
     Token current;
 
     ParserItemStack output;
     ParserItemStack operators;
 
-    // Tokens to mark the end of an expression
-    Token[] until;
+    // Set this to control when the parser stops.
+    bool delegate(ExpressionParser) stopParsing;
 
     this(TokenFeed input)
     {
         this.input = input;
+        this.start = input.current;
 
         this.output = new ParserItemStack();
         this.operators = new ParserItemStack();
 
-        this.until ~= new Token(null, TokenType.Symbol, ";");
-        this.until ~= new Token(null, TokenType.Symbol, "=");
+        this.stopParsing = ep => ep.current.match(TokenType.Symbol, ";") ||
+                                 ep.current.match(TokenType.Symbol, "=");
     }
 
-    void printState()
+    Node run()
     {
-        if (!verbose)
+        current = input.current;
+
+        if (verbose)
+        {
+            writeln("\nExpression parser starting: ", this.input);
+        }
+
+        printExpressionParserState(this);
+
+        while (read())
+        {
+            if (!this.input.next())
+            {
+                throw new UnexpectedEOF(current);
+            }
+
+            current = input.current;
+
+            printExpressionParserState(this);
+        }
+
+        if (output.len() != 1)
+        {
+            throw new SyntaxError("Invalid expression", current);
+        }
+
+        Node ret = getOrParseNode(output.pop());
+
+        if (verbose)
+        {
+            writeln("Expression parser output: ", ret);
+        }
+
+        return ret;
+    }
+
+    bool read()
+    {
+        previous = this.input.peek(-1);
+        current = this.input.current;
+
+        hackOperatorTypes();
+
+        if (this.checkForEnd())
+        {
+            return false;
+        }
+
+        // Consume as many operators as possible
+        while (this.consumeOperatorPrecedence()) {}
+
+        if (consumeSizeOf() || consumeCall() || consumeCast() ||
+            consumeParenthesis() || consumeIndexer())
+        {
+            input.seek(-1); // TODO
+            return true;
+        }
+
+        if (current.type != TokenType.Symbol)
+        {
+            this.output.push(ParserItem(current));
+            return true;
+        }
+
+        hackStructMemberIndexing();
+
+        // Operator was not handled: push it onto the operator stack.
+        this.operators.push(current);
+        return true;
+    }
+
+    // Detect reference and dereference operators. Resolve ambiguity between
+    // operators with the same symbol.
+    private void hackOperatorTypes()
+    {
+        if (!current.matchAnySymbol(["*", "&"]) || canCurrentBeInfix())
         {
             return;
         }
 
-        writefln("----------------------------------------------");
-        writefln("current: %s", this.current);
-
-        writefln("output:");
-        for (int i = 0; i < this.output.len(); i++)
+        switch (current.value)
         {
-            writefln("\t%s", this.output.peek(i));
+            case "*":
+                current.value = "dereference";
+                break;
+            case "&":
+                current.value = "reference";
+                break;
+            default:
+                throw new Exception("Unrecognized operator " ~ current.value);
+        }
+    }
+
+    // Analyze context near the current token to see if it can possibly be an
+    // infix operator.
+    private bool canCurrentBeInfix()
+    {
+        // TODO: Gotta be a better way to detect this. And this doesn't cover
+        // all cases.
+        return !previous.matchAny(TokenType.Word, ["return"]) &&
+                !previous.matchAnySymbol(["(", "{", "[", ";", ",", "&&", "!=",
+                "==", ">=", "<=", "<", ">", "=", "}"]);
+    }
+
+    // TODO
+    private void hackStructMemberIndexing()
+    {
+        // Hack to allow indexing a struct member
+        if (input.current.value != "[")
+        {
+            return;
         }
 
-        writefln("operators:");
-        for (int i = 0; i < this.operators.len(); i++)
+        while (this.operators.len() > 0)
         {
-            writefln("\t%s", this.operators.peek(i));
+            auto topOperator = this.operators.peek(0);
+
+            if (!topOperator.peek!(Token) ||
+                !topOperator.get!(Token).match(TokenType.Symbol, "."))
+            {
+                break;
+            }
+
+            this.consumeOperator();
         }
     }
 
@@ -314,7 +390,8 @@ class ExpressionParser
 
         foreach (item; this.operators.stack)
         {
-            if (item.isToken() && item.token.match(TokenType.Symbol, "("))
+            if (item.peek!(Token) &&
+                item.get!(Token).match(TokenType.Symbol, "("))
             {
                 ret++;
             }
@@ -323,611 +400,198 @@ class ExpressionParser
         return ret;
     }
 
-    // Pushes a new item onto the output stack, dealing with special cases
-    void outputPush(ParserItem i)
-    {
-        if (this.consumeCastComplete(i))
-        {
-            return;
-        }
-
-        this.output.push(i);
-    }
-
-    void consume()
-    {
-        auto current = this.current;
-
-        if (this.operators.len() == 0)
-        {
-            return;
-        }
-
-        OperatorType operator;
-        try
-        {
-            operator = operatorType(this.operators.peek(0).token.value);
-        }
-        catch (Exception e)
-        {
-            //throw new SyntaxError("Unrecognized operator", current);
-            throw e;
-        }
-
-        int inputCount;
-        try
-        {
-            inputCount = operatorInputCount(operator);
-        }
-        catch (Exception)
-        {
-            throw new SyntaxError("Unknown number of operands for operator",
-                    current);
-        }
-
-        if (this.output.len() < inputCount)
-        {
-            throw new SyntaxError(format(
-                    "Unexpected number of operands (got %d, expected %d) near",
-                    this.output.len(), inputCount), current);
-        }
-
-        this.operators.pop();
-        Node op = null;
-
-        if (inputCount == 2)
-        {
-            auto rightItem = this.output.pop();
-            auto leftItem = this.output.pop();
-
-            auto right = getOrParseNode(rightItem);
-            auto left = getOrParseNode(leftItem);
-
-            if (operator == OperatorType.DotAccessor)
-            {
-                // Check for a member call
-                auto call = cast(Call)rightItem.node;
-                if (call !is null)
-                {
-                    op = new MethodCall(left, call.functionName,
-                            call.parameters);
-                }
-                else
-                {
-                    op = new DotAccessor(left, rightItem.token.value);
-                }
-            }
-            else
-            {
-                op = new Operator(left, operator, right);
-            }
-        }
-        else if (inputCount == 1)
-        {
-            auto rightItem = this.output.pop();
-            auto right = getOrParseNode(rightItem);
-
-            switch (operator)
-            {
-                case OperatorType.Dereference:
-                    op = new Dereference(right);
-                    break;
-                default:
-                    throw new SyntaxError("Unrecognized operator", current);
-            }
-        }
-        else
-        {
-            throw new Exception("Unrecognized inputCount");
-        }
-
-        this.outputPush(new ParserItem(op));
-    }
-
-    // Function calls can start like "func(", "mod::func(", "func<T>(", or
-    // "mod::func<T>("
-    bool startFunctionCall()
-    {
-        int rewindTarget = this.input.index;
-        bool rewind()
-        {
-            this.input.index = rewindTarget;
-            return false;
-        }
-
-        auto token0 = this.input.current;
-
-        if (token0.type != TokenType.Word)
-        {
-            return rewind();
-        }
-
-        if (!this.input.next())
-        {
-            return rewind();
-        }
-
-        Token moduleToken = null;
-        Token functionToken = null;
-
-        if (this.input.current.match(TokenType.Symbol, "::"))
-        {
-            if (!this.input.next())
-            {
-                return rewind();
-            }
-
-            moduleToken = token0;
-            functionToken = this.input.current;
-
-            if (!this.input.next())
-            {
-                return rewind();
-            }
-        }
-        else
-        {
-            functionToken = token0;
-        }
-
-        Type[] typeParameters = tryParse(this.input,
-                &parseConcreteTypeParams);
-        if (typeParameters is null)
-        {
-            typeParameters = [];
-        }
-
-        if (!this.input.current.match(TokenType.Symbol, "("))
-        {
-            return rewind();
-        }
-
-        auto nameToken = new ParserItem(functionToken);
-        nameToken.functionName = true;
-        nameToken.typeParameters = typeParameters;
-        if (moduleToken !is null)
-        {
-            nameToken.moduleName = moduleToken.value;
-        }
-        this.outputPush(nameToken);
-
-        auto startList = new ParserItem(this.input.current);
-        startList.parameterListStart = true;
-        this.operators.push(startList);
-
-        return true;
-    }
-
-    void consumeFunctionCall()
-    {
-        Node[] parameters;
-
-        while (true)
-        {
-            auto topOutput = this.output.pop();
-
-            // The function name marks the beginning of the function call
-            if (topOutput.isToken() &&
-                topOutput.token.type == TokenType.Word &&
-                topOutput.functionName)
-            {
-                // Push the new call onto the output stack
-                auto call = new Call(topOutput.moduleName,
-                            topOutput.token.value, parameters,
-                            topOutput.typeParameters);
-
-                this.outputPush(new ParserItem(call));
-
-                break;
-            }
-
-            insertInPlace(parameters, 0, getOrParseNode(topOutput));
-        }
-    }
-
-    bool consumeSizeOf()
-    {
-        if (!this.input.current.match(TokenType.Word, "sizeof"))
-        {
-            return false;
-        }
-
-        if (!this.input.next() ||
-            !this.input.current.match(TokenType.Symbol, "("))
-        {
-            throw new Exception("Expected open parenthesis after sizeof");
-        }
-
-        if (!this.input.next())
-        {
-            throw new Exception("Expected a type in sizeof");
-        }
-
-        auto type = parseType(this.input);
-
-        if (!this.input.current.match(TokenType.Symbol, ")"))
-        {
-            throw new Exception("Expected close parenthesis after sizeof");
-        }
-
-        this.outputPush(new ParserItem(new SizeOf(type)));
-
-        return true;
-    }
-
-    // A cast start looks like '(bool)' and isn't completed until the target
-    // is set by a subsequent target (the thing to cast to that type).
-    bool consumeCastStart()
-    {
-        auto rewindTarget = this.input.index;
-        bool rewind()
-        {
-            this.input.index = rewindTarget;
-            return false;
-        }
-
-        // Check for open parenthesis
-        auto cur = this.input.current;
-
-        if (!cur.match(TokenType.Symbol, "("))
-        {
-            return rewind();
-        }
-
-        // Check for a valid type name
-        if (!this.input.next() || this.input.current.type != TokenType.Word)
-        {
-            return rewind();
-        }
-
-        auto castType = parseType(this.input);
-        if (castType is null)
-        {
-            return rewind();
-        }
-
-        // Check for close parenthesis
-        if (!this.input.current.match(TokenType.Symbol, ")"))
-        {
-            return rewind();
-        }
-
-        // TODO: shouldn't need this
-        if (this.input.peek(1).match(TokenType.Symbol, "{"))
-        {
-            return rewind();
-        }
-
-        this.outputPush(new ParserItem(new Cast(castType, null)));
-
-        return true;
-    }
-
-    // A cast is completed when the top of the output stack has an incomplete
-    // cast and the new item being pushed onto the stack is something that can
-    // be a cast target.
-    bool consumeCastComplete(ParserItem newItem)
-    {
-        if (this.output.stack.length == 0)
-        {
-            return false;
-        }
-
-        // Check for an incomplete cast
-        auto maybeCast = this.output.peek(0);
-
-        if (maybeCast is null || !maybeCast.isNode())
-        {
-            return false;
-        }
-
-        auto castNode = cast(Cast)maybeCast.node;
-        if (castNode is null || castNode.target !is null)
-        {
-            return false;
-        }
-
-        // Check if newItem is castable
-        if (newItem.isToken() &&
-            (newItem.token.type == TokenType.Integer ||
-             newItem.token.type == TokenType.Word))
-        {
-            castNode.target = parseToken(newItem.token);
-            castNode.target.parent = castNode;
-            return true;
-        }
-
-        return false;
-    }
-
     // Check for the end of the expression, returning true and consuming any
     // remaining operators if the end is found.
-    bool checkForEnd()
+    private bool checkForEnd()
     {
-        bool end = false;
-
-        foreach (unt; this.until)
-        {
-            if (this.current.match(unt))
-            {
-                end = true;
-                break;
-            }
-        }
-
-        if (!end)
+        if (!stopParsing(this))
         {
             return false;
         }
 
         while (this.operators.len() > 0)
         {
-            this.consume();
+            this.consumeOperator();
         }
 
         return true;
     }
 
-    bool consumeOperator()
+    private bool consumeParenthesis()
     {
-        this.current = this.input.current;
+        return consumeBracket("(", ")");
 
-        if (current.type != TokenType.Symbol)
+        // TODO: Disambiguate between sub-expression, type-cast, and function
+        // call.
+    }
+
+    bool consumeIndexer()
+    {
+        if (!consumeBracket("[", "]"))
+        {
+            return false;
+        }
+
+        // The sub-expression inside the brackets will be left on the top of
+        // the output stack by consumeBracket().
+        auto expression = getOrParseNode(output.pop());
+
+        // TODO: Use generalized shunting yard rules to apply indexer to its
+        // operand.
+        auto operand = getOrParseNode(output.pop());
+
+        output.push(new Indexer(operand, expression));
+
+        return true;
+    }
+
+    private bool consumeBracket(string bracketStart, string bracketStop)
+    {
+        if (!current.match(TokenType.Symbol, bracketStop))
+        {
+            return false;
+        }
+
+        // TODO: empty
+
+        while (!operators.peek(0).peek!(Token) ||
+               !operators.peek(0).get!(Token).match(TokenType.Symbol,
+                   bracketStart))
+        {
+            consumeOperator();
+        }
+
+        operators.pop();
+        input.expectSymbol(bracketStop);
+        return true;
+    }
+
+    // Consume the operator on top of the operator stack if the current input
+    // operator has lower precedence than it.
+    private bool consumeOperatorPrecedence()
+    {
+        if (current.type != TokenType.Symbol || operators.len() == 0)
         {
             return false;
         }
 
         try
         {
-            int cur, prev;
-            try
-            {
-                cur = operatorPrecedence(operatorType(current.value));
-                prev = operatorPrecedence(operatorType(
-                    this.operators.peek(0).token.value));
-            }
-            catch (Exception)
-            {
-                throw new SyntaxError("Unknown precedence for", this.current);
-            }
+            int cur = precedence(current.value);
+            int prev = precedence(operators.peek(0).get!(Token).value);
 
-            if (prev >= cur)
+            if (prev < cur)
             {
-                this.consume();
-                return true;
+                return false;
             }
         }
-        catch (Throwable)
+        catch (ParserException)
         {
             return false;
         }
 
-        return false;
-    }
-
-    bool next()
-    {
-        auto previous = this.input.current;
-        if (!this.input.next())
-        {
-            writefln("expression: %s", current);
-            throw new UnexpectedEOF(current);
-        }
-
-        this.current = this.input.current;
-        this.printState();
-
-        if (this.checkForEnd())
-        {
-            return false;
-        }
-
-        // Consume as many operators as possible
-        while (this.consumeOperator()) {}
-
-        // Detect sizeof
-        if (this.consumeSizeOf())
-        {
-            return true;
-        }
-
-        // Check for the beginning of a function call
-        if (this.startFunctionCall())
-        {
-            return true;
-        }
-
-        // Detect reference: word preceded by ampersand
-        if (current.type == TokenType.Word &&
-            this.operators.stack.length > 0)
-        {
-            auto topOperator = this.operators.peek(0);
-
-            if (topOperator.isToken() &&
-                topOperator.token.match(TokenType.Symbol, "&"))
-            {
-                this.output.push(new ParserItem(new Reference(
-                            parseToken(current))));
-
-                this.operators.pop();
-
-                return true;
-            }
-        }
-
-        // Detect dereference: asterisk symbol preceded by either nothing,
-        // a close parenthesis, or an operator.
-        if (current.match(TokenType.Symbol, "*"))
-        {
-            auto previousToken = this.input.peek(-1);
-
-            if (this.output.len() == 0 && this.operators.len() == 0 ||
-                previousToken.match(TokenType.Symbol, "(") ||
-                previousToken.match(TokenType.Symbol, "&&") ||
-                previousToken.match(TokenType.Symbol, "||") ||
-                previousToken.match(TokenType.Symbol, "!=") ||
-                previousToken.match(TokenType.Symbol, "==") ||
-                previousToken.match(TokenType.Symbol, "<=") ||
-                previousToken.match(TokenType.Symbol, ">=") ||
-                previousToken.match(TokenType.Symbol, "<") ||
-                previousToken.match(TokenType.Symbol, ">") ||
-                previousToken.match(TokenType.Symbol, "+") ||
-                previousToken.match(TokenType.Symbol, "-") ||
-                previousToken.match(TokenType.Symbol, "*") ||
-                previousToken.match(TokenType.Symbol, "/"))
-            {
-                // Rewrite as a dereference
-                auto rewritten = current.clone();
-                rewritten.value = "dereference";
-                this.operators.push(new ParserItem(rewritten));
-
-                return true;
-            }
-        }
-
-        if (current.type != TokenType.Symbol)
-        {
-            this.outputPush(new ParserItem(current));
-            return true;
-        }
-
-        // Detect cast: open parenthesis, type, close parenthesis
-        if (this.consumeCastStart())
-        {
-            return true;
-        }
-
-        // Hack to allow indexing a struct member
-        if (current.value == "[")
-        {
-            while (this.operators.len() > 0)
-            {
-                auto topOperator = this.operators.peek(0);
-
-                if (!topOperator.isToken() ||
-                    !topOperator.token.match(TokenType.Symbol, "."))
-                {
-                    break;
-                }
-
-                this.consume();
-            }
-        }
-
-        // Handle end of indexer
-        if (current.value == "]")
-        {
-            // Consume operators until the beginning of the bracket
-            while (true)
-            {
-                auto topOperator = this.operators.peek(0);
-
-                if (topOperator.isToken() &&
-                    topOperator.token.match(TokenType.Symbol, "["))
-                {
-                    auto valueItem = this.output.pop();
-                    auto indexerItem = this.output.pop();
-
-                    Node valueNode;
-                    if (valueItem.isToken())
-                    {
-                        valueNode = parseToken(valueItem.token);
-                    }
-                    else
-                    {
-                        valueNode = valueItem.node;
-                    }
-
-                    Node indexerNode;
-                    if (indexerItem.isToken())
-                    {
-                        indexerNode = parseToken(indexerItem.token);
-                    }
-                    else
-                    {
-                        indexerNode = indexerItem.node;
-                    }
-
-                    auto indexer = new Indexer(indexerNode, valueNode);
-
-                    this.output.push(indexer);
-
-                    this.operators.pop();
-                    return true;
-                }
-
-                this.consume();
-            }
-        }
-
-        if (current.value == "," || current.value == ")")
-        {
-            // Consume operators until the beginning of the parameter list
-            while (true)
-            {
-                auto topOperator = this.operators.peek(0);
-
-                if (topOperator.isToken() &&
-                    topOperator.token.type == TokenType.Symbol &&
-                    topOperator.token.value == "(")
-                {
-                    // Don't clean up the function call yet if we're only on a
-                    // comma
-                    if (current.value == ",")
-                    {
-                        return true;
-                    }
-
-                    // Function call?
-                    if (topOperator.parameterListStart)
-                    {
-                        this.consumeFunctionCall();
-                    }
-
-                    // Pop off the open parenthesis
-                    this.operators.pop();
-                    return true;
-                }
-
-                this.consume();
-            }
-        }
-
-        this.operators.push(current);
+        this.consumeOperator();
         return true;
     }
 
-    Node run()
+    // Consume the operator on top of the operator stack.
+    private void consumeOperator()
     {
-        Token current = this.input.current;
+        auto operator = operatorType(operators.pop().get!(Token).value);
+        Node node;
 
-        if (verbose)
+        switch (operatorInputCount(operator))
         {
-            writeln("\nExpression parser starting: ", this.input);
+            case 1:
+                node = consumePrefixOperator(operator);
+                break;
+            case 2:
+                node = consumeInfixOperator(operator);
+                break;
+            default:
+                throw new Exception("Unrecognized inputCount");
         }
 
-        while (this.next())
+        output.push(ParserItem(node));
+    }
+
+    private Node consumeInfixOperator(OperatorType operator)
+    {
+        auto rightItem = this.output.pop();
+        auto leftItem = this.output.pop();
+
+        auto right = getOrParseNode(rightItem);
+        auto left = getOrParseNode(leftItem);
+
+        if (operator != OperatorType.DotAccessor)
         {
-            current = this.input.current;
+            return new Operator(left, operator, right);
         }
 
-        auto len = this.output.len();
-        if (len != 1)
+        // Check for a member call
+        Call call;
+        if (rightItem.peek!(Node))
         {
-            // TODO: clarify what this implies.
-            throw new SyntaxError(format(
-                    "Expected one (got %d) token to be left near", len),
-                    current);
+            call = cast(Call)rightItem.get!(Node);
         }
 
-        return getOrParseNode(this.output.pop());
+        if (call !is null)
+        {
+            return new MethodCall(left, call.functionName, call.parameters);
+        }
+
+        return new DotAccessor(left, rightItem.get!(Token).value);
+    }
+
+    private Node consumePrefixOperator(OperatorType operator)
+    {
+        auto rightItem = this.output.pop();
+        auto right = getOrParseNode(rightItem);
+
+        switch (operator)
+        {
+            case OperatorType.Reference:
+                return new Reference(right);
+            case OperatorType.Dereference:
+                return new Dereference(right);
+            default:
+                throw new SyntaxError("Unrecognized operator", current);
+        }
+    }
+
+    bool consumeGrammar(Node node)
+    {
+        if (node is null)
+        {
+            return false;
+        }
+
+        this.output.push(ParserItem(node));
+        return true;
+    }
+
+    bool consumeCall()
+    {
+        // This will never support calling a function returned by an
+        // expression. Not that you can do that now, but you probably should be
+        // able to. And once you can, this will have to be handled in the
+        // expression parser.
+        return consumeGrammar(tryParse(input, &parseCall, null));
+    }
+
+    bool consumeSizeOf()
+    {
+        return consumeGrammar(tryParse(input, &parseSizeOf, null));
+    }
+
+    bool consumeCast()
+    {
+        return consumeGrammar(tryParse(input, &parseCast, null));
     }
 }
 
 Node parseExpression(TokenFeed tokens)
 {
-    // TODO: yuck
-    tokens.seek(-1);
     return new ExpressionParser(tokens).run();
 }
 
@@ -935,39 +599,11 @@ Node parseExpression(TokenFeed tokens)
 // with no open parenthesis on the stack
 Node parseExpressionParenthesis(TokenFeed tokens)
 {
-    Token current = tokens.current;
-
-    // TODO: yucky
-    tokens.seek(-1);
     auto parser = new ExpressionParser(tokens);
 
-    while (true)
-    {
-        if (!parser.next())
-        {
-            break;
-        }
+    parser.stopParsing = ep =>
+        ep.current.match(new Token(null, TokenType.Symbol, ")")) &&
+        ep.parenthesisDepth() == 0;
 
-        current = tokens.current;
-
-        // Look for the terminating close parenthesis
-        if (parser.input.peek(1) !is null &&
-            parser.input.peek(1).match(TokenType.Symbol, ")") &&
-            parser.parenthesisDepth() == 1)
-        {
-            // Consume the last parenthesis
-            parser.next();
-            tokens.next();
-
-            if (parser.output.len() != 1)
-            {
-                throw new SyntaxError("Expected one token to be left near",
-                        current);
-            }
-
-            return getOrParseNode(parser.output.pop());
-        }
-    }
-
-    throw new SyntaxError("Expected a closing parenthesis near", current);
+    return parser.run();
 }

@@ -12,6 +12,9 @@ import ast;
 import expressions;
 import validator;
 
+// A function that parses an element of grammar and produces a node in the AST
+alias Parser = Node function(TokenFeed);
+
 class SyntaxError : Exception
 {
     public Token token;
@@ -287,6 +290,23 @@ T tryParse(T)(TokenFeed tokens, T function(TokenFeed tokens) parser,
     tokens.index = copy.index;
 
     return ret;
+}
+
+// Run a series of parsers until one successfully parses something. If none
+// work, throws GrammarMismatch.
+Node expectAnyOf(TokenFeed tokens, Parser[] parsers)
+{
+    foreach (parser; parsers)
+    {
+        auto ret = tryParse(tokens, parser);
+
+        if (ret !is null)
+        {
+            return ret;
+        }
+    }
+
+    throw new GrammarMismatch(tokens.current());
 }
 
 string resolveImportFilename(Token start, string moduleName)
@@ -932,19 +952,20 @@ LocalDeclaration parseLocalDeclaration(TokenFeed tokens)
     return new LocalDeclaration(start, typeSignature, expression);
 }
 
+// Parse a scope operator like 'io::'
+string parseScope(TokenFeed tokens)
+{
+    string moduleName = tokens.expectWord().value;
+    tokens.expectSymbol("::");
+    return moduleName;
+}
+
 Type parseType(TokenFeed tokens)
 {
-    // Read either the module or type name
-    auto start = tokens.current;
-    string typeName = tokens.expectWord().value;
-    string moduleName = null;
+    Token start = tokens.current;
 
-    // Detect scope operator, which means we have a module and a type name
-    if (tokens.nextIfSymbol("::"))
-    {
-        moduleName = typeName;
-        typeName = tokens.expectWord().value;
-    }
+    string moduleName = tryParse(tokens, &parseScope, null);
+    string typeName = tokens.expectWord().value;
 
     // Read type parameters
     auto typeParams = tryParse(tokens, &parseConcreteTypeParams, []);
@@ -960,11 +981,12 @@ Type parseType(TokenFeed tokens)
     Node elements = null;
     if (tokens.nextIf(TokenType.Symbol, "["))
     {
-        // TODO
-        tokens.seek(-1);
         auto parser = new ExpressionParser(tokens);
-        parser.until ~= new Token(tokens.current.location, TokenType.Symbol,
-                "]");
+        parser.stopParsing = ep =>
+            ep.current.match(new Token(null, TokenType.Symbol, ";")) ||
+            ep.current.match(new Token(null, TokenType.Symbol, "=")) ||
+            ep.current.match(new Token(
+                    tokens.current.location, TokenType.Symbol, "]"));
 
         elements = parser.run();
 
@@ -1124,14 +1146,92 @@ ConditionalBlock parseConditionalBlock(TokenFeed tokens)
 {
     auto start = tokens.current;
 
-    if (!tokens.matchSymbol("("))
-    {
-        throw new SyntaxError("Expected a conditional expression",
-                tokens.current);
-    }
+    tokens.requireSymbol("(", "Expected a conditional expression");
 
     auto conditional = parseExpressionParenthesis(tokens);
+
+    tokens.requireSymbol(")", "Expected a right parenthesis");
+
     auto block = parseStatementBase(tokens);
 
     return new ConditionalBlock(start, conditional, block);
+}
+
+// Parse a function/method call argument: an expression ending in a comma or
+// right parenthesis.
+Node parseArgument(TokenFeed tokens)
+{
+    ExpressionParser parser = new ExpressionParser(tokens);
+
+    parser.stopParsing = ep =>
+        ep.current.match(TokenType.Symbol, ",") ||
+        ep.current.match(TokenType.Symbol, ")") &&
+        ep.parenthesisDepth() == 0;
+
+    return parser.run();
+}
+
+// Parse a function/method call argument list: an optional series of
+// comma-delimited expressions surrounded by parenthesis.
+Node[] parseArgumentList(TokenFeed tokens)
+{
+    tokens.expectSymbol("(");
+    Node[] arguments;
+
+    while (!tokens.nextIfSymbol(")"))
+    {
+        arguments ~= parseArgument(tokens);
+
+        tokens.nextIfSymbol(",");
+    }
+
+    return arguments;
+}
+
+// Function call examples:
+//  - func()
+//  - func<T>(4, 5)
+//  - mod::func(3)
+//  - mod::func<T>(5, 6, true)
+Call parseCall(TokenFeed tokens)
+{
+    auto moduleName = tryParse(tokens, &parseScope, null);
+    auto functionName = tokens.expectWord().value;
+    auto typeParams = tryParse(tokens, &parseConcreteTypeParams, []);
+    auto arguments = parseArgumentList(tokens);
+
+    return new Call(moduleName, functionName, typeParams, arguments);
+}
+
+SizeOf parseSizeOf(TokenFeed tokens)
+{
+    tokens.expectWord("sizeof");
+    tokens.expectSymbol("(");
+    auto type = parseType(tokens);
+    tokens.expectSymbol(")");
+
+    return new SizeOf(type);
+}
+
+// A cast looks like '(bool)x'
+Cast parseCast(TokenFeed tokens)
+{
+    tokens.expectSymbol("(");
+    auto castType = parseType(tokens);
+    tokens.expectSymbol(")");
+
+    Node target;
+
+    if (tokens.match(TokenType.Integer) || tokens.match(TokenType.Word))
+    {
+        target = parseToken(tokens.current());
+        tokens.next();
+    }
+    else
+    {
+        tokens.expectSymbol("(");
+        target = parseExpressionParenthesis(tokens);
+    }
+
+    return new Cast(castType, target);
 }
