@@ -2,6 +2,7 @@ import std.format;
 import std.stdio;
 import std.conv;
 import std.ascii;
+import std.string;
 import std.algorithm;
 
 import terminal;
@@ -39,6 +40,7 @@ class Char
 {
     dchar value;
     Line line;
+    Token token;
 
     // The position of the character within the line
     int lineOffset;
@@ -128,6 +130,7 @@ class SourceFile
     string filename;
     Line[] lines;
     Char[] chars;
+    Token[] tokens;
 
     this(string filename, string source)
     {
@@ -144,7 +147,9 @@ class SourceFile
 
         foreach (c; source)
         {
-            if (c == '\n')
+            const bool isNewline = c == '\n';
+
+            if (isNewline)
             {
                 lines ~= line;
                 line = new Line(this, line.number + 1);
@@ -157,7 +162,12 @@ class SourceFile
             }
 
             auto chr = new Char(c, line, lineOffset);
-            line.chars ~= chr;
+
+            if (!isNewline)
+            {
+                line.chars ~= chr;
+            }
+
             chars ~= chr;
         }
 
@@ -175,10 +185,13 @@ class Reader
     Char[] input;
     int index = 0;
 
-    this(string filename, string source)
+    // Keeps track of the index where the current token being lexed started.
+    // Basically it's the index of the last token's last character + 1.
+    int tokenStart = 0;
+
+    this(SourceFile file)
     {
-        source = source[$-1] == '\n' ? source : source ~ "\n";
-        this.input = new SourceFile(filename, source).chars;
+        input = file.chars;
     }
 
     bool isLast()
@@ -301,7 +314,18 @@ class Reader
     // Create a new Token at the Reader's current location
     Token token(TokenType type, string value)
     {
-        return new Token(currentChar, type, value);
+        Token ret = new Token(currentChar, type, value);
+
+        // Link characters with the token they were lexed as
+        for (int i = tokenStart; i < index; i++)
+        {
+            input[i].token = ret;
+        }
+
+        // Reset the beginning of the current token.
+        tokenStart = index;
+
+        return ret;
     }
 }
 
@@ -325,23 +349,23 @@ immutable string[] symbols =
     "{", "}",
 ];
 
-// Convert source code into a list of tokens
-Token[] lex(string filename, string source)
+// Convert source code into a list of tokens and metadata around the code.
+SourceFile lex(string filename, string source)
 {
-    auto reader = new Reader(filename, source);
+    auto file = new SourceFile(filename, source);
+    auto reader = new Reader(file);
 
-    Token[] tokens;
     Token token;
 
     while ((token = read(reader)) !is null)
     {
         if (token.type != TokenType.Comment)
         {
-            tokens ~= token;
+            file.tokens ~= token;
         }
     }
 
-    return tokens;
+    return file;
 }
 
 // Read the next token from the reader.
@@ -395,6 +419,8 @@ void skipWhiteSpace(Reader r)
     {
         r.advance();
     }
+
+    r.tokenStart = r.index;
 }
 
 bool isWhiteSpace(dchar c)
@@ -440,7 +466,7 @@ Token readSymbol(Reader r)
         if (r.matchSequence(to!(dchar[])(symbol)))
         {
             r.seek(cast(int)symbol.length);
-            return new Token(r.currentChar, TokenType.Symbol, symbol);
+            return r.token(TokenType.Symbol, symbol);
         }
     }
 

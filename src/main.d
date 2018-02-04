@@ -254,10 +254,10 @@ CompileResult compile(string sourceFilename, bool isPrimarySource)
     }
 
     // Lexer
-    Token[] tokens;
+    SourceFile file;
     try
     {
-        tokens = lex(sourceFilename, source);
+        file = lex(sourceFilename, source);
     }
     catch (LexerError e)
     {
@@ -265,38 +265,80 @@ CompileResult compile(string sourceFilename, bool isPrimarySource)
         exit(6);
     }
 
+    Token[] tokens = file.tokens;
+
     if (_verbose)
     {
         writeln("bshift tokens -------------------------------------------\n");
 
-        string buffer = "";
+        int indentSpaces(Line line)
+        {
+            int ret = 0;
+
+            foreach (c; line.chars)
+            {
+                if (c.value == '\t')
+                {
+                    // TODO
+                    ret += 4;
+                }
+                else if (c.value == ' ')
+                {
+                    ret += 1;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return ret;
+        }
+
+        string indented(int level)
+        {
+            string ret = "";
+
+            while (level-- > 0)
+            {
+                ret ~= " ";
+            }
+
+            return ret;
+        }
 
         Line line = null;
+        string buffer = "";
 
-        for (int i = 0; i < tokens.length; i++)
+        foreach (token; tokens)
         {
+            if (line is null)
+            {
+                line = token.location.line;
+            }
+
             if (buffer != "")
             {
                 buffer ~= " ";
             }
 
-            if (line != tokens[i].location.line)
+            buffer ~= token.toString();
+
+            if (line != token.location.line)
             {
                 if (line !is null)
                 {
-                    writeln(buffer);
+                    writeln(indented(indentSpaces(line)) ~ buffer);
                 }
 
+                line = token.location.line;
                 buffer = "";
-                line = tokens[i].location.line;
             }
-
-            buffer ~= tokens[i].toString();
         }
 
         if (buffer != "")
         {
-            writeln(buffer);
+            writeln(indented(indentSpaces(line)) ~ buffer);
         }
 
         writeln();
@@ -338,8 +380,8 @@ CompileResult compile(string sourceFilename, bool isPrimarySource)
 
         auto bytes = cast(ubyte[])contents;
 
-        auto file = File(asmFilename, "w");
-        file.rawWrite(bytes);
+        auto outputFile = File(asmFilename, "w");
+        outputFile.rawWrite(bytes);
     }
 
     return new CompileResult(mod, asmFilename, objectFilename, changed);

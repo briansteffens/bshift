@@ -322,7 +322,7 @@ Import[] processImport(Token start, string moduleName, string[] symbols = [])
     verbose = false;
 
     // Parse the import
-    auto parsed = parse(moduleName, lex(filename, readText(filename)));
+    auto parsed = parse(moduleName, lex(filename, readText(filename)).tokens);
 
     verbose = verboseOld;
 
@@ -419,7 +419,7 @@ Import[] parseImportFrom(TokenFeed tokens)
 
 Module parse(string name, string source)
 {
-    return parse(name, lex(name, source));
+    return parse(name, lex(name, source).tokens);
 }
 
 Module parse(string name, Token[] tokenArray)
