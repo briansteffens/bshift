@@ -16,6 +16,8 @@ import generator;
 import grammar;
 import terminal;
 
+bool processAll = false;
+
 enum Assembler
 {
     BASM,
@@ -41,9 +43,9 @@ int main(string[] args)
             continue;
         }
 
-        if (arg == "-f")
+        if (arg == "-a")
         {
-            force = true;
+            processAll = true;
             continue;
         }
 
@@ -64,7 +66,7 @@ int main(string[] args)
     string[] asmFiles;
     foreach (result; results)
     {
-        if (result.changed || force)
+        if (result.changed || processAll)
         {
             asmFiles ~= result.asmFile;
         }
@@ -232,7 +234,7 @@ CompileResult compile(string sourceFilename, bool isPrimarySource)
         exit(7);
     }
 
-    if (changed || force)
+    if (changed || processAll)
     {
         if (_verbose)
         {
