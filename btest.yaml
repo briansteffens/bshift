@@ -1,4 +1,5 @@
 test_path: tests
+parallelize_runners: true
 
 runners:
   - name: nasm

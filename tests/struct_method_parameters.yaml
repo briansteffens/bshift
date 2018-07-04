@@ -4,14 +4,14 @@ runners:
 
 cases:
  - name: call a struct method that takes an argument; returns 1
-   p2.x: 3
-   p2.y: 7
+   p2x: 3
+   p2y: 7
 
    status: 1
 
  - name: call a struct method that takes an argument; returns 0
-   p2.x: 4
-   p2.y: 7
+   p2x: 4
+   p2y: 7
 
    status: 0
 
@@ -37,8 +37,8 @@ templates:
         p1.y = 7;
 
         point p2;
-        p2.x = {{ p2.x }};
-        p2.y = {{ p2.y }};
+        p2.x = {{ p2x }};
+        p2.y = {{ p2y }};
 
         return p1.equals(&p2);
     }

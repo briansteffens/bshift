@@ -5,7 +5,7 @@ runners:
 cases:
  - name: write a string to the console using a syscall
 
-   status: 4
+   status: 3
    stdout: "Hi!"
 
 
@@ -14,12 +14,11 @@ templates:
 
     u64 main()
     {
-        u8[4] str;
+        u8[3] str;
 
         str[0] = 72;
         str[1] = 105;
         str[2] = 33;
-        str[3] = 10;
 
-        return syscall(1, 1, &str, 4);
+        return syscall(1, 1, &str, 3);
     }

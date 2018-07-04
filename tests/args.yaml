@@ -4,7 +4,9 @@ runners:
 
 cases:
  - name: pass args from command line
-   args: hi hey
+   args:
+    - hi
+    - hey
 
    status: 3
    stdout: hihey
