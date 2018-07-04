@@ -129,6 +129,8 @@ class Token
                 return "'" ~ colorBlue(this.value) ~ "'";
             case TokenType.DoubleQuote:
                 return "\"" ~ colorBlue(this.value) ~ "\"";
+            case TokenType.Comment:
+                return colorGreen(this.value);
             default:
                 throw new Exception("Unrecognized TokenType");
         }
@@ -244,7 +246,6 @@ class Reader
     void seek(int delta)
     {
         index += delta;
-        requireNotEOF();
     }
 
     Char peekChar(int distance)
@@ -288,7 +289,7 @@ class Reader
     // upcoming characters in the reader.
     bool matchSequence(dchar[] match)
     {
-        if (index + match.length >= input.length)
+        if (index + match.length > input.length)
         {
             return false;
         }
@@ -467,7 +468,7 @@ Token readMultiLineComment(Reader r)
 
 Token readSingleLineComment(Reader r)
 {
-    return r.token(TokenType.Comment, r.readUntilSequence(['\n']));
+    return r.token(TokenType.Comment, r.readUntil(r => r.peek(1) == '\n'));
 }
 
 Token readSymbol(Reader r)
