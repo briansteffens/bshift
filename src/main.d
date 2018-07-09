@@ -105,6 +105,12 @@ int main(string[] args)
 void link(string[] objectFiles)
 {
     auto cmd = format("ld -e _start %s", objectFiles.join(" "));
+
+    if (verbose)
+    {
+        writefln("Linker command: %s", cmd);
+    }
+
     auto res = executeShell(cmd);
 
     if (res.status != 0)
@@ -146,6 +152,11 @@ void assemble(Assembler assembler, string[] sources)
             default:
                 throw new Exception(
                         format("Unrecognized assembler %s", assembler));
+        }
+
+        if (verbose)
+        {
+            writefln("Assembler command: %s", command);
         }
 
         auto asmOut = executeShell(command);
