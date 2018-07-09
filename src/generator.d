@@ -164,6 +164,7 @@ OpSize primitiveToOpSize(Primitive t)
         case Primitive.Bool:
             return OpSize.Byte;
         case Primitive.U64:
+        case Primitive.I64:
             return OpSize.Qword;
         case Primitive.U8:
             return OpSize.Byte;
@@ -2836,6 +2837,12 @@ string renderNode(GeneratorState state, Node node)
     if (u64Literal !is null)
     {
         return format("%d", u64Literal.value);
+    }
+
+    auto i64Literal = cast(I64Literal)node;
+    if (i64Literal !is null)
+    {
+        return format("%d", i64Literal.value);
     }
 
     auto u8Literal = cast(U8Literal)node;

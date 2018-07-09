@@ -14,6 +14,7 @@ enum Primitive
 {
     U64,
     U8,
+    I64,
     Bool,
     Auto,
 }
@@ -370,9 +371,9 @@ int primitiveSize(Primitive t)
     switch (t)
     {
         case Primitive.U64:
+        case Primitive.I64:
             return 8;
         case Primitive.Bool:
-            return 1;
         case Primitive.U8:
             return 1;
         case Primitive.Auto:
@@ -388,10 +389,12 @@ Primitive parsePrimitive(string s)
     {
         case "u64":
             return Primitive.U64;
-        case "bool":
-            return Primitive.Bool;
         case "u8":
             return Primitive.U8;
+        case "i64":
+            return Primitive.I64;
+        case "bool":
+            return Primitive.Bool;
         case "auto":
             return Primitive.Auto;
         default:
@@ -405,10 +408,12 @@ string primitiveToString(Primitive p)
     {
         case Primitive.U64:
             return "u64";
-        case Primitive.Bool:
-            return "bool";
         case Primitive.U8:
             return "u8";
+        case Primitive.I64:
+            return "i64";
+        case Primitive.Bool:
+            return "bool";
         case Primitive.Auto:
             return "auto";
         default:
@@ -722,6 +727,27 @@ class U8Literal : Literal
     override Node clone()
     {
         return new U8Literal(this.value);
+    }
+
+    override string toString()
+    {
+        return to!string(this.value);
+    }
+}
+
+class I64Literal : Literal
+{
+    long value;
+
+    this(long value)
+    {
+        super(new PrimitiveType(Primitive.I64));
+        this.value = value;
+    }
+
+    override Node clone()
+    {
+        return new I64Literal(this.value);
     }
 
     override string toString()

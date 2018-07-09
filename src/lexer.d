@@ -380,6 +380,13 @@ SourceFile lex(string filename, string source)
     return file;
 }
 
+bool couldBeNumeric(Reader r)
+{
+    bool positiveInteger = isDigit(r.current);
+    bool negativeInteger = r.current == '-' && !r.eof && isDigit(r.peek(1));
+    return positiveInteger || negativeInteger;
+}
+
 // Read the next token from the reader.
 Token read(Reader r)
 {
@@ -399,7 +406,7 @@ Token read(Reader r)
     {
         return readDoubleQuote(r);
     }
-    else if (isDigit(r.current))
+    else if (couldBeNumeric(r))
     {
         return readNumeric(r);
     }
@@ -453,7 +460,17 @@ bool isDelimiter(dchar c)
 
 Token readNumeric(Reader r)
 {
-    return r.token(TokenType.Integer, r.readUntil(r => !isDigit(r.peek(1))));
+    bool isNegative = r.current == '-';
+    if (isNegative)
+    {
+        r.advance();
+    }
+    string tokenValue = r.readUntil(r => !isDigit(r.peek(1)));
+    if (isNegative)
+    {
+        tokenValue = "-" ~ tokenValue;
+    }
+    return r.token(TokenType.Integer, tokenValue);
 }
 
 Token readWord(Reader r)

@@ -105,6 +105,7 @@ There are only a few built-in datatypes so far:
 | bool | 1 byte         | Can be true or false
 | u8   | 1 byte         | Unsigned 8-bit integer, often used as an ASCII character
 | u64  | 8 bytes        | Unsigned 64-bit integer
+| i64  | 8 bytes        | Signed 64-bit integer
 | void | N/A            | Placeholder keyword for functions that don't return a value
 
 You can also have arrays of these primitives and pointers to these primitives.

@@ -192,7 +192,14 @@ Node parseToken(Token t)
     switch (t.type)
     {
         case TokenType.Integer:
-            return new U64Literal(to!ulong(t.value));
+            if (t.value[0] == '-')
+            {
+                return new I64Literal(to!long(t.value));
+            }
+            else
+            {
+                return new U64Literal(to!ulong(t.value));
+            }
         case TokenType.Word:
             switch (t.value)
             {

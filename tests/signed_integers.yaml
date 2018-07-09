@@ -1,0 +1,112 @@
+runners:
+ - basm
+ - nasm
+
+cases:
+ - name: compare signed integer variables
+   test: compare_variables
+   status: 0
+
+ - name: compare signed integer variable to literal
+   test: compare_variable_to_literal
+   status: 0
+
+ - name: pass signed integers as arguments to, and return from, functions
+   test: function_arguments_and_return
+   status: 0
+
+
+templates:
+ - test.bs: |
+
+    import io;
+
+    u64 compare_variables()
+    {
+        i64 a = 5;
+        i64 b = -13;
+        i64 c = -13;
+
+        if (a == b)
+        {
+            return 1;
+        }
+
+        if (a < b)
+        {
+            return 2;
+        }
+
+        if (b != c)
+        {
+            return 3;
+        }
+
+        return 0;
+    }
+
+    u64 compare_variable_to_literal()
+    {
+        i64 a = 3;
+        i64 b = -7;
+        i64 c = 0;
+
+        if (a != 3)
+        {
+            return 1;
+        }
+
+        if (b != -7)
+        {
+            return 2;
+        }
+
+        if (c != 0)
+        {
+            return 3;
+        }
+
+        if (a > 4)
+        {
+            return 4;
+        }
+
+        if (b >= -6)
+        {
+            return 5;
+        }
+
+        if (c < -1)
+        {
+            return 6;
+        }
+
+        if (b <= -8)
+        {
+            return 7;
+        }
+
+        return 0;
+    }
+
+    i64 useful_function(i64 a, i64 b)
+    {
+        return a + b;
+    }
+
+    u64 function_arguments_and_return()
+    {
+        i64 result = useful_function(-3, -2);
+
+        if (result != -5)
+        {
+            return 1;
+        }
+
+        return 0;
+    }
+
+    u64 main()
+    {
+        return {{ test }}();
+    }
