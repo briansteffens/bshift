@@ -7,10 +7,5 @@ runners:
      - bshift --nasm test.bs
     run: ./a.out
 
-  - name: basm
-    setup:
-     - bshift test.bs
-    run: ./a.out
-
   - name: bshift
     run: bshift test.bs
